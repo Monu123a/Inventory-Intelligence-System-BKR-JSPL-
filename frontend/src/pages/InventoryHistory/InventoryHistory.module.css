@@ -1,0 +1,65 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badgeNeutral {
+  background-color: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+}
+
+.badgeAmazon {
+  background-color: rgba(245, 158, 11, 0.15); /* Orange hue for Amazon */
+  color: #d97706; 
+}
+
+.badgeUpload {
+  background-color: rgba(59, 130, 246, 0.1); /* Blue for upload */
+  color: #2563eb;
+}
+
+.badgeManual {
+  background-color: rgba(139, 92, 246, 0.1); /* Purple for manual */
+  color: #7c3aed;
+}
+
+.qtyText {
+  color: var(--color-neutral-600);
+}
+
+.qtyChange {
+  font-weight: 700;
+}
+
+.qtyChange.pos {
+  color: var(--color-success);
+}
+
+.qtyChange.neg {
+  color: var(--color-danger);
+}
+
+.viewBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.2s;
+}
+
+.viewBtn:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+}

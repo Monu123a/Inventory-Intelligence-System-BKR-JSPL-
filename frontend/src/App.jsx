@@ -1,191 +1,56 @@
-import { useState } from 'react';
-import './App.css';
-import Header from './components/Header';
-import UploadPanel from './components/UploadPanel';
-import ConfigPanel from './components/ConfigPanel';
-import StatusPanel from './components/StatusPanel';
-import PreviewPanel from './components/PreviewPanel';
+import React, { Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ROUTES } from './constants/routes';
+import MainLayout from './components/layout/MainLayout';
+import ProtectedRoute from './components/ProtectedRoute';
+import NotificationManager from './components/Notification/NotificationManager';
+import LoadingOverlay from './components/LoadingOverlay/LoadingOverlay';
+import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 
-const API = import.meta.env.VITE_API_URL || 'https://halte-data-transformation.onrender.com';
+const Overview = lazy(() => import('./pages/Overview/Overview'));
+const Products = lazy(() => import('./pages/Products/Products'));
+const Warehouses = lazy(() => import('./pages/Warehouses/Warehouses'));
+const Inventory = lazy(() => import('./pages/Inventory/Inventory'));
+const InventoryHistory = lazy(() => import('./pages/InventoryHistory/InventoryHistory'));
+const Reports = lazy(() => import('./pages/Reports/Reports'));
+const DownloadCentre = lazy(() => import('./pages/DownloadCentre/DownloadCentre'));
+const Login = lazy(() => import('./pages/Login/Login'));
+const Settings = lazy(() => import('./pages/Settings/SettingsPage'));
+const POSPage = lazy(() => import('./pages/POS/POSPage'));
+const SalesHistoryPage = lazy(() => import('./pages/POS/SalesHistoryPage'));
 
-export default function App() {
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [warnings, setWarnings] = useState([]);
-  const [previewCols, setPreviewCols] = useState([]);
-  const [previewData, setPreviewData] = useState([]);
-  const [outputFile, setOutputFile] = useState('');
-  const [auditFile, setAuditFile] = useState('');
-  const [requirementFile, setRequirementFile] = useState('');
-  const [duplicateFile, setDuplicateFile] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-
-  const filenames = uploadedFiles.map(f => f.name);
-
-  const handleTransform = async () => {
-    if (!filenames.length) return;
-    setLoading(true);
-    setSuccess(false);
-    setPreviewData([]);
-    setPreviewCols([]);
-    try {
-      const res = await fetch(`${API}/api/transform`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filenames }),
-      });
-      const data = await res.json();
-      setStats(data.stats);
-      setWarnings(data.warnings || []);
-      setOutputFile(data.output_filename || '');
-      setAuditFile(data.audit_filename || '');
-      setRequirementFile(data.requirement_filename || '');
-      setDuplicateFile(data.duplicate_filename || '');
-      setSuccess(true);
-    } catch (err) {
-      setWarnings([{ level: 'CRITICAL', message: 'Transform request failed: ' + err.message }]);
-    }
-    setLoading(false);
-  };
-
-  const handleDryRun = async () => {
-    if (!filenames.length) return;
-    setLoading(true);
-    setSuccess(false);
-    try {
-      const res = await fetch(`${API}/api/dry-run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filenames }),
-      });
-      const data = await res.json();
-      setStats(data.stats);
-      setWarnings(data.warnings || []);
-      setPreviewCols(data.preview_columns || []);
-      setPreviewData(data.preview_data || []);
-      setOutputFile('');
-    } catch (err) {
-      setWarnings([{ level: 'CRITICAL', message: 'Dry run failed: ' + err.message }]);
-    }
-    setLoading(false);
-  };
-
-  const handleDownload = () => {
-    if (!outputFile) return;
-    const a = document.createElement('a');
-    a.href = `${API}/api/download/${outputFile}`;
-    a.download = outputFile;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleDownloadAudit = () => {
-    if (!auditFile) return;
-    const a = document.createElement('a');
-    a.href = `${API}/api/download/${auditFile}`;
-    a.download = auditFile;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleDownloadGeneric = (filename) => {
-    if (!filename) return;
-    const a = document.createElement('a');
-    a.href = `${API}/api/download/${filename}`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleReset = async () => {
-    try { await fetch(`${API}/api/reset`, { method: 'DELETE' }); } catch {}
-    setUploadedFiles([]);
-    setStats(null);
-    setWarnings([]);
-    setPreviewCols([]);
-    setPreviewData([]);
-    setOutputFile('');
-    setAuditFile('');
-    setRequirementFile('');
-    setDuplicateFile('');
-    setSuccess(false);
-  };
-
+const App = () => {
   return (
-    <div className="app-container">
-      <Header />
-
-      {loading && (
-        <div className="progress-bar-container">
-          <div className="progress-bar-fill" style={{ width: '100%' }} />
-        </div>
-      )}
-
-      <div className="action-bar" style={{ marginTop: 20 }}>
-        <button
-          className="btn btn-primary"
-          onClick={handleTransform}
-          disabled={!filenames.length || loading}
-        >
-          🔄 Transform Data
-        </button>
-        <button
-          className="btn"
-          onClick={handleDryRun}
-          disabled={!filenames.length || loading}
-        >
-          👁 Dry Run Preview
-        </button>
-        <button
-          className="btn btn-success"
-          onClick={() => handleDownloadGeneric(outputFile)}
-          disabled={!outputFile}
-        >
-          📥 Download Output
-        </button>
-        {auditFile && (
-          <button
-            className="btn btn-warning"
-            onClick={() => handleDownloadGeneric(auditFile)}
-          >
-            📋 Download Audit Report
-          </button>
-        )}
-        {requirementFile && (
-          <button
-            className="btn btn-info"
-            onClick={() => handleDownloadGeneric(requirementFile)}
-          >
-            📦 Download Stock Required
-          </button>
-        )}
-        {duplicateFile && (
-          <button
-            className="btn btn-error"
-            onClick={() => handleDownloadGeneric(duplicateFile)}
-          >
-            ⚠️ Download Duplicate Orders
-          </button>
-        )}
-        <button className="btn btn-danger" onClick={handleReset}>
-          🗑 Reset
-        </button>
-      </div>
-
-      <div className="main-grid">
-        <div className="left-column">
-          <UploadPanel uploadedFiles={uploadedFiles} setUploadedFiles={setUploadedFiles} />
-          <PreviewPanel columns={previewCols} data={previewData} />
-        </div>
-        <div className="right-column">
-          <ConfigPanel />
-          <StatusPanel stats={stats} warnings={warnings} success={success} />
-        </div>
-      </div>
-    </div>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Suspense fallback={<div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center' }}>Loading Application...</div>}>
+          <NotificationManager />
+          <LoadingOverlay />
+          <Routes>
+            {/* Public Routes */}
+            <Route path={ROUTES.LOGIN} element={<Login />} />
+            
+            <Route element={<ProtectedRoute />}>
+              <Route element={<MainLayout />}>
+                <Route path={ROUTES.OVERVIEW} element={<Overview />} />
+                <Route path={ROUTES.PRODUCTS} element={<Products />} />
+                <Route path={ROUTES.WAREHOUSES} element={<Warehouses />} />
+                <Route path={ROUTES.INVENTORY} element={<Inventory />} />
+                <Route path={ROUTES.INVENTORY_HISTORY} element={<InventoryHistory />} />
+                <Route path={ROUTES.REPORTS} element={<Reports />} />
+                <Route path={ROUTES.DOWNLOAD_CENTRE} element={<DownloadCentre />} />
+                <Route path={ROUTES.SETTINGS} element={<Settings />} />
+                <Route path={ROUTES.POS} element={<POSPage />} />
+                <Route path={ROUTES.POS_HISTORY} element={<SalesHistoryPage />} />
+              </Route>
+            </Route>
+            
+            <Route path="*" element={<Navigate to={ROUTES.OVERVIEW} replace />} />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
-}
+};
+
+export default App;

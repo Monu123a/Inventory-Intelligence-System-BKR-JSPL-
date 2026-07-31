@@ -1,0 +1,14 @@
+.tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.2s;
+}
+
+.tr:hover {
+  background-color: var(--color-neutral-50);
+}
+
+.td {
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}

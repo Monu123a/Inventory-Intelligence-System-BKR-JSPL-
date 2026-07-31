@@ -1,0 +1,102 @@
+.selectorWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--color-neutral-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2) var(--spacing-3);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.selectorWrapper:hover {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 0.12);
+}
+
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.5rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.badgeJSPL {
+  background-color: #3b82f6; /* Blue */
+}
+
+.badgeBKR {
+  background-color: #10b981; /* Green */
+}
+
+.badgeDefault {
+  background-color: var(--color-text-muted);
+}
+
+.selectContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.select {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  padding-right: 1.5rem;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right center;
+  background-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select:focus {
+  outline: none;
+}
+
+.status {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .selectorWrapper {
+    min-width: 180px;
+    max-width: 220px;
+  }
+
+  .status {
+    display: none;
+  }
+}

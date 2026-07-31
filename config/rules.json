@@ -28,10 +28,10 @@
   },
   "SkuMasterMapper": {
     "enabled": true,
-    "master_key": "SKU",
+    "master_key": "ITEM CODE",
     "amazon_key": "Sku",
     "fields_to_map": {
-      "GST %": "GST Slab"
+      "TAX-1(%)": "igst"
     }
   },
   "LocationFilter": {

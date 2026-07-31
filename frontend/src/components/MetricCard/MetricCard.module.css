@@ -1,0 +1,58 @@
+.metricWrapper {
+  height: 100%;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.clickable:hover > div {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.title {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.value {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-neutral-900);
+}
+
+.iconWrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon {
+  font-size: 1.5rem;
+}
+
+/* Colors */
+.icon--primary { background-color: rgba(37, 99, 235, 0.1); color: var(--color-primary); }
+.icon--success { background-color: rgba(22, 163, 74, 0.1); color: var(--color-success); }
+.icon--warning { background-color: rgba(234, 179, 8, 0.1); color: var(--color-warning); }
+.icon--danger { background-color: rgba(220, 38, 38, 0.1); color: var(--color-danger); }
+.icon--neutral { background-color: var(--color-neutral-100); color: var(--color-neutral-600); }

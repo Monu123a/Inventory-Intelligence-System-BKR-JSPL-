@@ -1,0 +1,106 @@
+import React from 'react';
+import styles from './ReceiptModal.module.css';
+
+const ReceiptModal = ({ receipt, onClose }) => {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const formatDate = (isoString) => {
+    return new Date(isoString).toLocaleString();
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <div className={styles.receiptContent} id="printable-receipt">
+          <div className={styles.header}>
+            <h2>BKR Offline Store</h2>
+            <p>123 Main Street, Retail City</p>
+            <p>GSTIN: 27AAAAA0000A1Z5</p>
+          </div>
+
+          <div className={styles.divider}></div>
+
+          <div className={styles.row}>
+            <span>Bill No:</span>
+            <span className={styles.bold}>{receipt.bill_number}</span>
+          </div>
+          <div className={styles.row}>
+            <span>Date:</span>
+            <span>{formatDate(receipt.sale_date)}</span>
+          </div>
+          {receipt.customer_name && (
+            <div className={styles.row}>
+              <span>Customer:</span>
+              <span>{receipt.customer_name}</span>
+            </div>
+          )}
+
+          <div className={styles.divider}></div>
+
+          <table className={styles.itemsTable}>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.items.map((item, idx) => (
+                <tr key={idx}>
+                  <td>
+                    {item.sku}
+                    <div style={{fontSize: '10px', color: '#666'}}>GST {item.gst_rate}%</div>
+                  </td>
+                  <td>{item.quantity}</td>
+                  <td>{item.selling_price.toFixed(2)}</td>
+                  <td>{item.line_total.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className={styles.divider}></div>
+
+          <div className={styles.row}>
+            <span>Taxable Amount:</span>
+            <span>₹{receipt.total_taxable_amount.toFixed(2)}</span>
+          </div>
+          <div className={styles.row}>
+            <span>Total Tax (GST):</span>
+            <span>₹{receipt.total_tax.toFixed(2)}</span>
+          </div>
+          <div className={`${styles.row} ${styles.bold}`} style={{fontSize: '18px', marginTop: '8px'}}>
+            <span>Grand Total:</span>
+            <span>₹{receipt.grand_total.toFixed(2)}</span>
+          </div>
+
+          <div className={styles.divider}></div>
+          
+          <div className={styles.row}>
+            <span>Payment Method:</span>
+            <span>{receipt.payment_method}</span>
+          </div>
+
+          <div className={styles.footer}>
+            Thank you for shopping with us!
+          </div>
+        </div>
+        
+        <div className={styles.actions}>
+          <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>
+            Close
+          </button>
+          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handlePrint}>
+            Print Receipt
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ReceiptModal;

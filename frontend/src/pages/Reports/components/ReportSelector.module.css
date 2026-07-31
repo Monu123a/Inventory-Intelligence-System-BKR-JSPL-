@@ -1,0 +1,37 @@
+.selectorContainer {
+  display: flex;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.selectorContainer::-webkit-scrollbar {
+  display: none;
+}
+
+.tabBtn {
+  background: var(--color-neutral-100);
+  border: 1px solid transparent;
+  color: var(--color-neutral-600);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.tabBtn:hover {
+  background-color: var(--color-neutral-200);
+  color: var(--color-neutral-900);
+}
+
+.tabBtn.active {
+  background-color: rgba(37, 99, 235, 0.1);
+  color: var(--color-primary);
+  border-color: rgba(37, 99, 235, 0.3);
+}

@@ -1,0 +1,39 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--spacing-4);
+  background-color: var(--color-bg);
+}
+
+.content {
+  background-color: var(--color-surface);
+  padding: var(--spacing-8);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
+}
+
+.title {
+  color: var(--color-danger);
+  margin-bottom: var(--spacing-4);
+}
+
+.message {
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-6);
+}
+
+.debug {
+  margin-top: var(--spacing-6);
+  padding: var(--spacing-4);
+  background-color: var(--color-neutral-100);
+  border-radius: var(--radius-md);
+  text-align: left;
+  overflow-x: auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-600);
+}

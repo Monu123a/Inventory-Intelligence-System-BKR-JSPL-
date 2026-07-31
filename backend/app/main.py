@@ -11,6 +11,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
 from app.models.context import ExecutionContext, LogLevel, TransformationWarning
 from app.repositories.config_repository import ConfigRepository
@@ -19,6 +20,16 @@ from app.engines.transformation import TransformationEngine
 from app.engines.validation import ValidationEngine
 from app.plugins.plugin_registry import PluginRegistry
 from app.services.transformation_service import TransformationService
+
+# New routers
+from app.api.routers.products import router as products_router
+from app.api.routers.warehouses import router as warehouses_router
+from app.api.routers.inventory import router as inventory_router
+from app.api.routers.dashboard import router as dashboard_router
+from app.api.routers.reports import router as reports_router
+from app.api.routers.companies import router as companies_router
+from app.api.routers.auth import router as auth_router
+from app.api.routers.pos import router as pos_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -31,7 +42,7 @@ logger = logging.getLogger("amazon_logic_transformer")
 # ---------------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
-CONFIG_DIR = os.path.join(PROJECT_ROOT, "config")
+CONFIG_DIR = os.path.join(BASE_DIR, "config")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
@@ -57,22 +68,49 @@ transformation_service = TransformationService(
     logs_dir=LOGS_DIR,
 )
 
+from app.services.scheduler_service import start_scheduler, shutdown_scheduler
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up Amazon Logic Transformer...")
+    start_scheduler()
+    yield
+    # Shutdown
+    logger.info("Shutting down Amazon Logic Transformer...")
+    shutdown_scheduler()
+
 # ---------------------------------------------------------------------------
 # FastAPI
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Amazon Logic Transformer", version="1.0.0")
+app = FastAPI(title="Amazon Logic Transformer", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173", 
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:3000",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
         "https://halte-data-transformation.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register Inventory Management Routers
+app.include_router(companies_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(products_router, prefix="/api")
+app.include_router(warehouses_router, prefix="/api")
+app.include_router(inventory_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
+app.include_router(pos_router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------

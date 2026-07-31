@@ -1,0 +1,76 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-4);
+  border-bottom: 1px solid var(--color-border);
+  gap: var(--spacing-4);
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.select {
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  background-color: var(--color-surface);
+  color: var(--color-neutral-700);
+  font-size: var(--font-size-sm);
+}
+
+.bulkActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-3) var(--spacing-4);
+  background-color: rgba(37, 99, 235, 0.05);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bulkText {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-primary);
+}
+
+.bulkBtns {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.iconBtn {
+  color: var(--color-neutral-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  padding: 4px;
+}
+
+.iconBtn:hover {
+  color: var(--color-primary);
+}
+
+.textBtn {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-neutral-600);
+  text-decoration: underline;
+}
+
+.textBtn:hover {
+  color: var(--color-neutral-900);
+}

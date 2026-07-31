@@ -4,6 +4,7 @@
     "InvoiceFilter",
     "LocationFilter",
     "SkuTrim",
+    "SkuMasterMapper",
     "AccountCodeMapper",
     "DefaultInjector",
     "ColumnMapper"
@@ -25,18 +26,24 @@
     "enabled": true,
     "length": 6
   },
+  "SkuMasterMapper": {
+    "enabled": true,
+    "master_key": "ITEM CODE",
+    "amazon_key": "Sku",
+    "fields_to_map": {
+      "TAX-1(%)": "igst"
+    }
+  },
   "LocationFilter": {
     "enabled": true,
-    "allowed_states": [
-      "Chandigarh"
-    ],
+    "allowed_states": [],
     "filter_column": "Bill From State"
   },
   "DefaultInjector": {
     "enabled": true,
     "defaults": {
       "MEM SHIP": "JH",
-      "TAX REGION": "2"
+      "TAX REGION": 2
     }
   },
   "AccountCodeMapper": {
@@ -45,5 +52,8 @@
   },
   "ColumnMapper": {
     "enabled": true
+  },
+  "ExactInvoiceFilter": {
+    "enabled": false
   }
 }

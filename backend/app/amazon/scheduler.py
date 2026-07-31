@@ -22,26 +22,31 @@ logging.basicConfig(
 
 logger = logging.getLogger("amazon.scheduler")
 
-def job():
-    logger.info("Executing scheduled Amazon SP-API job...")
-    pipeline = AmazonPipeline()
-    pipeline.run()
+is_running = False
 
-def get_run_time() -> str:
-    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "amazon_config.yaml")
+def job():
+    global is_running
+    if is_running:
+        logger.warning("Previous Amazon SP-API job is still running. Skipping this cycle.")
+        return
+        
+    is_running = True
     try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-            return config.get("scheduler", {}).get("run_time", "02:00")
-    except Exception as e:
-        logger.error(f"Failed to load scheduler config: {e}. Defaulting to 02:00.")
-        return "02:00"
+        logger.info("Executing scheduled Amazon SP-API job...")
+        pipeline = AmazonPipeline()
+        pipeline.run()
+    finally:
+        is_running = False
 
 if __name__ == "__main__":
-    run_time = get_run_time()
-    logger.info(f"Amazon SP-API Scheduler initialized. Job will run daily at {run_time}.")
+    if os.getenv("AMAZON_SYNC_ENABLED", "true").lower() != "true":
+        logger.info("Amazon Sync is disabled via AMAZON_SYNC_ENABLED=false. Exiting scheduler.")
+        sys.exit(0)
+        
+    interval = int(os.getenv("AMAZON_SYNC_INTERVAL", "30"))
+    logger.info(f"Amazon SP-API Scheduler initialized. Job will run every {interval} minutes.")
     
-    schedule.every().day.at(run_time).do(job)
+    schedule.every(interval).minutes.do(job)
     
     # Optional: Run it immediately once on startup for debugging/testing
     if os.getenv("RUN_ON_STARTUP", "false").lower() == "true":
