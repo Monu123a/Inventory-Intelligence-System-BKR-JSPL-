@@ -1,4 +1,5 @@
-import hashlib
+import os
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Header, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -7,10 +8,28 @@ from typing import Optional
 from app.models.db import get_db
 from app.models.schema import Company, CompanyUser, User
 
+import jwt
 
-def _build_token(user: User) -> str:
-    return hashlib.sha256(f"{user.id}:{user.username}:secret".encode()).hexdigest()
 
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_DAYS = 7
+
+
+def _get_jwt_secret() -> str:
+    return os.getenv("JWT_SECRET", "your-super-secret-key-change-in-prod")
+
+
+def create_access_token(user: User) -> str:
+    payload = {
+        "sub": str(user.id),
+        "username": user.username,
+        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRY_DAYS),
+    }
+    return jwt.encode(payload, _get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def decode_access_token(token: str) -> dict:
+    return jwt.decode(token, _get_jwt_secret(), algorithms=[JWT_ALGORITHM])
 
 def get_current_user(
     authorization: Optional[str] = Header(None, description="Bearer auth token"),
@@ -23,10 +42,16 @@ def get_current_user(
     if scheme.lower() != "bearer" or not token:
         raise HTTPException(status_code=401, detail="Invalid authorization header")
 
-    users = db.query(User).all()
-    for user in users:
-        if _build_token(user) == token:
+    try:
+        payload = decode_access_token(token)
+        user_id = int(payload.get("sub"))
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
             return user
+    except jwt.PyJWTError:
+        pass
+    except RuntimeError:
+        raise HTTPException(status_code=500, detail="Authentication is not configured")
 
     raise HTTPException(status_code=401, detail="Invalid or expired token")
 

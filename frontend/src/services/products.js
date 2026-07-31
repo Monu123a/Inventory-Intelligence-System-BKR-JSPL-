@@ -1,8 +1,8 @@
 import api from './api';
 import { API_ROUTES } from '../constants/apiRoutes';
 
-export const getProducts = async (params) => {
-  const response = await api.get(API_ROUTES.PRODUCTS, { params });
+export const getProducts = async () => {
+  const response = await api.get(API_ROUTES.PRODUCTS);
   return response.data;
 };
 

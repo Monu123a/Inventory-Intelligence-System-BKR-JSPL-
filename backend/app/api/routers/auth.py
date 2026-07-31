@@ -5,7 +5,7 @@ import hashlib
 
 from app.models.db import get_db
 from app.models.schema import User
-from app.api.dependencies import get_current_user
+from app.api.dependencies import create_access_token, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -35,8 +35,7 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     if user.password_hash != _hash_password(credentials.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Simple token (in production, use JWT)
-    token = hashlib.sha256(f"{user.id}:{user.username}:secret".encode()).hexdigest()
+    token = create_access_token(user)
     
     return {
         "token": token,

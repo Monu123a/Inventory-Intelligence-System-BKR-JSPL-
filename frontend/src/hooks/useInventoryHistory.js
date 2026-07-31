@@ -16,7 +16,8 @@ export const useInventoryHistory = ({ search = '', dateRange = { start: '', end:
 
   const prodQuery = useQuery({
     queryKey: ['products', companyId],
-    queryFn: productService.getProducts,
+    queryFn: () => productService.getProducts(),
+    enabled: !!companyId,
   });
 
   const whQuery = useQuery({

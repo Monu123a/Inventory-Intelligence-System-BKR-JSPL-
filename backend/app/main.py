@@ -1,3 +1,7 @@
+from app.api.dependencies import get_current_user
+from fastapi import Depends, APIRouter
+from app.models.schema import User
+
 import json
 import logging
 import os
@@ -30,6 +34,7 @@ from app.api.routers.reports import router as reports_router
 from app.api.routers.companies import router as companies_router
 from app.api.routers.auth import router as auth_router
 from app.api.routers.pos import router as pos_router
+from app.api.routers.company_settings import router as company_settings_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -111,6 +116,7 @@ app.include_router(inventory_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(pos_router, prefix="/api")
+app.include_router(company_settings_router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------
@@ -182,9 +188,10 @@ def _build_context() -> ExecutionContext:
 def _read_uploaded_files(filenames: List[str]) -> pd.DataFrame:
     frames = []
     for fname in filenames:
-        path = os.path.join(UPLOAD_DIR, fname)
+        safe_name = os.path.basename(fname)
+        path = os.path.join(UPLOAD_DIR, safe_name)
         if not os.path.exists(path):
-            raise HTTPException(status_code=404, detail=f"File not found: {fname}")
+            raise HTTPException(status_code=404, detail=f"File not found: {safe_name}")
         df = pd.read_excel(path)
         frames.append(df)
     if not frames:
@@ -198,19 +205,23 @@ def _read_uploaded_files(filenames: List[str]) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+legacy_router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
+
+
 @app.get("/")
 def health_check():
     return {"status": "ok", "message": "Amazon Logic Transformer is running."}
 
 
-@app.post("/api/upload")
+@legacy_router.post("/upload")
 async def upload_files(files: List[UploadFile] = File(...)):
     """Upload one or more Excel files."""
     uploaded = []
     for f in files:
         if not f.filename.endswith((".xlsx", ".xls")):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {f.filename}")
-        dest = os.path.join(UPLOAD_DIR, f.filename)
+        dest = os.path.join(UPLOAD_DIR, os.path.basename(f.filename))
         with open(dest, "wb") as out:
             content = await f.read()
             out.write(content)
@@ -219,7 +230,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
     return UploadResponse(files=uploaded, message=f"{len(uploaded)} file(s) uploaded.")
 
 
-@app.post("/api/transform")
+@legacy_router.post("/transform")
 async def transform(body: dict):
     """Run the full transformation pipeline and generate the output Excel."""
     filenames = body.get("filenames", [])
@@ -235,7 +246,7 @@ async def transform(body: dict):
     return TransformResponse(**result_dict)
 
 
-@app.post("/api/dry-run")
+@legacy_router.post("/dry-run")
 async def dry_run(body: dict):
     """Run the pipeline without saving – return preview and stats."""
     filenames = body.get("filenames", [])
@@ -263,20 +274,21 @@ async def dry_run(body: dict):
     )
 
 
-@app.get("/api/download/{filename}")
+@legacy_router.get("/download/{filename}")
 async def download_file(filename: str):
     """Download a generated output file."""
-    path = os.path.join(OUTPUT_DIR, filename)
+    safe_filename = os.path.basename(filename)
+    path = os.path.join(OUTPUT_DIR, safe_filename)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found.")
     return FileResponse(
         path=path,
-        filename=filename,
+        filename=safe_filename,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 
-@app.get("/api/config")
+@legacy_router.get("/config")
 async def get_config():
     """Return the current configuration (mapping + rules + lookups)."""
     return {
@@ -286,7 +298,7 @@ async def get_config():
     }
 
 
-@app.put("/api/config")
+@legacy_router.put("/config")
 async def update_config(body: dict):
     """Update configuration files."""
     if "mapping" in body:
@@ -298,7 +310,7 @@ async def update_config(body: dict):
     return {"status": "ok", "message": "Configuration updated."}
 
 
-@app.get("/api/uploaded-files")
+@legacy_router.get("/uploaded-files")
 async def list_uploaded_files():
     """List files currently in the uploads directory."""
     files = []
@@ -310,7 +322,7 @@ async def list_uploaded_files():
     return {"files": files}
 
 
-@app.delete("/api/reset")
+@legacy_router.delete("/reset")
 async def reset():
     """Clear uploads and outputs."""
     for d in (UPLOAD_DIR, OUTPUT_DIR):
@@ -323,3 +335,4 @@ async def reset():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+app.include_router(legacy_router)

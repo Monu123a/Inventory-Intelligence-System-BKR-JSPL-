@@ -17,7 +17,8 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
 
   const prodQuery = useQuery({
     queryKey: ['products', companyId],
-    queryFn: productService.getProducts,
+    queryFn: () => productService.getProducts(),
+    enabled: !!companyId,
   });
 
   const whQuery = useQuery({

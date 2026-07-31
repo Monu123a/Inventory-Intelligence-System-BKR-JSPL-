@@ -1,3 +1,4 @@
+import os
 import pytest
 import hashlib
 import sys
@@ -7,9 +8,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-suite-123456")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app as fastapi_app
+from app.api.dependencies import create_access_token
 from app.models.db import Base, get_db
 from app.models.schema import Company, CompanyUser, User
 
@@ -21,10 +25,6 @@ engine = create_engine(
     poolclass=StaticPool
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def _build_token(user_id: int, username: str) -> str:
-    return hashlib.sha256(f"{user_id}:{username}:secret".encode()).hexdigest()
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_db():
@@ -60,7 +60,7 @@ def seeded_company_context(db_session):
         "company": company,
         "user": user,
         "headers": {
-            "Authorization": f"Bearer {_build_token(user.id, user.username)}",
+            "Authorization": f"Bearer {create_access_token(user)}",
             "X-Company-Id": str(company.id),
         }
     }

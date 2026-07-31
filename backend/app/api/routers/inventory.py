@@ -106,10 +106,15 @@ async def upload_inventory(
     if upload_type not in ["ADD", "REPLACE"]:
         raise HTTPException(status_code=400, detail="upload_type must be ADD or REPLACE")
     import tempfile
+    import os
+    import shutil
+    from datetime import datetime, timezone
     
     # Use a secure temp directory that works across platforms
     temp_dir = tempfile.gettempdir()
-    temp_file = os.path.join(temp_dir, f"inv_{datetime.now(timezone.utc).timestamp()}_{file.filename}")
+    # Sanitize the filename to prevent path traversal
+    safe_filename = os.path.basename(file.filename)
+    temp_file = os.path.join(temp_dir, f"inv_{datetime.now(timezone.utc).timestamp()}_{safe_filename}")
     
     with open(temp_file, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

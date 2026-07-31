@@ -19,7 +19,7 @@ const EMPTY_ARRAY = [];
 export const useReports = ({ reportType = 'LOW_STOCK', search = '', warehouseId = '', page = 1, limit = 15 }) => {
   const companyId = useCompanyStore((state) => state.companyId);
   const invQuery = useQuery({ queryKey: ['inventory', 'all', companyId], queryFn: () => inventoryService.getInventory(null) });
-  const prodQuery = useQuery({ queryKey: ['products', companyId], queryFn: productService.getProducts });
+  const prodQuery = useQuery({ queryKey: ['products', companyId], queryFn: () => productService.getProducts(), enabled: !!companyId });
   const whQuery = useQuery({ queryKey: ['warehouses', companyId], queryFn: warehouseService.getWarehouses });
 
   const rawInventory = invQuery.data ?? EMPTY_ARRAY;

@@ -37,6 +37,39 @@
   color: #333;
 }
 
+/* Invoice Type Selector */
+.typeSelector {
+  display: flex;
+  gap: 8px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.typeBtn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.typeBtn:hover {
+  color: #111827;
+}
+
+.typeBtnActive {
+  background-color: white;
+  color: #2563eb;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
 /* Customer Form */
 .customerForm {
   display: grid;

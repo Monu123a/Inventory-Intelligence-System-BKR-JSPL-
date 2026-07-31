@@ -10,4 +10,5 @@ export const ROUTES = {
   SETTINGS: '/settings',
   POS: '/pos',
   POS_HISTORY: '/pos-history',
+  POS_INVOICE: '/sales/:saleId/invoice',
 };

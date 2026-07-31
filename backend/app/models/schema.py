@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, UniqueConstraint, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.db import Base
@@ -126,7 +126,7 @@ class InventoryMovement(Base):
     source = Column(String, nullable=False) # Upload, Amazon, Manual, Transfer
     reference_id = Column(String) # e.g. INV-12345
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    metadata_payload = Column(JSON, default={})
+    metadata_payload = Column(JSON, default=dict)
 
     company = relationship("Company", back_populates="movements")
     product = relationship("Product", back_populates="movements")
@@ -206,6 +206,80 @@ class JobExecutionLog(Base):
 
     company = relationship("Company", back_populates="job_logs")
 
+class CompanySettings(Base):
+    """
+    Per-company settings used by Billing/POS without changing the core Company table.
+    Stores:
+    - optional company profile fields (to snapshot into invoices)
+    - tally integration configuration (optional)
+    """
+    __tablename__ = "company_settings"
+
+    company_id = Column(Integer, ForeignKey("companies.id"), primary_key=True)
+
+    # Company profile (source for snapshot)
+    legal_name = Column(String, nullable=True)
+    gstin = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    state = Column(String, nullable=True)
+    state_code = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    logo_url = Column(String, nullable=True)
+    bank_details = Column(JSON, nullable=True)  # {bank_name, account_no, ifsc, branch, upi, ...}
+
+    # Billing default text
+    declaration = Column(Text, nullable=True)
+    terms_of_delivery_default = Column(String, nullable=True)
+
+    # Tally Integration (optional)
+    tally_enabled = Column(Boolean, default=False)
+    tally_endpoint_url = Column(String, nullable=True)
+    tally_payload_format = Column(String, default="XML")  # XML | JSON
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    company = relationship("Company")
+
+
+class InvoiceSequence(Base):
+    """
+    Per-company invoice numbering sequence.
+    Example invoice numbers:
+      BKR/26-27/012
+      JSPL/26-27/103
+    """
+    __tablename__ = "invoice_sequences"
+    __table_args__ = (UniqueConstraint('company_id', 'fiscal_year', name='uix_company_fy_sequence'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    fiscal_year = Column(String, nullable=False)  # e.g. "26-27"
+    last_number = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    company = relationship("Company")
+
+
+class AuditLog(Base):
+    """
+    Lightweight audit logging for important operational events.
+    (e.g. invoice created, tally sync started/success/failed)
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    entity_type = Column(String, nullable=False)  # "Sale", etc.
+    entity_id = Column(Integer, nullable=False)
+    event_type = Column(String, nullable=False)   # "INVOICE_CREATED", "TALLY_SYNC_STARTED", ...
+    message = Column(Text, nullable=True)
+    metadata_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    company = relationship("Company")
+
+
 class Sale(Base):
     __tablename__ = "sales"
     __table_args__ = (UniqueConstraint('company_id', 'bill_number', name='uix_company_bill_number'),)
@@ -219,10 +293,64 @@ class Sale(Base):
     total_taxable_amount = Column(Float, default=0.0)
     total_tax = Column(Float, default=0.0)
     grand_total = Column(Float, default=0.0)
-    payment_method = Column(String, nullable=True) # Cash, UPI, Card, etc.
+    payment_method = Column(String, nullable=True) # Cash, UPI, Card, Bank Transfer, Cheque, Credit
+    payment_reference = Column(String, nullable=True)  # UPI txn ref, cheque no, etc.
+    payment_date = Column(DateTime, nullable=True)
     status = Column(String, default="Completed") # Draft, Completed, Cancelled, Returned
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # ------------------------------------------------------------------
+    # Invoice/Billing Snapshot Fields (extend Sale for now; future-proofed
+    # by keeping renderer/export services separate from persistence)
+    # ------------------------------------------------------------------
+
+    # Invoice identity
+    invoice_number = Column(String, nullable=True, index=True)
+    invoice_type = Column(String, default="B2C")  # B2C | B2B
+
+    # Customer snapshot
+    customer_gstin = Column(String, nullable=True)
+    customer_address = Column(Text, nullable=True)
+    customer_state = Column(String, nullable=True)
+    customer_state_code = Column(String, nullable=True)
+    place_of_supply = Column(String, nullable=True)
+    customer_email = Column(String, nullable=True)
+    customer_phone = Column(String, nullable=True)
+
+    # Invoice information
+    payment_terms = Column(String, nullable=True)
+    delivery_note = Column(String, nullable=True)
+    delivery_note_date = Column(DateTime, nullable=True)
+    dispatch_document_number = Column(String, nullable=True)
+    dispatch_through = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
+    vehicle_number = Column(String, nullable=True)
+    lr_rr_number = Column(String, nullable=True)
+    terms_of_delivery = Column(String, nullable=True)
+
+    # Company snapshot (do NOT fetch from Company at print time)
+    company_name_snapshot = Column(String, nullable=True)
+    company_gstin_snapshot = Column(String, nullable=True)
+    company_address_snapshot = Column(Text, nullable=True)
+    company_state_snapshot = Column(String, nullable=True)
+    company_state_code_snapshot = Column(String, nullable=True)
+    company_email_snapshot = Column(String, nullable=True)
+    company_phone_snapshot = Column(String, nullable=True)
+    company_logo_url_snapshot = Column(String, nullable=True)
+    company_bank_details_snapshot = Column(JSON, nullable=True)
+
+    # Optional e-invoice fields (if needed later)
+    einvoice_irn = Column(String, nullable=True)
+    einvoice_ack_no = Column(String, nullable=True)
+    einvoice_ack_date = Column(DateTime, nullable=True)
+    einvoice_qr_code_data = Column(Text, nullable=True)
+
+    # Tally sync metadata (B2B only, optional and configurable)
+    tally_sync_status = Column(String, default="NOT_APPLICABLE")  # NOT_APPLICABLE|PENDING|PROCESSING|SUCCESS|FAILED|RETRYING|CANCELLED
+    tally_sync_at = Column(DateTime, nullable=True)
+    tally_reference = Column(String, nullable=True)
+    tally_error_message = Column(Text, nullable=True)
 
     company = relationship("Company")
     creator = relationship("User")
@@ -241,7 +369,14 @@ class SaleItem(Base):
     taxable_amount = Column(Float, default=0.0)
     cgst = Column(Float, default=0.0)
     sgst = Column(Float, default=0.0)
+    igst = Column(Float, default=0.0)
     line_total = Column(Float, default=0.0)
+
+    # Invoice line snapshot fields
+    product_name = Column(String, nullable=True)
+    hsn_sac = Column(String, nullable=True)
+    unit = Column(String, nullable=True)
+    discount = Column(Float, default=0.0)
 
     sale = relationship("Sale", back_populates="items")
     product = relationship("Product")

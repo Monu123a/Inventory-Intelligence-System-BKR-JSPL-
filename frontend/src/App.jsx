@@ -18,6 +18,7 @@ const Login = lazy(() => import('./pages/Login/Login'));
 const Settings = lazy(() => import('./pages/Settings/SettingsPage'));
 const POSPage = lazy(() => import('./pages/POS/POSPage'));
 const SalesHistoryPage = lazy(() => import('./pages/POS/SalesHistoryPage'));
+const InvoicePreviewPage = lazy(() => import('./pages/POS/InvoicePreviewPage'));
 
 const App = () => {
   return (
@@ -42,6 +43,7 @@ const App = () => {
                 <Route path={ROUTES.SETTINGS} element={<Settings />} />
                 <Route path={ROUTES.POS} element={<POSPage />} />
                 <Route path={ROUTES.POS_HISTORY} element={<SalesHistoryPage />} />
+                <Route path={ROUTES.POS_INVOICE} element={<InvoicePreviewPage />} />
               </Route>
             </Route>
             

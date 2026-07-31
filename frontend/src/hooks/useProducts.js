@@ -10,7 +10,8 @@ export const useProducts = ({ search = '', category = '', brand = '', status = '
   const companyId = useCompanyStore((state) => state.companyId);
   const query = useQuery({
     queryKey: ['products', companyId],
-    queryFn: productService.getProducts,
+    queryFn: () => productService.getProducts(),
+    enabled: !!companyId,
   });
 
   const products = query.data ?? EMPTY_ARRAY;
