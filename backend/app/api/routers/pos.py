@@ -452,8 +452,8 @@ def _build_invoice_dto(sale: Sale) -> dict:
 
 
 @router.get("/sales/{sale_id}")
-def get_sale_invoice(sale_id: int, company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db)):
-    sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == company_id).first()
+def get_sale_invoice(sale_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     return {"receipt": _build_invoice_dto(sale)}

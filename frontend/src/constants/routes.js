@@ -14,4 +14,5 @@ export const ROUTES = {
   REPLENISHMENT_JSPL: '/replenishment/jspl',
   REPLENISHMENT_BKR: '/replenishment/bkr',
   REPLENISHMENT_BKR_INVOICE: '/replenishment/bkr/:id',
+  INTER_COMPANY_HISTORY: '/replenishment/history',
 };

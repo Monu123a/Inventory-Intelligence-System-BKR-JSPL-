@@ -32,6 +32,7 @@ class MovementResponse(BaseModel):
     product_id: int
     timestamp: datetime
     product_sku: str
+    product_name: str
     warehouse_id: int
     qty_before: int
     qty_changed: int
@@ -68,14 +69,17 @@ def get_global_inventory_history(company_id: int = Depends(get_current_company_i
             
         mov_dict = {
             "id": mov.id,
+            "company_id": mov.company_id,
+            "product_id": mov.product_id,
             "timestamp": mov.timestamp,
-            "product_sku": mov.product_sku,
+            "product_sku": mov.product.sku if mov.product else "Unknown",
+            "product_name": mov.product.name if mov.product else "Unknown",
             "warehouse_id": mov.warehouse_id,
             "qty_before": mov.qty_before,
             "qty_changed": mov.qty_changed,
             "qty_after": mov.qty_after,
-            "source": mov.source,
-            "reference_id": mov.reference_id,
+            "source": mov.source or "",
+            "reference_id": mov.reference_id or "",
             "metadata_payload": payload,
             "display_metadata": disp_meta
         }

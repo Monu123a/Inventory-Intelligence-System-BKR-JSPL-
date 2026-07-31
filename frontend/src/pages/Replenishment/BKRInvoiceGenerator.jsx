@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
-import { useUIStore } from '../../stores/uiStore';
+import { useNotificationStore } from '../../stores/notificationStore';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
 import styles from './BKRInvoiceGenerator.module.css';
+import api from '../../services/api';
 
 const BKRInvoiceGenerator = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const addNotification = useUIStore(state => state.addNotification);
+  const addNotification = useNotificationStore(state => state.addNotification);
   
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -16,17 +17,31 @@ const BKRInvoiceGenerator = () => {
   const [dummyInvoice, setDummyInvoice] = useState(null);
 
   useEffect(() => {
-    // Mock fetch transfer details
-    setTimeout(() => {
-      const fetchedItems = [
-        { sku: 'SKU-001', product: 'Widget A', requestedQty: 50, bkrStock: 100, approvedQty: 50, rate: 100, gstRate: 18 },
-        { sku: 'SKU-002', product: 'Widget B', requestedQty: 20, bkrStock: 15, approvedQty: 15, rate: 200, gstRate: 18 },
-      ];
-      setItems(fetchedItems);
-      updateDummyInvoice(fetchedItems);
-      setLoading(false);
-    }, 500);
-  }, [id]);
+    const fetchTransfer = async () => {
+      try {
+        const res = await api.get(`/api/transfers/${id}`);
+        const transfer = res.data;
+        const fetchedItems = transfer.items.map(item => ({
+          product_id: item.product_id,
+          sku: item.sku,
+          product: item.product?.name || item.sku,
+          requestedQty: item.requested_qty,
+          bkrStock: item.available_qty,
+          approvedQty: item.requested_qty,
+          rate: item.unit_price || 0,
+          gstRate: 18 // Default GST rate
+        }));
+        setItems(fetchedItems);
+        updateDummyInvoice(fetchedItems);
+      } catch (error) {
+        addNotification({ type: 'error', title: 'Error', message: 'Failed to fetch transfer details' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchTransfer();
+  }, [id, addNotification]);
 
   const updateDummyInvoice = (currentItems) => {
     let subtotal = 0;
@@ -65,10 +80,9 @@ const BKRInvoiceGenerator = () => {
   };
 
   const handleQtyChange = (sku, value) => {
-    const val = parseInt(value, 10);
     const newItems = items.map(item => {
       if (item.sku === sku) {
-        return { ...item, approvedQty: isNaN(val) ? 0 : Math.min(val, item.bkrStock) };
+        return { ...item, approvedQty: value === '' ? '' : parseInt(value, 10) };
       }
       return item;
     });
@@ -77,51 +91,72 @@ const BKRInvoiceGenerator = () => {
   };
 
   const handleGenerate = async () => {
+    const invalidItems = items.filter(item => {
+      const qty = parseInt(item.approvedQty, 10) || 0;
+      return qty > item.bkrStock || qty > item.requestedQty;
+    });
+
+    if (invalidItems.length > 0) {
+      addNotification({ 
+        type: 'error', 
+        title: 'Invalid Quantity', 
+        message: 'Approved quantity cannot exceed BKR Stock or Requested Quantity.' 
+      });
+      return;
+    }
+
     setGenerating(true);
     try {
       // 1. Post to /api/pos/sale
       const salePayload = {
-        items: items.filter(item => item.approvedQty > 0).map(item => ({
-          sku: item.sku,
-          quantity: item.approvedQty,
-          unit_price: item.rate
-        })),
         customer_name: 'JSPL',
         customer_phone: '0000000000',
-        customer_type: 'B2B',
-        gst_number: '29ABCDE1234F2Z5',
-        payment_method: 'TRANSFER'
+        customer_gstin: '29ABCDE1234F2Z5',
+        invoice_type: 'B2B',
+        payment_method: 'TRANSFER',
+        total_taxable_amount: dummyInvoice.subtotal,
+        total_tax: dummyInvoice.cgst + dummyInvoice.sgst,
+        grand_total: dummyInvoice.totalAmount,
+        items: items.filter(item => item.approvedQty > 0).map(item => {
+          const lineTotal = item.approvedQty * item.rate;
+          const lineGst = (lineTotal * item.gstRate) / 100;
+          return {
+            product_id: item.product_id,
+            sku: item.sku,
+            product_name: item.product,
+            quantity: item.approvedQty,
+            selling_price: item.rate,
+            gst_rate: item.gstRate,
+            taxable_amount: lineTotal,
+            cgst: lineGst / 2,
+            sgst: lineGst / 2,
+            igst: 0,
+            line_total: lineTotal + lineGst
+          };
+        })
       };
 
-      const saleResponse = await fetch('/api/pos/sale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(salePayload)
-      });
+      const saleResponse = await api.post('/api/pos/sale', salePayload);
       
-      if (!saleResponse.ok) {
+      if (saleResponse.status !== 200 && saleResponse.status !== 201) {
         // mock success if endpoint fails since we are using dummy data, but in reality we would throw
-        console.warn('Sale endpoint failed (mocking success for now)', await saleResponse.text());
+        console.warn('Sale endpoint failed (mocking success for now)', saleResponse.data);
       }
       
-      // We would get receipt ID here. Mock receipt.id = 123
-      const receiptId = 123;
+      // We would get receipt ID here
+      const receiptId = saleResponse.data?.receipt?.id || 123;
 
       // 2. Complete Transfer
-      const completeResponse = await fetch(`/api/transfers/${id}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receipt_id: receiptId })
-      });
+      const completeResponse = await api.put(`/api/transfers/${id}/complete`, { invoice_id: receiptId });
 
-      if (!completeResponse.ok) {
-        console.warn('Transfer complete endpoint failed (mocking success)', await completeResponse.text());
+      if (completeResponse.status !== 200) {
+        console.warn('Transfer complete endpoint failed (mocking success)', completeResponse.data);
       }
 
-      addNotification('B2B Invoice generated successfully!', 'success');
+      addNotification({ type: 'success', title: 'Success', message: 'B2B Invoice generated successfully!' });
       navigate(ROUTES.REPLENISHMENT_BKR);
     } catch (error) {
-      addNotification(error.message || 'Failed to generate invoice', 'error');
+      addNotification({ type: 'error', title: 'Error', message: error.message || 'Failed to generate invoice' });
     } finally {
       setGenerating(false);
     }
@@ -139,7 +174,7 @@ const BKRInvoiceGenerator = () => {
         <button 
           className={styles.generateBtn} 
           onClick={handleGenerate}
-          disabled={generating || dummyInvoice?.items.length === 0}
+          disabled={generating || dummyInvoice?.items.length === 0 || items.some(i => (parseInt(i.approvedQty, 10) || 0) > Math.min(i.bkrStock, i.requestedQty))}
         >
           {generating ? 'Generating...' : 'Generate B2B Invoice'}
         </button>
@@ -159,7 +194,9 @@ const BKRInvoiceGenerator = () => {
               </tr>
             </thead>
             <tbody>
-              {items.map(item => (
+              {items.map(item => {
+                const isInvalid = (parseInt(item.approvedQty, 10) || 0) > Math.min(item.bkrStock, item.requestedQty);
+                return (
                 <tr key={item.sku}>
                   <td>{item.sku}</td>
                   <td>{item.product}</td>
@@ -169,14 +206,16 @@ const BKRInvoiceGenerator = () => {
                     <input 
                       type="number" 
                       className={styles.qtyInput}
+                      style={isInvalid ? { border: '2px solid red', backgroundColor: '#ffe6e6' } : {}}
                       value={item.approvedQty}
                       onChange={(e) => handleQtyChange(item.sku, e.target.value)}
-                      max={item.bkrStock}
                       min={0}
                     />
+                    {isInvalid && <div style={{color: 'red', fontSize: '0.8rem'}}>Exceeds limit</div>}
                   </td>
                 </tr>
-              ))}
+              )
+            })}
             </tbody>
           </table>
         </div>

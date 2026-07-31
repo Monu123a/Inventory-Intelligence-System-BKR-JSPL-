@@ -13,6 +13,7 @@ const navItems = [
   { path: ROUTES.INVENTORY, label: 'Inventory', icon: FiList },
 
   { path: ROUTES.INVENTORY_HISTORY, label: 'Inventory History', icon: FiClock },
+  { path: ROUTES.INTER_COMPANY_HISTORY, label: 'Inter-Company History', icon: FiClock },
   { path: ROUTES.REPORTS, label: 'Reports', icon: FiFileText },
   { path: ROUTES.DOWNLOAD_CENTRE, label: 'Download Centre', icon: FiDownload },
 ];

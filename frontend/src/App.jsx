@@ -23,6 +23,7 @@ const InvoicePreviewPage = lazy(() => import('./pages/POS/InvoicePreviewPage'));
 const JSPLReplenishmentView = lazy(() => import('./pages/Replenishment/JSPLReplenishmentView'));
 const BKRRequirementsView = lazy(() => import('./pages/Replenishment/BKRRequirementsView'));
 const BKRInvoiceGenerator = lazy(() => import('./pages/Replenishment/BKRInvoiceGenerator'));
+const InterCompanyHistory = lazy(() => import('./pages/Replenishment/InterCompanyHistory'));
 const App = () => {
   return (
     <ErrorBoundary>
@@ -50,6 +51,7 @@ const App = () => {
                 <Route path={ROUTES.REPLENISHMENT_JSPL} element={<JSPLReplenishmentView />} />
                 <Route path={ROUTES.REPLENISHMENT_BKR} element={<BKRRequirementsView />} />
                 <Route path={ROUTES.REPLENISHMENT_BKR_INVOICE} element={<BKRInvoiceGenerator />} />
+                <Route path={ROUTES.INTER_COMPANY_HISTORY} element={<InterCompanyHistory />} />
               </Route>
             </Route>
             

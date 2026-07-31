@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import styles from './TransferList.module.css'; // Re-use existing table styles
+import api from '../../services/api';
 
 const BKRRequirementsView = () => {
   const navigate = useNavigate();
@@ -9,14 +10,19 @@ const BKRRequirementsView = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In a real scenario, this would fetch from /api/transfers?status=Pending
-    setTimeout(() => {
-      setTransfers([
-        { id: 'TRF-101', status: 'Pending', createdDate: '2023-10-15', requestedBy: 'JSPL', itemsCount: 3 },
-        { id: 'TRF-102', status: 'Pending', createdDate: '2023-10-16', requestedBy: 'JSPL', itemsCount: 1 },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchTransfers = async () => {
+      try {
+        const res = await api.get('/api/transfers?status=active');
+        // The backend already filters active if status=active is passed.
+        // Let's ensure we only show pending/in progress
+        setTransfers(res.data.filter(t => t.status === 'Pending' || t.status === 'In Progress'));
+      } catch (err) {
+        console.error('Failed to fetch transfers', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTransfers();
   }, []);
 
   if (loading) return <div className={styles.loading}>Loading JSPL Requirements...</div>;
@@ -44,12 +50,12 @@ const BKRRequirementsView = () => {
           <tbody>
             {transfers.map(trf => (
               <tr key={trf.id}>
-                <td>{trf.id}</td>
-                <td>{trf.requestedBy}</td>
-                <td>{trf.createdDate}</td>
-                <td>{trf.itemsCount}</td>
+                <td>{trf.transfer_number || trf.id}</td>
+                <td>{trf.from_company_name || 'JSPL'}</td>
+                <td>{new Date(trf.created_at).toLocaleDateString()}</td>
+                <td>{trf.items?.length || 0}</td>
                 <td>
-                  <span className={`${styles.badge} ${styles.pending}`}>{trf.status}</span>
+                  <span className={`${styles.badge} ${trf.status === 'Pending' ? styles.pending : styles.inProgress}`}>{trf.status}</span>
                 </td>
                 <td>
                   <button 

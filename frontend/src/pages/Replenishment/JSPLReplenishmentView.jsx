@@ -1,20 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { useUIStore } from '../../stores/uiStore';
+import { useNotificationStore } from '../../stores/notificationStore';
 import styles from './JSPLReplenishmentView.module.css';
+import api from '../../services/api';
 
 const JSPLReplenishmentView = () => {
-  const addNotification = useUIStore(state => state.addNotification);
+  const addNotification = useNotificationStore(state => state.addNotification);
   const [recommendations, setRecommendations] = useState([]);
+  const [activeTransfers, setActiveTransfers] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Mocking recommendations data
-    setRecommendations([
-      { id: 'REC-1', sku: 'SKU-001', product: 'Widget A', requiredQty: 50, currentStock: 10 },
-      { id: 'REC-2', sku: 'SKU-002', product: 'Widget B', requiredQty: 200, currentStock: 5 },
-      { id: 'REC-3', sku: 'SKU-003', product: 'Widget C', requiredQty: 100, currentStock: 0 },
-    ]);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        // Fetch real recommendations data
+        const recRes = await api.get('/api/replenishment/recommendations');
+        setRecommendations(recRes.data);
+
+        // Fetch active transfers
+        const transfersRes = await api.get('/api/transfers?status=active');
+        setActiveTransfers(transfersRes.data);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const handleSelect = (id) => {
@@ -41,23 +54,29 @@ const JSPLReplenishmentView = () => {
     try {
       const itemsToApprove = recommendations
         .filter(r => selectedItems.has(r.id))
-        .map(r => ({ sku: r.sku, quantity: r.requiredQty }));
+        .map(r => ({ product_id: r.id, requested_qty: r.requiredQty, sku: r.sku }));
 
-      const response = await fetch('/api/transfers/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToApprove })
-      });
+      // JSPL (1) is requesting goods FROM BKR (2) TO JSPL (1)
+      const payload = {
+        from_company_id: 2, 
+        to_company_id: 1,
+        items: itemsToApprove.map(i => ({ product_id: i.product_id, requested_qty: i.requested_qty }))
+      };
 
-      if (!response.ok) throw new Error('Failed to create transfer');
+      const response = await api.post('/api/transfers/create', payload);
 
-      addNotification('Replenishment request sent to BKR successfully', 'success');
+      if (response.status !== 200) throw new Error('Failed to create transfer');
+
+      addNotification({ type: 'success', title: 'Success', message: 'Replenishment request sent to BKR successfully' });
       
-      // Remove approved items from list
-      setRecommendations(recommendations.filter(r => !selectedItems.has(r.id)));
+      const newTransfer = {
+        items: itemsToApprove.map(i => ({ sku: i.sku, requested_qty: i.requested_qty })),
+        status: 'Pending'
+      };
+      setActiveTransfers([...activeTransfers, newTransfer]);
       setSelectedItems(new Set());
     } catch (error) {
-      addNotification(error.message || 'Failed to approve replenishment', 'error');
+      addNotification({ type: 'error', title: 'Error', message: error.message || 'Failed to approve replenishment' });
     } finally {
       setLoading(false);
     }
@@ -92,10 +111,14 @@ const JSPLReplenishmentView = () => {
               <th>Product</th>
               <th>Current Stock</th>
               <th>Required Qty</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {recommendations.map(item => (
+            {recommendations.map(item => {
+              const activeTransfer = activeTransfers.find(t => t.items.some(i => i.sku === item.sku));
+              const isPending = !!activeTransfer;
+              return (
               <tr key={item.id}>
                 <td>
                   <input 
@@ -103,17 +126,25 @@ const JSPLReplenishmentView = () => {
                     className={styles.checkbox}
                     checked={selectedItems.has(item.id)}
                     onChange={() => handleSelect(item.id)}
+                    disabled={isPending}
                   />
                 </td>
                 <td>{item.sku}</td>
                 <td>{item.product}</td>
                 <td>{item.currentStock}</td>
                 <td>{item.requiredQty}</td>
+                <td>
+                  {isPending ? (
+                    <span className={styles.badge}>{activeTransfer.status}</span>
+                  ) : (
+                    <span style={{ color: '#888' }}>-</span>
+                  )}
+                </td>
               </tr>
-            ))}
+            )})}
             {recommendations.length === 0 && (
               <tr>
-                <td colSpan="5" style={{textAlign: 'center'}}>No items need replenishment right now.</td>
+                <td colSpan="6" style={{textAlign: 'center'}}>No items need replenishment right now.</td>
               </tr>
             )}
           </tbody>
