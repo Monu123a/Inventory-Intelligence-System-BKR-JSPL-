@@ -57,6 +57,9 @@ class Product(Base):
     brand = Column(String)
     item_rate = Column(Float, default=0.0)
     min_stock_level = Column(Integer, default=0)
+    reorder_level = Column(Integer, default=0)
+    safety_stock = Column(Integer, default=0)
+    preferred_transfer_qty = Column(Integer, default=1)
     status = Column(String, default="Active")
     hsn = Column(String)
     hsn_code = Column(String)
@@ -236,6 +239,11 @@ class CompanySettings(Base):
     tally_enabled = Column(Boolean, default=False)
     tally_endpoint_url = Column(String, nullable=True)
     tally_payload_format = Column(String, default="XML")  # XML | JSON
+    
+    # Replenishment Configuration
+    replenishment_enabled = Column(Boolean, default=False)
+    replenishment_time = Column(String, default="14:30")
+    replenishment_buffer_minutes = Column(Integer, default=30)
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -380,3 +388,89 @@ class SaleItem(Base):
 
     sale = relationship("Sale", back_populates="items")
     product = relationship("Product")
+
+
+# ------------------------------------------------------------------
+# Inter-Company Stock Replenishment & Transfer Models
+# ------------------------------------------------------------------
+
+class ReplenishmentRun(Base):
+    __tablename__ = "replenishment_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    run_date = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, nullable=False) # Success, Failed, Skipped
+    reason = Column(Text, nullable=True)
+    amazon_sync_log_id = Column(Integer, ForeignKey("amazon_sync_logs.id"), nullable=True)
+
+    company = relationship("Company")
+    recommendations = relationship("ReplenishmentRecommendation", back_populates="run", cascade="all, delete-orphan")
+
+
+class ReplenishmentRecommendation(Base):
+    __tablename__ = "replenishment_recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("replenishment_runs.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    current_stock = Column(Integer, default=0)
+    reserved_stock = Column(Integer, default=0)
+    available_stock = Column(Integer, default=0)
+    today_demand = Column(Integer, default=0)
+    safety_stock = Column(Integer, default=0)
+    recommended_qty = Column(Integer, default=0)
+    status = Column(String, default="Pending") # Pending, Approved, Dismissed
+
+    run = relationship("ReplenishmentRun", back_populates="recommendations")
+    product = relationship("Product")
+
+
+class StockTransfer(Base):
+    __tablename__ = "stock_transfers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_number = Column(String, index=True, unique=True, nullable=False)
+    from_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    to_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    
+    # Draft, Pending Approval, Approved, Invoice Generated, Dispatched, Received, Completed, Cancelled
+    status = Column(String, default="Draft")
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    dispatch_date = Column(DateTime, nullable=True)
+    received_date = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    total_value = Column(Float, default=0.0)
+
+    # Link to the generated B2B Sale Invoice
+    invoice_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+
+    from_company = relationship("Company", foreign_keys=[from_company_id])
+    to_company = relationship("Company", foreign_keys=[to_company_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    approver = relationship("User", foreign_keys=[approved_by])
+    invoice = relationship("Sale", foreign_keys=[invoice_id])
+    items = relationship("StockTransferItem", back_populates="transfer", cascade="all, delete-orphan")
+
+
+class StockTransferItem(Base):
+    __tablename__ = "stock_transfer_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transfer_id = Column(Integer, ForeignKey("stock_transfers.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    
+    requested_qty = Column(Integer, default=0)
+    approved_qty = Column(Integer, default=0)
+    dispatched_qty = Column(Integer, default=0)
+    received_qty = Column(Integer, default=0)
+    
+    unit_price = Column(Float, default=0.0)
+    total_value = Column(Float, default=0.0)
+
+    transfer = relationship("StockTransfer", back_populates="items")
+    product = relationship("Product")
+

@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import { useUIStore } from '../../stores/uiStore';
 import useCompanyStore from '../../stores/useCompanyStore';
-import { FiHome, FiBox, FiLayers, FiList, FiClock, FiFileText, FiDownload, FiSettings, FiShoppingCart, FiDollarSign } from 'react-icons/fi';
+import { FiHome, FiBox, FiLayers, FiList, FiClock, FiFileText, FiDownload, FiSettings, FiShoppingCart, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
 import styles from './Sidebar.module.css';
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { path: ROUTES.PRODUCTS, label: 'Products', icon: FiBox },
   { path: ROUTES.WAREHOUSES, label: 'Warehouses', icon: FiLayers },
   { path: ROUTES.INVENTORY, label: 'Inventory', icon: FiList },
+
   { path: ROUTES.INVENTORY_HISTORY, label: 'Inventory History', icon: FiClock },
   { path: ROUTES.REPORTS, label: 'Reports', icon: FiFileText },
   { path: ROUTES.DOWNLOAD_CENTRE, label: 'Download Centre', icon: FiDownload },
@@ -39,6 +40,25 @@ const Sidebar = () => {
             <span className={styles.label}>{item.label}</span>
           </NavLink>
         ))}
+
+        {!isBkr ? (
+          <NavLink
+            to={ROUTES.REPLENISHMENT_JSPL}
+            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+          >
+            <FiRefreshCw className={styles.icon} />
+            <span className={styles.label}>Need Replenishment</span>
+          </NavLink>
+        ) : (
+          <NavLink
+            to={ROUTES.REPLENISHMENT_BKR}
+            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+          >
+            <FiRefreshCw className={styles.icon} />
+            <span className={styles.label}>JSPL Requirements</span>
+          </NavLink>
+        )}
+
 
         {isBkr && (
           <>

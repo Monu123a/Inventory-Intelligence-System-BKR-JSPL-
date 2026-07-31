@@ -1,0 +1,88 @@
+.container {
+  padding: 24px;
+  background-color: var(--bg-color, #f4f6f8);
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.titleArea h1 {
+  margin: 0;
+  color: var(--text-primary, #333);
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.primaryBtn {
+  background-color: var(--primary-color, #0056b3);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.tableContainer {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th, .table td {
+  padding: 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.table th {
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  background-color: var(--bg-light, #fafafa);
+}
+
+.qtyInput {
+  width: 80px;
+  padding: 6px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary, #666);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 18px;
+  color: var(--text-secondary, #666);
+}

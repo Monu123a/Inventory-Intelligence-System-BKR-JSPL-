@@ -11,4 +11,7 @@ export const ROUTES = {
   POS: '/pos',
   POS_HISTORY: '/pos-history',
   POS_INVOICE: '/sales/:saleId/invoice',
+  REPLENISHMENT_JSPL: '/replenishment/jspl',
+  REPLENISHMENT_BKR: '/replenishment/bkr',
+  REPLENISHMENT_BKR_INVOICE: '/replenishment/bkr/:id',
 };

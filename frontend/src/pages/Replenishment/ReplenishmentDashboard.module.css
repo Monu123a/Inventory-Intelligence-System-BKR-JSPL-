@@ -1,0 +1,118 @@
+.container {
+  padding: 24px;
+  background-color: var(--bg-color, #f4f6f8);
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--text-primary, #333);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.primaryBtn {
+  background-color: var(--primary-color, #0056b3);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.secondaryBtn {
+  background-color: white;
+  color: var(--primary-color, #0056b3);
+  border: 1px solid var(--primary-color, #0056b3);
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.kpiCards {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  flex: 1;
+}
+
+.card h3 {
+  margin-top: 0;
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kpiValue {
+  font-size: 28px;
+  font-weight: bold;
+  margin: 10px 0 0;
+  color: var(--text-primary, #333);
+}
+
+.kpiText {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+}
+
+.widget {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.table th, .table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.table th {
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  background-color: var(--bg-light, #fafafa);
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  color: var(--primary-color, #0056b3);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 18px;
+  color: var(--text-secondary, #666);
+}

@@ -35,6 +35,8 @@ from app.api.routers.companies import router as companies_router
 from app.api.routers.auth import router as auth_router
 from app.api.routers.pos import router as pos_router
 from app.api.routers.company_settings import router as company_settings_router
+from app.api.routers.replenishment import router as replenishment_router
+from app.api.routers.transfers import router as transfers_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -117,6 +119,8 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(pos_router, prefix="/api")
 app.include_router(company_settings_router, prefix="/api")
+app.include_router(replenishment_router, prefix="/api")
+app.include_router(transfers_router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------
