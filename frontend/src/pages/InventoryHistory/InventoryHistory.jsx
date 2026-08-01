@@ -15,6 +15,8 @@ const EventBadge = ({ source }) => {
   if (s.includes('amazon')) colorClass = styles.badgeAmazon;
   else if (s.includes('upload')) colorClass = styles.badgeUpload;
   else if (s.includes('manual')) colorClass = styles.badgeManual;
+  else if (s.includes('transfer in')) colorClass = styles.badgeTransferIn;
+  else if (s.includes('transfer out')) colorClass = styles.badgeTransferOut;
 
   return <span className={`${styles.badge} ${colorClass}`}>{source}</span>;
 };

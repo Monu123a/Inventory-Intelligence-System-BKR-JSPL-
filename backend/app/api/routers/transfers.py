@@ -5,6 +5,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.schema import User, StockTransfer
 from app.services.stock_transfer_service import StockTransferService
 from app.services.transfer_number_service import TransferNumberService
+from sqlalchemy import func
 
 router = APIRouter(prefix="/transfers", tags=["Stock Transfers"])
 
@@ -68,18 +69,20 @@ def complete_transfer(transfer_id: int, req: CompleteTransferRequest, db: Sessio
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{transfer_id}")
-def get_transfer(transfer_id: int, db: Session = Depends(get_db)):
+def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).first()
     if not transfer:
         raise HTTPException(status_code=404, detail="Transfer not found")
         
     items = []
     for item in transfer.items:
-        source_inv = db.query(Inventory).filter(
+        # Aggregate available stock across ALL warehouses for the source company
+        total_available = db.query(
+            func.sum(Inventory.available_qty)
+        ).filter(
             Inventory.company_id == transfer.from_company_id,
             Inventory.product_id == item.product_id
-        ).first()
-        available_qty = source_inv.current_qty if source_inv else 0
+        ).scalar() or 0
         
         items.append({
             "id": item.id,
@@ -87,8 +90,8 @@ def get_transfer(transfer_id: int, db: Session = Depends(get_db)):
             "sku": item.product.sku if item.product else "",
             "product": item.product.name if item.product else "",
             "requested_qty": item.requested_qty,
-            "unit_price": item.product.item_rate if item.product else 0, # Map actual price from product
-            "available_qty": available_qty
+            "unit_price": item.product.item_rate if item.product else 0,
+            "available_qty": total_available
         })
         
     return {
@@ -108,7 +111,8 @@ def list_transfers(
     status: Optional[str] = None, 
     to_company_id: Optional[int] = None,
     history: Optional[bool] = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     from app.models.schema import CompanySettings
     query = db.query(StockTransfer)

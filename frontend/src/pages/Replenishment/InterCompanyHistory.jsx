@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './InterCompanyHistory.module.css';
 import api from '../../services/api';
+import { useNotificationStore } from '../../stores/notificationStore';
 
 const InterCompanyHistory = () => {
+  const addNotification = useNotificationStore(state => state.addNotification);
   const [transfers, setTransfers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -16,7 +18,7 @@ const InterCompanyHistory = () => {
         const response = await api.get('/api/transfers?history=true');
         setTransfers(response.data);
       } catch (error) {
-        console.error('Error fetching inter-company history:', error);
+        addNotification({ type: 'error', title: 'Error', message: 'Error fetching inter-company history' });
       } finally {
         setIsLoading(false);
       }
@@ -59,9 +61,9 @@ const InterCompanyHistory = () => {
                     <td>{trf.to_company_name}</td>
                     <td>{trf.invoice_id || '-'}</td>
                     <td>{trf.total_qty}</td>
-                    <td>${trf.total_amount?.toFixed(2)}</td>
+                    <td>₹{trf.total_amount?.toFixed(2)}</td>
                     <td>
-                      <span className={`${styles.status} ${styles[trf.status.toLowerCase()] || ''}`}>
+                      <span className={`${styles.status} ${styles[(trf.status || '').toLowerCase()] || ''}`}>
                         {trf.status}
                       </span>
                     </td>

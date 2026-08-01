@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from sqlalchemy.orm import Session
 from app.models.schema import StockTransfer, Company
@@ -18,19 +19,22 @@ class TransferNumberService:
 
         prefix = f"TRF/{company_code}/{fy}/"
         
-        last_transfer = (
+        # Get all transfers with this prefix to find the max sequence
+        matching_transfers = (
             db.query(StockTransfer)
             .filter(StockTransfer.from_company_id == company_id)
             .filter(StockTransfer.transfer_number.startswith(prefix))
-            .order_by(StockTransfer.id.desc())
-            .first()
+            .all()
         )
         
         seq = 1
-        if last_transfer:
-            try:
-                seq = int(last_transfer.transfer_number.split('/')[-1]) + 1
-            except ValueError:
-                seq = 1
+        for t in matching_transfers:
+            # Extract the sequence number from the last segment, handling any suffixes
+            last_segment = t.transfer_number.split('/')[-1]
+            # Extract only the leading digits (handles "0001", "0001-BO", etc.)
+            match = re.match(r'^(\d+)', last_segment)
+            if match:
+                num = int(match.group(1))
+                seq = max(seq, num + 1)
                 
         return f"{prefix}{seq:04d}"

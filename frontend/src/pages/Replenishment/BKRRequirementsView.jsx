@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import styles from './TransferList.module.css'; // Re-use existing table styles
 import api from '../../services/api';
+import { useNotificationStore } from '../../stores/notificationStore';
 
 const BKRRequirementsView = () => {
   const navigate = useNavigate();
+  const addNotification = useNotificationStore(state => state.addNotification);
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -17,7 +19,7 @@ const BKRRequirementsView = () => {
         // Let's ensure we only show pending/in progress
         setTransfers(res.data.filter(t => t.status === 'Pending' || t.status === 'In Progress'));
       } catch (err) {
-        console.error('Failed to fetch transfers', err);
+        addNotification({ type: 'error', title: 'Error', message: 'Failed to fetch transfers' });
       } finally {
         setLoading(false);
       }

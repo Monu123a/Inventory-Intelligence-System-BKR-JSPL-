@@ -18,10 +18,15 @@ class ProductCreate(BaseModel):
     min_stock_level: int = 0
     status: str = "Active"
     hsn: Optional[str] = None
+    hsn_code: Optional[str] = None
     barcode: Optional[str] = None
     unit: Optional[str] = None
+    reorder_level: Optional[int] = None
+    safety_stock: Optional[int] = None
+    default_gst_rate: Optional[float] = None
 
 class ProductResponse(ProductCreate):
+    id: int
     model_config = ConfigDict(from_attributes=True)
 
 @router.get("/filters")

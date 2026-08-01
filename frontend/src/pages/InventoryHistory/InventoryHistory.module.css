@@ -29,6 +29,16 @@
   color: #7c3aed;
 }
 
+.badgeTransferIn {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.badgeTransferOut {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
 .qtyText {
   color: var(--color-neutral-600);
 }

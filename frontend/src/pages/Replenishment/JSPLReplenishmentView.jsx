@@ -22,7 +22,7 @@ const JSPLReplenishmentView = () => {
         const transfersRes = await api.get('/api/transfers?status=active');
         setActiveTransfers(transfersRes.data);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        addNotification({ type: 'error', title: 'Error', message: 'Failed to load replenishment data' });
       } finally {
         setLoading(false);
       }
@@ -65,7 +65,7 @@ const JSPLReplenishmentView = () => {
 
       const response = await api.post('/api/transfers/create', payload);
 
-      if (response.status !== 200) throw new Error('Failed to create transfer');
+      if (response.status !== 200 && response.status !== 201) throw new Error('Failed to create transfer');
 
       addNotification({ type: 'success', title: 'Success', message: 'Replenishment request sent to BKR successfully' });
       
@@ -75,6 +75,10 @@ const JSPLReplenishmentView = () => {
       };
       setActiveTransfers([...activeTransfers, newTransfer]);
       setSelectedItems(new Set());
+      
+      // Refetch recommendations
+      const recRes = await api.get('/api/replenishment/recommendations');
+      setRecommendations(recRes.data);
     } catch (error) {
       addNotification({ type: 'error', title: 'Error', message: error.message || 'Failed to approve replenishment' });
     } finally {

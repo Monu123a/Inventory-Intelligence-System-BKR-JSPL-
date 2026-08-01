@@ -88,7 +88,7 @@ export default function InvoicePreviewPage() {
 
   const handleDownloadPdf = () => {
     if (invoiceRef.current && invoice) {
-      downloadInvoicePdf(invoiceRef.current, invoice.invoiceNumber || saleId);
+      downloadInvoicePdf(invoiceRef.current, invoice.invoice_number || saleId);
     }
   };
 
@@ -109,8 +109,8 @@ export default function InvoicePreviewPage() {
 
   if (!invoice) return null;
 
-  const isB2b = invoice.customerType === 'B2B' || invoice.gstNumber;
-  const tallyStatus = invoice.tallyStatus || 'PENDING';
+  const isB2b = invoice.invoice_type === 'B2B' || invoice.customer?.gstin;
+  const tallyStatus = invoice.tally?.status || 'PENDING';
   const showRetry = isB2b && (tallyStatus === 'FAILED' || tallyStatus === 'PENDING');
 
   return (

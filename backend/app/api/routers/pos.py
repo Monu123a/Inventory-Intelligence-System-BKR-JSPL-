@@ -161,7 +161,8 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
         for item in request.items:
             inv = db.query(Inventory).filter(
                 Inventory.product_id == item.product_id,
-                Inventory.warehouse_id == default_warehouse.id
+                Inventory.warehouse_id == default_warehouse.id,
+                Inventory.company_id == company_id
             ).with_for_update().first() # Lock row
 
             if not inv or inv.available_qty < item.quantity:
@@ -252,10 +253,12 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
             db.add(sale_item)
             
             # 5. Inventory Deduction via Event Engine
+            # Use the verified DB product SKU, not the client-supplied SKU
+            verified_sku = product.sku if product else item.sku
             InventoryEventEngine.process_event(
                 db=db,
                 company_id=company_id,
-                product_sku=item.sku,
+                product_sku=verified_sku,
                 warehouse_id=default_warehouse.id,
                 quantity=item.quantity,
                 event_type="SALE",

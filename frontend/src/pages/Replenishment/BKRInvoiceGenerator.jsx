@@ -24,7 +24,7 @@ const BKRInvoiceGenerator = () => {
         const fetchedItems = transfer.items.map(item => ({
           product_id: item.product_id,
           sku: item.sku,
-          product: item.product?.name || item.sku,
+          product: (typeof item.product === 'object' ? item.product?.name : item.product) || item.sku,
           requestedQty: item.requested_qty,
           bkrStock: item.available_qty,
           approvedQty: item.requested_qty,
@@ -56,26 +56,40 @@ const BKRInvoiceGenerator = () => {
       sgst += lineGst / 2;
       
       return {
-        productName: item.product,
+        product_name: item.product,
         sku: item.sku,
         quantity: item.approvedQty,
-        unitPrice: item.rate,
-        totalPrice: lineTotal + lineGst
+        selling_price: item.rate,
+        gst_rate: item.gstRate,
+        cgst: lineGst / 2,
+        sgst: lineGst / 2,
+        igst: 0,
+        taxable_amount: lineTotal,
+        line_total: lineTotal + lineGst
       };
     });
 
     setDummyInvoice({
-      invoiceNumber: 'PREVIEW-' + id,
+      invoice_number: 'PREVIEW-' + id,
       date: new Date().toISOString(),
-      customerName: 'JSPL',
-      customerType: 'B2B',
-      gstNumber: '29ABCDE1234F2Z5',
+      invoice_type: 'B2B',
+      payment_method: 'TRANSFER',
+      customer: {
+        name: 'JSPL',
+        phone: '0000000000',
+        gstin: '29ABCDE1234F2Z5'
+      },
+      company: {
+        name: 'BKR',
+        gstin: '29BKRDE1234F2Z5',
+        phone: '0000000000'
+      },
       items: invoiceItems,
-      subtotal,
-      cgst,
-      sgst,
-      totalAmount: subtotal + cgst + sgst,
-      paymentMethod: 'TRANSFER'
+      totals: {
+        total_taxable_amount: subtotal,
+        total_tax: cgst + sgst,
+        grand_total: subtotal + cgst + sgst
+      }
     });
   };
 
@@ -124,7 +138,7 @@ const BKRInvoiceGenerator = () => {
             product_id: item.product_id,
             sku: item.sku,
             product_name: item.product,
-            quantity: item.approvedQty,
+            quantity: parseInt(item.approvedQty, 10) || 0,
             selling_price: item.rate,
             gst_rate: item.gstRate,
             taxable_amount: lineTotal,
@@ -144,7 +158,8 @@ const BKRInvoiceGenerator = () => {
       }
       
       // We would get receipt ID here
-      const receiptId = saleResponse.data?.receipt?.id || 123;
+      const receiptId = saleResponse.data?.receipt?.id;
+      if (!receiptId) throw new Error("Sale response missing receipt ID");
 
       // 2. Complete Transfer
       const completeResponse = await api.put(`/api/transfers/${id}/complete`, { invoice_id: receiptId });
@@ -156,7 +171,7 @@ const BKRInvoiceGenerator = () => {
       addNotification({ type: 'success', title: 'Success', message: 'B2B Invoice generated successfully!' });
       navigate(ROUTES.REPLENISHMENT_BKR);
     } catch (error) {
-      addNotification({ type: 'error', title: 'Error', message: error.message || 'Failed to generate invoice' });
+      addNotification({ type: 'error', title: 'Error', message: error.response?.data?.detail || error.message || 'Failed to generate invoice' });
     } finally {
       setGenerating(false);
     }

@@ -42,7 +42,7 @@ export const useInventoryHistory = ({ search = '', dateRange = { start: '', end:
       const product = products.find(p => p.sku === record.product_sku) || {};
       return {
         ...record,
-        product_name: product.name || 'Unknown Product',
+        product_name: record.product_name || product.name || 'Unknown Product',
         warehouse_name: warehouseMap[record.warehouse_id] || `Warehouse ${record.warehouse_id}`,
       };
     });
@@ -53,7 +53,7 @@ export const useInventoryHistory = ({ search = '', dateRange = { start: '', end:
       joined = joined.filter(r => new Date(r.timestamp).getTime() >= start);
     }
     if (dateRange.end) {
-      const end = new Date(dateRange.end).getTime();
+      const end = new Date(dateRange.end).getTime() + 86399999; // + 23:59:59.999
       joined = joined.filter(r => new Date(r.timestamp).getTime() <= end);
     }
 

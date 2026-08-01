@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
   }
   
   const companyId = useCompanyStore.getState().companyId;
-  if (companyId) {
+  if (companyId !== null && companyId !== undefined) {
     config.headers['X-Company-Id'] = companyId.toString();
   }
   

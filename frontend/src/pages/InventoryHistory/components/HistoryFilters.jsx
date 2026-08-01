@@ -64,6 +64,8 @@ export const HistoryFilters = ({
             <option value="Amazon">Amazon Order</option>
             <option value="Upload">Inventory Upload</option>
             <option value="Manual">Manual Adjustment</option>
+            <option value="Transfer In">Transfer In</option>
+            <option value="Transfer Out">Transfer Out</option>
           </select>
         </div>
         

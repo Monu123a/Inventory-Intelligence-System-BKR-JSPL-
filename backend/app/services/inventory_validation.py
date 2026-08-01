@@ -57,6 +57,10 @@ class InventoryValidationService:
             except (ValueError, TypeError):
                 errors.append(f"Row {row_num}: Quantity for SKU {sku} is not numeric.")
                 continue
+            
+            if quantity < 0:
+                errors.append(f"Row {row_num}: Quantity for SKU {sku} cannot be negative ({quantity}).")
+                continue
                 
             record["warehouse_id"] = warehouse.id
             valid_records.append(record)

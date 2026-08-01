@@ -34,8 +34,7 @@ def get_recommendations(company_id: int = Depends(get_current_company_id), db: S
         Inventory.product_id,
         func.sum(Inventory.available_qty).label("total_qty")
     ).filter(
-        Inventory.company_id == company_id,
-        Inventory.product_id.in_([1, 2, 3, 4, 5]) # Temporarily limit to a few test products to avoid massive lists
+        Inventory.company_id == company_id
     ).group_by(
         Inventory.product_id
     ).all()
@@ -43,15 +42,24 @@ def get_recommendations(company_id: int = Depends(get_current_company_id), db: S
     recommendations = []
     for product_id, total_qty in results:
         total_qty = total_qty or 0
-        if total_qty < 10:
-            product = db.query(Product).filter(Product.id == product_id).first()
-            if product:
-                recommendations.append({
-                    "id": product.id,
-                    "sku": product.sku,
-                    "product": product.name,
-                    "requiredQty": max(50 - total_qty, 10),
-                    "currentStock": total_qty
-                })
+        product = db.query(Product).filter(
+            Product.id == product_id,
+            Product.company_id == company_id
+        ).first()
+        if not product:
+            continue
+        
+        # Use product-level thresholds, with sensible defaults
+        min_stock = product.min_stock_level or 10
+        reorder_level = product.reorder_level or 50
+        
+        if total_qty < min_stock:
+            recommendations.append({
+                "id": product.id,
+                "sku": product.sku,
+                "product": product.name,
+                "requiredQty": max(reorder_level - total_qty, 10),
+                "currentStock": total_qty
+            })
     return recommendations
 

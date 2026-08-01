@@ -23,6 +23,9 @@ class InventoryEventEngine:
         """
         The single source of truth for all inventory modifications.
         """
+        # Guard against negative quantities
+        if quantity < 0:
+            raise ValueError(f"Quantity must be non-negative, got {quantity}")
         # Ensure product exists for this company
         product = db.query(Product).filter(Product.sku == product_sku, Product.company_id == company_id).first()
         if not product:
@@ -43,7 +46,9 @@ class InventoryEventEngine:
                 company_id=company_id,
                 product_id=product.id,
                 warehouse_id=warehouse_id,
-                current_qty=0
+                current_qty=0,
+                reserved_qty=0,
+                available_qty=0
             )
             db.add(inventory)
             db.flush()

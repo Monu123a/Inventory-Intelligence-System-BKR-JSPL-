@@ -31,15 +31,15 @@ class MovementResponse(BaseModel):
     company_id: int
     product_id: int
     timestamp: datetime
-    product_sku: str
-    product_name: str
+    product_sku: Optional[str] = None
+    product_name: Optional[str] = None
     warehouse_id: int
     qty_before: int
     qty_changed: int
     qty_after: int
-    source: str
-    reference_id: str
-    metadata_payload: dict
+    source: Optional[str] = None
+    reference_id: Optional[str] = None
+    metadata_payload: Optional[dict] = None
     model_config = ConfigDict(from_attributes=True)
 
 @router.get("/", response_model=List[InventoryResponse])
@@ -87,16 +87,38 @@ def get_global_inventory_history(company_id: int = Depends(get_current_company_i
     
     return result
 
-@router.get("/{sku}/history", response_model=List[MovementResponse])
+@router.get("/{sku}/history", response_model=List[GlobalMovementResponse])
 def get_inventory_history(sku: str, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     """Inventory Timeline (History) for a specific product"""
     product = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
     if not product:
         return []
-    return db.query(InventoryMovement).options(joinedload(InventoryMovement.product)).filter(
+    movements = db.query(InventoryMovement).options(joinedload(InventoryMovement.product)).filter(
         InventoryMovement.company_id == company_id, 
         InventoryMovement.product_id == product.id
     ).order_by(InventoryMovement.timestamp.desc()).all()
+    
+    result = []
+    for mov in movements:
+        payload = mov.metadata_payload or {}
+        disp_meta = [{"label": k.replace("_", " ").title(), "value": str(v)} for k, v in payload.items()]
+        result.append({
+            "id": mov.id,
+            "company_id": mov.company_id,
+            "product_id": mov.product_id,
+            "timestamp": mov.timestamp,
+            "product_sku": mov.product.sku if mov.product else "Unknown",
+            "product_name": mov.product.name if mov.product else "Unknown",
+            "warehouse_id": mov.warehouse_id,
+            "qty_before": mov.qty_before,
+            "qty_changed": mov.qty_changed,
+            "qty_after": mov.qty_after,
+            "source": mov.source or "",
+            "reference_id": mov.reference_id or "",
+            "metadata_payload": payload,
+            "display_metadata": disp_meta
+        })
+    return result
 
 @router.post("/upload")
 async def upload_inventory(
