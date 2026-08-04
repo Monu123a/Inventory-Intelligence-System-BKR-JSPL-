@@ -27,6 +27,7 @@ class CompanySettingsResponse(BaseModel):
 
     declaration: str | None = None
     terms_of_delivery_default: str | None = None
+    smtp_settings: dict | None = None
 
 
 class CompanySettingsUpdate(BaseModel):
@@ -46,6 +47,7 @@ class CompanySettingsUpdate(BaseModel):
 
     declaration: str | None = None
     terms_of_delivery_default: str | None = None
+    smtp_settings: dict | None = None
 
 
 @router.get("/", response_model=CompanySettingsResponse)
@@ -68,6 +70,7 @@ def get_settings(company_id: int = Depends(get_current_company_id), db: Session 
         bank_details=settings.bank_details,
         declaration=settings.declaration,
         terms_of_delivery_default=settings.terms_of_delivery_default,
+        smtp_settings=settings.smtp_settings,
     )
 
 

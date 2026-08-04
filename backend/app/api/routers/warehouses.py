@@ -4,48 +4,91 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from app.models.db import get_db
-from app.models.schema import Warehouse
 from app.api.dependencies import get_current_company_id
+from app.services.warehouse_service import WarehouseService
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 
 class WarehouseBase(BaseModel):
     name: str
-    code: str
+    code: Optional[str] = None
     status: str = "Active"
     address: Optional[str] = None
     contact_person: Optional[str] = None
+    manager: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None
+    hub_id: Optional[int] = None
 
 class WarehouseResponse(WarehouseBase):
     id: int
+    company_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class WarehouseUserBase(BaseModel):
+    user_id: int
+    permission: str = "VIEW"
+
+class WarehouseUserResponse(WarehouseUserBase):
+    id: int
+    warehouse_id: int
     model_config = ConfigDict(from_attributes=True)
 
 @router.get("/", response_model=List[WarehouseResponse])
 def get_warehouses(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    return db.query(Warehouse).filter(Warehouse.company_id == company_id).all()
+    return WarehouseService.get_all(db, company_id)
 
 @router.post("/", response_model=WarehouseResponse)
 def create_warehouse(warehouse: WarehouseBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    existing = db.query(Warehouse).filter(Warehouse.code == warehouse.code, Warehouse.company_id == company_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Warehouse with this code already exists")
-    new_wh = Warehouse(**warehouse.model_dump(), company_id=company_id)
-    db.add(new_wh)
-    db.commit()
-    db.refresh(new_wh)
-    return new_wh
+    try:
+        return WarehouseService.create(db, company_id, warehouse.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{warehouse_id}", response_model=WarehouseResponse)
+def get_warehouse(warehouse_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    wh = WarehouseService.get_by_id(db, warehouse_id, company_id)
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    return wh
 
 @router.put("/{warehouse_id}", response_model=WarehouseResponse)
 def update_warehouse(warehouse_id: int, warehouse: WarehouseBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    existing = db.query(Warehouse).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
-    if not existing:
+    try:
+        return WarehouseService.update(db, warehouse_id, company_id, warehouse.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/{warehouse_id}")
+def delete_warehouse(warehouse_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    try:
+        WarehouseService.delete(db, warehouse_id, company_id)
+        return {"detail": "Warehouse deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{warehouse_id}/users", response_model=List[WarehouseUserResponse])
+def get_warehouse_users(warehouse_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    wh = WarehouseService.get_by_id(db, warehouse_id, company_id)
+    if not wh:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    
-    for key, value in warehouse.model_dump(exclude_unset=True).items():
-        setattr(existing, key, value)
-        
-    db.commit()
-    db.refresh(existing)
-    return existing
+    return WarehouseService.get_warehouse_users(db, warehouse_id)
+
+@router.post("/{warehouse_id}/users", response_model=WarehouseUserResponse)
+def assign_warehouse_user(warehouse_id: int, data: WarehouseUserBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    wh = WarehouseService.get_by_id(db, warehouse_id, company_id)
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    return WarehouseService.assign_warehouse_user(db, warehouse_id, data.user_id, data.permission)
+
+@router.delete("/{warehouse_id}/users/{user_id}")
+def remove_warehouse_user(warehouse_id: int, user_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    wh = WarehouseService.get_by_id(db, warehouse_id, company_id)
+    if not wh:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    success = WarehouseService.remove_warehouse_user(db, warehouse_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Warehouse user assignment not found")
+    return {"detail": "User removed from warehouse successfully"}

@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.schema import Product, Warehouse, InventoryMovement, AmazonSyncLog, Inventory
+from app.services.inventory_event_engine import InventoryEventEngine
 from app.amazon.mock_orders import get_mock_shipped_orders
 
 logger = logging.getLogger("amazon.pipeline")
@@ -47,6 +48,7 @@ class AmazonPipeline:
         last_next_token = last_sync.next_token if last_sync else None
         
         sync_log = AmazonSyncLog(
+            company_id=1,  # Default company for Amazon sync
             sync_start_time=datetime.utcnow(),
             status="IN_PROGRESS",
             orders_processed=0,
@@ -69,9 +71,12 @@ class AmazonPipeline:
             sync_log.api_response_status = "200 OK"
             
             # Find a default warehouse to deduct from
-            default_warehouse = db.query(Warehouse).filter(Warehouse.is_active == True).first()
+            default_warehouse = db.query(Warehouse).filter(Warehouse.status == "Active").first()
             if not default_warehouse:
                 raise Exception("No active warehouse found to deduct inventory from.")
+            
+            # Get the company_id from the warehouse
+            company_id = default_warehouse.company_id
 
             movements_count = 0
             skipped_count = 0
@@ -107,8 +112,11 @@ class AmazonPipeline:
                         skipped_count += 1
                         continue
                     
-                    # Verify product exists
-                    product = db.query(Product).filter(Product.sku == normalized_sku).first()
+                    # Verify product exists for this company
+                    product = db.query(Product).filter(
+                        Product.sku == normalized_sku,
+                        Product.company_id == company_id
+                    ).first()
                     if not product:
                         logger.warning(f"Order {order_id} has unknown SKU: {normalized_sku}. Recording failure.")
                         failed_count += 1
@@ -116,29 +124,23 @@ class AmazonPipeline:
                             unknown_skus_list.append(normalized_sku)
                         continue
                         
-                    # Create Movement
-                    movement = InventoryMovement(
-                        sku=normalized_sku,
-                        warehouse_id=default_warehouse.id,
-                        quantity=quantity,
-                        operation="DECREASE",
-                        source="Amazon",
-                        reference_id=unique_ref,
-                        reason=f"Amazon Order Shipped"
-                    )
-                    db.add(movement)
-                    
-                    # Update Inventory directly to reflect current stock
-                    inv = db.query(Inventory).filter(
-                        Inventory.sku == normalized_sku, 
-                        Inventory.warehouse_id == default_warehouse.id
-                    ).first()
-                    
-                    if inv:
-                        inv.quantity -= quantity
-                    else:
-                        inv = Inventory(sku=normalized_sku, warehouse_id=default_warehouse.id, quantity=-quantity)
-                        db.add(inv)
+                    # Use InventoryEventEngine for proper stock deduction and movement tracking
+                    try:
+                        InventoryEventEngine.process_event(
+                            db=db,
+                            company_id=company_id,
+                            product_sku=normalized_sku,
+                            warehouse_id=default_warehouse.id,
+                            quantity=quantity,
+                            event_type="DEDUCT",
+                            source="AMAZON_SYNC",
+                            reference_id=unique_ref,
+                            metadata_payload={"order_id": order_id, "order_item_id": order_item_id}
+                        )
+                    except Exception as item_err:
+                        logger.error(f"Failed to process item {unique_ref}: {item_err}")
+                        failed_count += 1
+                        continue
                         
                     movements_count += 1
 

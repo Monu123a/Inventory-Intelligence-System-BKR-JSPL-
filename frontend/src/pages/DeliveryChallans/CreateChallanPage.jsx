@@ -1,0 +1,155 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
+import useCompanyStore from '../../stores/useCompanyStore';
+import styles from './DeliveryChallansPage.module.css';
+
+export default function CreateChallanPage() {
+  const navigate = useNavigate();
+  const currentCompany = useCompanyStore(state => state.currentCompany);
+  
+  const [sales, setSales] = useState([]);
+  const [selectedSaleId, setSelectedSaleId] = useState('');
+  
+  const [transport, setTransport] = useState({
+    vehicle_number: '',
+    transport_mode: '',
+    eway_bill: '',
+    remarks: ''
+  });
+  
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (currentCompany?.id) {
+      // Fetch recent sales to link to the challan
+      api.get('/api/pos/history?limit=50')
+        .then(res => setSales(res.data?.items || []))
+        .catch(err => console.error(err));
+    }
+  }, [currentCompany]);
+
+  const handleCreate = async () => {
+    if (!selectedSaleId) {
+      setError('Please select an invoice to base the Delivery Challan on.');
+      return;
+    }
+    
+    setCreating(true);
+    setError('');
+    
+    try {
+      const payload = {
+        sale_id: parseInt(selectedSaleId),
+        ...transport
+      };
+      const response = await api.post('/api/delivery-challans/', payload);
+      navigate(`/delivery-challans/${response.data.id}`);
+    } catch (err) {
+      console.error(err);
+      let errorMessage = 'Failed to create Delivery Challan';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => `${e.loc?.slice(-1)?.[0] || 'Field'}: ${e.msg}`).join(', ');
+        }
+      }
+      setError(errorMessage);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className={styles.container} style={{ maxWidth: '600px', margin: '0 auto' }}>
+      <div className={styles.header}>
+        <h2>Create Delivery Challan</h2>
+      </div>
+      
+      {error && <div className={styles.errorText} style={{ color: 'red', marginBottom: '16px' }}>{error}</div>}
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>Select Invoice</label>
+          <select 
+            value={selectedSaleId}
+            onChange={(e) => setSelectedSaleId(e.target.value)}
+            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+          >
+            <option value="">-- Select an Invoice --</option>
+            {sales.map(sale => (
+              <option key={sale.id} value={sale.id}>
+                {sale.bill_number} - {sale.customer_name} ({new Date(sale.sale_date).toLocaleDateString()})
+              </option>
+            ))}
+          </select>
+          <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
+            The challan will automatically copy the products, quantities, and parties from the invoice.
+          </small>
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>Vehicle Number (Optional)</label>
+          <input 
+            type="text" 
+            value={transport.vehicle_number}
+            onChange={(e) => setTransport({...transport, vehicle_number: e.target.value})}
+            placeholder="e.g. MH 12 AB 1234"
+            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+          />
+        </div>
+        
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>Transport Mode (Optional)</label>
+          <input 
+            type="text" 
+            value={transport.transport_mode}
+            onChange={(e) => setTransport({...transport, transport_mode: e.target.value})}
+            placeholder="e.g. Road, Air, Rail"
+            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>E-Way Bill (Optional)</label>
+          <input 
+            type="text" 
+            value={transport.eway_bill}
+            onChange={(e) => setTransport({...transport, eway_bill: e.target.value})}
+            placeholder="E-Way Bill Number"
+            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>Remarks</label>
+          <textarea 
+            value={transport.remarks}
+            onChange={(e) => setTransport({...transport, remarks: e.target.value})}
+            placeholder="Any additional remarks..."
+            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '80px' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+          <button 
+            onClick={() => navigate('/delivery-challans')}
+            style={{ padding: '10px 20px', background: '#f3f4f6', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button 
+            className={styles.primaryButton}
+            onClick={handleCreate}
+            disabled={creating}
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            {creating ? 'Creating...' : 'Create Challan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

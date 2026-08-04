@@ -24,6 +24,7 @@ class TransferNumberService:
             db.query(StockTransfer)
             .filter(StockTransfer.from_company_id == company_id)
             .filter(StockTransfer.transfer_number.startswith(prefix))
+            .with_for_update()
             .all()
         )
         

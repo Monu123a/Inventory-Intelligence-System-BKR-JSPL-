@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, UniqueConstraint, Text
 from sqlalchemy.orm import relationship
+
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, UniqueConstraint, Text, text
+from sqlalchemy.ext.hybrid import hybrid_property
 from datetime import datetime
 from app.models.db import Base
 
@@ -13,15 +15,17 @@ class Company(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    users = relationship("CompanyUser", back_populates="company")
-    products = relationship("Product", back_populates="company")
-    warehouses = relationship("Warehouse", back_populates="company")
-    inventories = relationship("Inventory", back_populates="company")
-    movements = relationship("InventoryMovement", back_populates="company")
-    amazon_sync_logs = relationship("AmazonSyncLog", back_populates="company")
-    reports = relationship("ReportHistory", back_populates="company")
-    alerts = relationship("Alert", back_populates="company")
-    job_logs = relationship("JobExecutionLog", back_populates="company")
+    users = relationship("CompanyUser", back_populates="company", cascade="all, delete-orphan")
+    products = relationship("Product", back_populates="company", cascade="all, delete-orphan")
+    warehouses = relationship("Warehouse", back_populates="company", cascade="all, delete-orphan")
+    inventories = relationship("Inventory", back_populates="company", cascade="all, delete-orphan")
+    movements = relationship("InventoryMovement", back_populates="company", cascade="all, delete-orphan")
+    amazon_sync_logs = relationship("AmazonSyncLog", back_populates="company", cascade="all, delete-orphan")
+    reports = relationship("ReportHistory", back_populates="company", cascade="all, delete-orphan")
+    alerts = relationship("Alert", back_populates="company", cascade="all, delete-orphan")
+    job_logs = relationship("JobExecutionLog", back_populates="company", cascade="all, delete-orphan")
+    sales_returns = relationship("SalesReturn", backref="company_ref", cascade="all, delete-orphan")
+    delivery_challans = relationship("DeliveryChallan", backref="company_ref", cascade="all, delete-orphan")
 
 class CompanyUser(Base):
     __tablename__ = "company_users"
@@ -31,6 +35,8 @@ class CompanyUser(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     role = Column(String, default="Admin")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('user_id', 'company_id', name='uix_user_company'),)
 
     user = relationship("User", back_populates="company_access")
     company = relationship("Company", back_populates="users")
@@ -71,27 +77,72 @@ class Product(Base):
 
     company = relationship("Company", back_populates="products")
     
-    inventories = relationship("Inventory", back_populates="product")
-    movements = relationship("InventoryMovement", back_populates="product")
+    inventories = relationship("Inventory", back_populates="product", cascade="all, delete-orphan")
+    movements = relationship("InventoryMovement", back_populates="product", cascade="all, delete-orphan")
+
+class StateHub(Base):
+    __tablename__ = "state_hubs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    hub_code = Column(String, index=True, nullable=False)
+    hub_name = Column(String, nullable=False)
+    gstin = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    state_code = Column(String, nullable=True)
+    contact_person = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    status = Column(String, default="Active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('company_id', 'hub_code', name='uix_company_hub_code'),)
+
+    company = relationship("Company")
+    warehouses = relationship("Warehouse", back_populates="hub")
+
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    hub_id = Column(Integer, ForeignKey("state_hubs.id"), nullable=True)
     name = Column(String, nullable=False)
     code = Column(String, index=True)
     status = Column(String, default="Active")
     address = Column(String, nullable=True)
     contact_person = Column(String, nullable=True)
+    manager = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
     email = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint('company_id', 'code', name='uix_company_warehouse_code'),)
 
     company = relationship("Company", back_populates="warehouses")
-    inventories = relationship("Inventory", back_populates="warehouse")
-    movements = relationship("InventoryMovement", back_populates="warehouse")
+    hub = relationship("StateHub", back_populates="warehouses")
+    inventories = relationship("Inventory", back_populates="warehouse", cascade="all, delete-orphan")
+    movements = relationship("InventoryMovement", back_populates="warehouse", cascade="all, delete-orphan")
+    users = relationship("WarehouseUser", back_populates="warehouse", cascade="all, delete-orphan")
+
+class WarehouseUser(Base):
+    __tablename__ = "warehouse_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    permission = Column(String, default="VIEW") # VIEW, MANAGE
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('warehouse_id', 'user_id', name='uix_warehouse_user'),)
+
+    warehouse = relationship("Warehouse", back_populates="users")
+    user = relationship("User")
 
 class Inventory(Base):
     __tablename__ = "inventory"
@@ -100,9 +151,9 @@ class Inventory(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
-    current_qty = Column(Integer, default=0)
-    reserved_qty = Column(Integer, default=0)
-    available_qty = Column(Integer, default=0)
+    current_qty = Column(Integer, default=0, server_default=text('0'), nullable=False)
+    reserved_qty = Column(Integer, default=0, server_default=text('0'), nullable=False)
+    available_qty = Column(Integer, default=0, server_default=text('0'), nullable=False)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint('company_id', 'product_id', 'warehouse_id', name='uix_company_prod_wh'),)
@@ -111,7 +162,7 @@ class Inventory(Base):
     product = relationship("Product", back_populates="inventories")
     warehouse = relationship("Warehouse", back_populates="inventories")
 
-    @property
+    @hybrid_property
     def product_sku(self):
         return self.product.sku if self.product else None
 
@@ -135,7 +186,7 @@ class InventoryMovement(Base):
     product = relationship("Product", back_populates="movements")
     warehouse = relationship("Warehouse", back_populates="movements")
 
-    @property
+    @hybrid_property
     def product_sku(self):
         return self.product.sku if self.product else None
 
@@ -148,6 +199,10 @@ class InventorySnapshot(Base):
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     quantity = Column(Integer, default=0)
+
+    company = relationship("Company")
+    warehouse = relationship("Warehouse")
+    product = relationship("Product")
 
 class AmazonSyncLog(Base):
     __tablename__ = "amazon_sync_logs"
@@ -230,6 +285,7 @@ class CompanySettings(Base):
     phone = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
     bank_details = Column(JSON, nullable=True)  # {bank_name, account_no, ifsc, branch, upi, ...}
+    smtp_settings = Column(JSON, nullable=True) # {host, port, username, password, use_tls, from_email}
 
     # Billing default text
     declaration = Column(Text, nullable=True)
@@ -240,10 +296,13 @@ class CompanySettings(Base):
     tally_endpoint_url = Column(String, nullable=True)
     tally_payload_format = Column(String, default="XML")  # XML | JSON
     
-    # Replenishment Configuration
     replenishment_enabled = Column(Boolean, default=False)
     replenishment_time = Column(String, default="14:30")
     replenishment_buffer_minutes = Column(Integer, default=30)
+    
+    # Amazon Returns Integration
+    amazon_returns_sync_enabled = Column(Boolean, default=False)
+    amazon_returns_sync_interval_minutes = Column(Integer, default=5)
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -474,3 +533,414 @@ class StockTransferItem(Base):
     transfer = relationship("StockTransfer", back_populates="items")
     product = relationship("Product")
 
+
+# ------------------------------------------------------------------
+# Amazon Returns Synchronization Models
+# ------------------------------------------------------------------
+
+class AmazonReturn(Base):
+    __tablename__ = "amazon_returns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    amazon_return_id = Column(String, index=True, nullable=False)
+    amazon_order_id = Column(String, index=True, nullable=False)
+    order_item_id = Column(String, nullable=False)
+    sku = Column(String, index=True, nullable=False)
+    asin = Column(String, nullable=True)
+    product_name = Column(String, nullable=True)
+    quantity = Column(Integer, default=1)
+    return_reason = Column(String, nullable=True)
+    
+    # "In Transit", "Received"
+    return_status = Column(String, default="In Transit")
+    
+    # Phase 2: Inspection fields
+    inspection_status = Column(String, nullable=True) # e.g. "RESTOCKED", "DEFECTIVE"
+    inspection_notes = Column(Text, nullable=True)
+    inspection_images = Column(JSON, default=list)
+    inspected_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    inspected_at = Column(DateTime, nullable=True)
+    
+    requested_at = Column(DateTime, nullable=True)
+    received_at = Column(DateTime, nullable=True)
+    last_synced_at = Column(DateTime, default=datetime.utcnow)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('company_id', 'amazon_return_id', 'order_item_id', name='uix_company_return_item'),)
+
+    company = relationship("Company")
+
+
+class AmazonReturnSyncLog(Base):
+    __tablename__ = "amazon_return_sync_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False) # e.g., "Running", "Success", "Failed"
+    records_created = Column(Integer, default=0)
+    records_updated = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+    duration = Column(Float, nullable=True)
+
+    company = relationship("Company")
+
+
+class DefectiveInventory(Base):
+    __tablename__ = "defective_inventory"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    amazon_return_id = Column(Integer, ForeignKey("amazon_returns.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    
+    sku_snapshot = Column(String, index=True, nullable=False)
+    product_name_snapshot = Column(String, nullable=True)
+    
+    quantity = Column(Integer, default=1)
+    return_reason = Column(String, nullable=True)
+    
+    inspection_notes = Column(Text, nullable=True)
+    inspection_images = Column(JSON, default=list)
+    inspector_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    inspection_date = Column(DateTime, nullable=True)
+    
+    status = Column(String, default="NEW") # Enums: NEW, UNDER_REVIEW, REPAIR, RETURN_VENDOR, SCRAPPED, DISPOSED
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    company = relationship("Company")
+    amazon_return = relationship("AmazonReturn")
+    product = relationship("Product")
+    inspector = relationship("User")
+
+# =====================================================================
+# Sales Returns & Delivery Documents (Phase 6)
+# =====================================================================
+
+class SalesReturn(Base):
+    __tablename__ = "sales_returns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+    return_number = Column(String, index=True, nullable=False, unique=True)
+    return_type = Column(String, default="OFFLINE") # ONLINE | OFFLINE
+    return_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Snapshots for header
+    customer_name = Column(String, nullable=True)
+    
+    # Totals
+    total_taxable_amount = Column(Float, default=0.0)
+    total_tax = Column(Float, default=0.0)
+    grand_total = Column(Float, default=0.0)
+    
+    status = Column(String, default="Draft") # Draft, Completed, Cancelled
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    sale = relationship('Sale')
+    items = relationship('SalesReturnItem', back_populates='sales_return', cascade='all, delete-orphan')
+
+class SalesReturnItem(Base):
+    __tablename__ = "sales_return_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    return_id = Column(Integer, ForeignKey("sales_returns.id"), nullable=False)
+    sale_item_id = Column(Integer, ForeignKey("sale_items.id"), nullable=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    
+    # Independent snapshots to preserve historical integrity
+    sku_snapshot = Column(String, nullable=True)
+    product_name_snapshot = Column(String, nullable=True)
+    hsn_snapshot = Column(String, nullable=True)
+    unit_snapshot = Column(String, nullable=True)
+    
+    # Return details
+    returned_quantity = Column(Integer, default=0)
+    return_reason = Column(String, nullable=True)
+    
+    # Pricing
+    unit_price = Column(Float, default=0.0)
+    tax_rate = Column(Float, default=0.0)
+    tax_amount = Column(Float, default=0.0)
+    total_price = Column(Float, default=0.0)
+    
+    sales_return = relationship('SalesReturn', back_populates='items')
+    sale_item = relationship('SaleItem')
+    product = relationship('Product')
+
+
+class DeliveryChallan(Base):
+    __tablename__ = "delivery_challans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    challan_number = Column(String, index=True, nullable=False, unique=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+    challan_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Immutable snapshots (just like invoices)
+    seller_snapshot = Column(JSON, nullable=True)
+    buyer_snapshot = Column(JSON, nullable=True)
+    shipping_snapshot = Column(JSON, nullable=True)
+    
+    # Transport Details
+    vehicle_number = Column(String, nullable=True)
+    transport_mode = Column(String, nullable=True)
+    eway_bill = Column(String, nullable=True)
+    remarks = Column(Text, nullable=True)
+    
+    status = Column(String, default="Draft") # Draft, Generated, Printed, Cancelled, Completed
+    print_count = Column(Integer, default=0, server_default=text('0'))
+    last_printed_at = Column(DateTime, nullable=True)
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    sale = relationship('Sale')
+    items = relationship('DeliveryChallanItem', back_populates='delivery_challan', cascade='all, delete-orphan')
+
+class DeliveryChallanItem(Base):
+    __tablename__ = "delivery_challan_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    challan_id = Column(Integer, ForeignKey("delivery_challans.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    
+    # Snapshots
+    sku_snapshot = Column(String, nullable=True)
+    product_name_snapshot = Column(String, nullable=True)
+    hsn_snapshot = Column(String, nullable=True)
+    unit_snapshot = Column(String, nullable=True)
+    
+    quantity = Column(Integer, default=0)
+    
+    # Optional Pricing (Challans don't always show price, but often do for insurance/eway bill)
+    unit_price = Column(Float, default=0.0)
+    tax_rate = Column(Float, default=0.0)
+    tax_amount = Column(Float, default=0.0)
+    total_price = Column(Float, default=0.0)
+    
+    delivery_challan = relationship('DeliveryChallan', back_populates='items')
+    product = relationship('Product')
+
+# =====================================================================
+# Service Management (Phase 7)
+# =====================================================================
+
+class ServiceSequence(Base):
+    """
+    Per-company service numbering sequence.
+    Example service numbers:
+      SRV/BKR/26-27/00001
+    """
+    __tablename__ = "service_sequences"
+    __table_args__ = (UniqueConstraint('company_id', 'fiscal_year', name='uix_company_fy_srv_sequence'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    fiscal_year = Column(String, nullable=False)  # e.g. "26-27"
+    last_number = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    company = relationship("Company")
+
+
+class ServiceRecord(Base):
+    __tablename__ = "service_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    service_number = Column(String, index=True, nullable=False, unique=True)
+    
+    # Customer Identity
+    customer_id = Column(Integer, ForeignKey("sales.id"), nullable=True) # Will link to Sale or dedicated customer in future, for now nullable
+    customer_name_snapshot = Column(String, nullable=False)
+    customer_mobile_snapshot = Column(String, nullable=True)
+    customer_email_snapshot = Column(String, nullable=True)
+    
+    # Metadata
+    invoice_number = Column(String, nullable=True)
+    sale_type = Column(String, nullable=True) # Online, Offline
+    marketplace = Column(String, nullable=True) # Amazon, Offline
+    
+    service_date = Column(DateTime, default=datetime.utcnow)
+    service_type = Column(String, nullable=False) # Repair, Replacement, Installation, General Service
+    status = Column(String, default="Pending") # Pending, In Progress, Completed, Cancelled
+    
+    complaint = Column(Text, nullable=True)
+    technician_notes = Column(Text, nullable=True)
+    
+    # Bill Fields
+    labour_charges = Column(Float, default=0.0)
+    spare_charges = Column(Float, default=0.0)
+    tax_amount = Column(Float, default=0.0)
+    grand_total = Column(Float, default=0.0)
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    company = relationship("Company")
+    creator = relationship("User")
+    items = relationship('ServiceRecordItem', back_populates='service_record', cascade='all, delete-orphan')
+
+
+class ServiceRecordItem(Base):
+    __tablename__ = "service_record_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    service_record_id = Column(Integer, ForeignKey("service_records.id"), nullable=False)
+    
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    sku_snapshot = Column(String, nullable=True)
+    quantity = Column(Integer, default=1)
+    serial_number = Column(String, nullable=True)
+    
+    # Replacement Tracking
+    replacement_product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    replacement_quantity = Column(Integer, default=0)
+    
+    service_record = relationship('ServiceRecord', back_populates='items')
+    product = relationship('Product', foreign_keys=[product_id])
+    replacement_product = relationship('Product', foreign_keys=[replacement_product_id])
+
+
+class ServiceReminder(Base):
+    __tablename__ = "service_reminders"
+    __table_args__ = (UniqueConstraint('sale_id', 'product_id', name='uix_sale_product_reminder'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    
+    customer_id = Column(Integer, nullable=True) # Placeholder for future FK
+    customer_name_snapshot = Column(String, nullable=True)
+    customer_mobile_snapshot = Column(String, nullable=True)
+    
+    sale_date = Column(DateTime, nullable=False)
+    reminder_date = Column(DateTime, nullable=False)
+    
+    status = Column(String, default="Pending") # Pending, Contacted, Completed, Dismissed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    company = relationship("Company")
+    sale = relationship("Sale")
+    product = relationship("Product")
+from datetime import datetime
+
+class FCDispatch(Base):
+    __tablename__ = "fc_dispatches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
+    invoice_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+    delivery_challan_id = Column(Integer, ForeignKey("delivery_challans.id"), nullable=True)
+    
+    dispatch_number = Column(String, index=True, nullable=False, unique=True)
+    dispatch_status = Column(String, default="Draft") # Draft, Invoice Generated, Challan Generated, Inventory Updated, Completed, Completed with Errors, XML Pending, Cancelled
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    company = relationship("Company")
+    warehouse = relationship("Warehouse")
+    invoice = relationship("Sale")
+    delivery_challan = relationship("DeliveryChallan")
+    items = relationship("FCDispatchItem", back_populates="dispatch", cascade="all, delete-orphan")
+
+
+class FCDispatchItem(Base):
+    __tablename__ = "fc_dispatch_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dispatch_id = Column(Integer, ForeignKey("fc_dispatches.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    
+    sku_snapshot = Column(String, nullable=True)
+    product_name_snapshot = Column(String, nullable=True)
+    hsn_snapshot = Column(String, nullable=True)
+    
+    quantity = Column(Integer, nullable=False, default=1)
+    unit_price = Column(Float, nullable=False, default=0.0)
+    gst_rate = Column(Float, nullable=False, default=0.0)
+    
+    taxable_amount = Column(Float, nullable=False, default=0.0)
+    tax_amount = Column(Float, nullable=False, default=0.0)
+    total_amount = Column(Float, nullable=False, default=0.0)
+    
+    dispatch = relationship("FCDispatch", back_populates="items")
+    product = relationship("Product")
+
+
+class FCReturn(Base):
+    __tablename__ = "fc_returns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
+    dispatch_id = Column(Integer, ForeignKey("fc_dispatches.id"), nullable=True)
+    
+    return_number = Column(String, index=True, nullable=False, unique=True)
+    status = Column(String, default="Draft") # Draft, Completed, Cancelled
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    company = relationship("Company")
+    warehouse = relationship("Warehouse")
+    dispatch = relationship("FCDispatch")
+    items = relationship("FCReturnItem", back_populates="fc_return", cascade="all, delete-orphan")
+
+
+class FCReturnItem(Base):
+    __tablename__ = "fc_return_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    fc_return_id = Column(Integer, ForeignKey("fc_returns.id"), nullable=False)
+    dispatch_item_id = Column(Integer, ForeignKey("fc_dispatch_items.id"), nullable=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    
+    quantity = Column(Integer, nullable=False, default=1)
+    return_reason = Column(String, nullable=True)
+    
+    fc_return = relationship("FCReturn", back_populates="items")
+    dispatch_item = relationship("FCDispatchItem")
+    product = relationship("Product")
+
+
+class DamageClaim(Base):
+    __tablename__ = "damage_claims"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    
+    claim_number = Column(String, index=True, nullable=False, unique=True)
+    quantity = Column(Integer, nullable=False, default=1)
+    
+    video_reference = Column(String, nullable=True) # URL or File Path
+    remarks = Column(Text, nullable=True)
+    
+    claim_status = Column(String, default="Pending") # Pending, Approved, Rejected
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    company = relationship("Company")
+    warehouse = relationship("Warehouse")
+    product = relationship("Product")

@@ -22,13 +22,21 @@ from app.repositories.config_repository import ConfigRepository
 from app.repositories.lookup_repository import LookupRepository
 from app.engines.transformation import TransformationEngine
 from app.engines.validation import ValidationEngine
-from app.plugins.plugin_registry import PluginRegistry
 from app.services.transformation_service import TransformationService
+from app.plugins.plugin_registry import PluginRegistry
 
 # New routers
 from app.api.routers.products import router as products_router
+from app.api.routers import pos, auth, companies, products, warehouses, inventory, dashboard, reports, company_settings, replenishment, transfers, accounting, amazon_returns, defective_inventory, returns_reports
+from app.api.routers.sales_returns import router as sales_returns_router
+from app.api.routers.delivery_challans import router as delivery_challans_router
+from app.api.routers.services import router as services_router
+from app.api.routers.service_reminders import router as service_reminders_router
+from app.api.routers.documents import router as documents_router
 from app.api.routers.warehouses import router as warehouses_router
 from app.api.routers.inventory import router as inventory_router
+from app.api.routers.state_hubs import router as state_hubs_router
+from app.api.routers.warehouse_inventory import router as warehouse_inventory_router
 from app.api.routers.dashboard import router as dashboard_router
 from app.api.routers.reports import router as reports_router
 from app.api.routers.companies import router as companies_router
@@ -37,6 +45,9 @@ from app.api.routers.pos import router as pos_router
 from app.api.routers.company_settings import router as company_settings_router
 from app.api.routers.replenishment import router as replenishment_router
 from app.api.routers.transfers import router as transfers_router
+from app.api.routers.fc_dispatches import router as fc_dispatches_router
+from app.api.routers.fc_returns import router as fc_returns_router
+from app.api.routers.damage_claims import router as damage_claims_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -110,18 +121,35 @@ app.add_middleware(
 )
 
 # Register Inventory Management Routers
+app.include_router(state_hubs_router, prefix="/api")
+app.include_router(warehouse_inventory_router, prefix="/api")
 app.include_router(companies_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(products_router, prefix="/api")
 app.include_router(warehouses_router, prefix="/api")
 app.include_router(inventory_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
-app.include_router(reports_router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 app.include_router(pos_router, prefix="/api")
 app.include_router(company_settings_router, prefix="/api")
-app.include_router(replenishment_router, prefix="/api")
-app.include_router(transfers_router, prefix="/api")
+app.include_router(replenishment.router, prefix="/api")
+app.include_router(transfers.router, prefix="/api")
+app.include_router(accounting.router, prefix="/api")
+app.include_router(amazon_returns.router, prefix="/api")
+app.include_router(defective_inventory.router, prefix="/api")
+app.include_router(returns_reports.router, prefix="/api")
 
+# Phase 6
+app.include_router(sales_returns_router, prefix="/api")
+app.include_router(delivery_challans_router, prefix="/api")
+app.include_router(services_router, prefix="/api")
+app.include_router(service_reminders_router, prefix="/api")
+app.include_router(documents_router, prefix="/api")
+
+# Phase 9: Warehouse Logistics
+app.include_router(fc_dispatches_router, prefix="/api")
+app.include_router(fc_returns_router, prefix="/api")
+app.include_router(damage_claims_router, prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Pydantic response models
@@ -336,7 +364,8 @@ async def reset():
     return {"status": "ok", "message": "All uploads and outputs cleared."}
 
 
+app.include_router(legacy_router)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
-app.include_router(legacy_router)

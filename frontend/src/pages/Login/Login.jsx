@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { ROUTES } from '../../constants/routes';
@@ -11,7 +11,14 @@ const Login = () => {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('admin');
   const setAuth = useAuthStore(state => state.setAuth);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(ROUTES.OVERVIEW, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

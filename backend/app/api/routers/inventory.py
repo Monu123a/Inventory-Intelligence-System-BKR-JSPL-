@@ -21,9 +21,9 @@ class InventoryResponse(BaseModel):
     product_sku: str
     warehouse_id: int
     current_qty: int
-    reserved_qty: int
-    available_qty: int
-    last_updated: datetime
+    reserved_qty: Optional[int] = 0
+    available_qty: Optional[int] = 0
+    last_updated: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 class MovementResponse(BaseModel):
@@ -214,8 +214,8 @@ def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get
             company_id=company_id,
             product_sku=adjustment.product_sku,
             warehouse_id=adjustment.warehouse_id,
-            quantity=qty,
-            event_type="ADD", # Delta adjustment
+            quantity=abs(qty),
+            event_type="ADD" if qty > 0 else "DEDUCT", # Delta adjustment
             source="Manual",
             reference_id=ref,
             metadata_payload={"reason": adjustment.reason}

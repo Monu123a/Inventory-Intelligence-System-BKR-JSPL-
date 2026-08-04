@@ -146,6 +146,29 @@
   font-weight: 600;
 }
 
+.returnBadge {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.returnNone {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.returnPartial {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.returnFull {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .tallyBadge {
   display: inline-flex;
   align-items: center;

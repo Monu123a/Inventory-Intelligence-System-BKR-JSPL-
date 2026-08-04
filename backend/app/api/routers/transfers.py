@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, Any
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user, get_db, get_current_company_id
 from app.models.schema import User, StockTransfer
 from app.services.stock_transfer_service import StockTransferService
 from app.services.transfer_number_service import TransferNumberService
@@ -23,7 +23,10 @@ class CreateTransferRequest(BaseModel):
     items: List[TransferItemRequest]
 
 @router.post("/create")
-def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), company_id: int = Depends(get_current_company_id)):
+    if req.from_company_id != company_id and req.to_company_id != company_id:
+        raise HTTPException(status_code=403, detail="Cannot create transfer for unrelated companies")
+        
     from app.models.schema import StockTransferItem
     transfer_num = TransferNumberService.generate_next(db, company_id=req.from_company_id)
     transfer = StockTransfer(
@@ -47,8 +50,12 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
     return {"status": "success", "transfer_id": transfer.id}
 
 @router.post("/{transfer_id}/approve")
-def approve_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def approve_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), company_id: int = Depends(get_current_company_id)):
     try:
+        transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).first()
+        if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
+            raise HTTPException(status_code=403, detail="Not authorized to approve this transfer")
+            
         transfer = StockTransferService.approve_transfer(db, transfer_id, current_user.id)
         return {"status": "success", "transfer_id": transfer.id}
     except Exception as e:
@@ -61,17 +68,21 @@ class CompleteTransferRequest(BaseModel):
     invoice_id: int
 
 @router.put("/{transfer_id}/complete")
-def complete_transfer(transfer_id: int, req: CompleteTransferRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def complete_transfer(transfer_id: int, req: CompleteTransferRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), company_id: int = Depends(get_current_company_id)):
     try:
+        transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).first()
+        if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
+            raise HTTPException(status_code=403, detail="Not authorized to complete this transfer")
+            
         transfer = StockTransferService.complete_transfer(db, transfer_id, req.invoice_id, current_user.id)
         return {"status": "success", "transfer_id": transfer.id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{transfer_id}")
-def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), company_id: int = Depends(get_current_company_id)):
     transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).first()
-    if not transfer:
+    if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
         raise HTTPException(status_code=404, detail="Transfer not found")
         
     items = []
@@ -111,11 +122,15 @@ def list_transfers(
     status: Optional[str] = None, 
     to_company_id: Optional[int] = None,
     history: Optional[bool] = False,
+    company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.schema import CompanySettings
-    query = db.query(StockTransfer)
+    from app.models.schema import CompanySettings, Company
+    query = db.query(StockTransfer).filter(
+        (StockTransfer.from_company_id == company_id) | 
+        (StockTransfer.to_company_id == company_id)
+    )
     
     if to_company_id:
         query = query.filter(StockTransfer.to_company_id == to_company_id)
@@ -131,12 +146,16 @@ def list_transfers(
     transfers = query.all()
     
     # Pre-fetch companies for fast mapping
-    companies = {c.company_id: c.legal_name for c in db.query(CompanySettings).all()}
+    companies_settings = {c.company_id: c.legal_name for c in db.query(CompanySettings).all()}
+    companies_names = {c.id: c.name for c in db.query(Company).all()}
     
     result = []
     for t in transfers:
         total_qty = sum(item.requested_qty for item in t.items)
         total_amount = sum(item.requested_qty * item.unit_price for item in t.items)
+        
+        from_name = companies_settings.get(t.from_company_id) or companies_names.get(t.from_company_id) or "Unknown"
+        to_name = companies_settings.get(t.to_company_id) or companies_names.get(t.to_company_id) or "Unknown"
         
         result.append({
             "id": t.id,
@@ -144,8 +163,8 @@ def list_transfers(
             "status": t.status,
             "from_company_id": t.from_company_id,
             "to_company_id": t.to_company_id,
-            "from_company_name": companies.get(t.from_company_id, "Unknown"),
-            "to_company_name": companies.get(t.to_company_id, "Unknown"),
+            "from_company_name": from_name,
+            "to_company_name": to_name,
             "created_at": t.created_at,
             "invoice_id": t.invoice_id,
             "total_qty": total_qty,

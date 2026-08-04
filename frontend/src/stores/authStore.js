@@ -2,9 +2,14 @@ import { create } from 'zustand';
 
 export const useAuthStore = create((set) => ({
   user: null,
-  token: localStorage.getItem('token') || null,
-  isAuthenticated: !!localStorage.getItem('token'),
+  token: (localStorage.getItem('token') && localStorage.getItem('token') !== 'null' && localStorage.getItem('token') !== 'undefined') ? localStorage.getItem('token') : null,
+  isAuthenticated: !!(localStorage.getItem('token') && localStorage.getItem('token') !== 'null' && localStorage.getItem('token') !== 'undefined'),
   setAuth: (user, token) => {
+    if (!token) {
+      localStorage.removeItem('token');
+      set({ user: null, token: null, isAuthenticated: false });
+      return;
+    }
     localStorage.setItem('token', token);
     set({ user, token, isAuthenticated: true });
   },

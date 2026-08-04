@@ -23,12 +23,22 @@ class ReplenishmentService:
         
         demand_map = {row.product_id: row.total_demand for row in demand_query}
         
+        # Aggregate inventory across all warehouses for the company
         inventories = (
-            db.query(Inventory)
-            .join(Product, Product.id == Inventory.product_id)
+            db.query(
+                Inventory.product_id,
+                func.sum(Inventory.current_qty).label('current_qty'),
+                func.sum(Inventory.reserved_qty).label('reserved_qty'),
+            )
             .filter(Inventory.company_id == company_id)
+            .group_by(Inventory.product_id)
             .all()
         )
+        
+        # Pre-fetch products to get safety_stock
+        product_ids = [inv.product_id for inv in inventories]
+        products = db.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
+        product_map = {p.id: p for p in products}
         
         run = ReplenishmentRun(
             company_id=company_id,
@@ -40,9 +50,17 @@ class ReplenishmentService:
         
         recommendations_created = 0
         for inv in inventories:
-            available_stock = inv.current_qty - inv.reserved_qty
+            product = product_map.get(inv.product_id)
+            if not product:
+                continue
+                
+            # Handle potential None values from SUM
+            current_qty = inv.current_qty or 0
+            reserved_qty = inv.reserved_qty or 0
+            
+            available_stock = current_qty - reserved_qty
             today_demand = demand_map.get(inv.product_id, 0)
-            safety_stock = inv.product.safety_stock or 0
+            safety_stock = product.safety_stock or 0
             
             required_qty = today_demand + safety_stock - available_stock
             
@@ -50,8 +68,8 @@ class ReplenishmentService:
                 rec = ReplenishmentRecommendation(
                     run_id=run.id,
                     product_id=inv.product_id,
-                    current_stock=inv.current_qty,
-                    reserved_stock=inv.reserved_qty,
+                    current_stock=current_qty,
+                    reserved_stock=reserved_qty,
                     available_stock=available_stock,
                     today_demand=today_demand,
                     safety_stock=safety_stock,
@@ -75,7 +93,7 @@ class ReplenishmentService:
             .filter(AmazonSyncLog.company_id == company_id)
             .filter(AmazonSyncLog.sync_start_time >= today_start)
             .filter(AmazonSyncLog.status.in_(["SUCCESS", "COMPLETED"]))
-            .filter(AmazonSyncLog.orders_processed > 0)
+            .filter(AmazonSyncLog.orders_processed >= 0)
             .first()
         )
         return log is not None

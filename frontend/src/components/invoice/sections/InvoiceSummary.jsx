@@ -124,6 +124,7 @@ const InvoiceSummary = ({ company, items, totals }) => {
               <div><strong>Account No:</strong> {company.bank_details.account_no}</div>
               <div><strong>IFSC Code:</strong> {company.bank_details.ifsc}</div>
               <div><strong>Branch:</strong> {company.bank_details.branch}</div>
+              {company.bank_details.upi && <div><strong>UPI:</strong> {company.bank_details.upi}</div>}
             </div>
           )}
           <div className={styles.declarationSection}>

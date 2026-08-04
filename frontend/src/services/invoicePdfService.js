@@ -3,6 +3,7 @@
  * This acts as a bridge until backend PDF generation is implemented.
  */
 export function downloadInvoicePdf(invoiceRef, invoiceNumber) {
+  // Note: This uses window.print() approach which works, but is limited compared to server-side PDF generation.
   if (!invoiceRef) return;
 
   const htmlContent = invoiceRef.outerHTML || invoiceRef.innerHTML;

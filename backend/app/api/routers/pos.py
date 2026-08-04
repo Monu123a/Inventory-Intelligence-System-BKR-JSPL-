@@ -7,7 +7,7 @@ from sqlalchemy import func
 from uuid import uuid4
 
 from app.models.db import get_db
-from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings
+from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem
 from app.api.dependencies import get_current_company_id
 from app.services.inventory_event_engine import InventoryEventEngine
 from app.services.invoice_number_service import InvoiceNumberService
@@ -55,13 +55,14 @@ def _generate_bill_number() -> str:
     return f"BKR-{timestamp}-{suffix}"
 
 # --- Pydantic Models ---
+from pydantic import BaseModel, Field
 class PosCartItem(BaseModel):
     product_id: int
     sku: str
     product_name: Optional[str] = None
     hsn_sac: Optional[str] = None
     unit: Optional[str] = None
-    quantity: int
+    quantity: int = Field(..., gt=0)
     selling_price: float
     discount: float = 0.0
     gst_rate: float
@@ -157,16 +158,22 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
     default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
 
     try:
-        # 1. Validate Stock
+        # 1. Validate Stock (Aggregated to prevent overselling on duplicate items)
+        required_quantities = {}
         for item in request.items:
+            required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
+
+        for product_id, total_qty in required_quantities.items():
             inv = db.query(Inventory).filter(
-                Inventory.product_id == item.product_id,
+                Inventory.product_id == product_id,
                 Inventory.warehouse_id == default_warehouse.id,
                 Inventory.company_id == company_id
             ).with_for_update().first() # Lock row
 
-            if not inv or inv.available_qty < item.quantity:
-                raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {item.sku}")
+            if not inv or inv.available_qty < total_qty:
+                product = db.query(Product).filter(Product.id == product_id).first()
+                sku_name = product.sku if product else str(product_id)
+                raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
         # 2. Generate Bill Number
         bill_number = _generate_bill_number()
@@ -282,19 +289,26 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
         )
         db.commit()
         
-        # Format Receipt Data
-        # Tally sync (B2B only, configurable)
+        # Tally sync (B2B only, configurable) - runs AFTER sale is committed
+        # Tally failures should NOT rollback the sale
         tally_result = {"status": sale.tally_sync_status}
         if sale.invoice_type == "B2B":
-            if TallyIntegrationService.is_enabled_for_company(db, company_id):
-                res = TallyIntegrationService.sync_sale(db, sale_id=sale.id, mode="PROCESSING")
+            try:
+                if TallyIntegrationService.is_enabled_for_company(db, company_id):
+                    res = TallyIntegrationService.sync_sale(db, sale_id=sale.id, mode="PROCESSING")
+                    db.commit()
+                    db.refresh(sale)
+                    tally_result = {"status": res.status, "reference": res.reference, "error_message": res.error_message}
+                else:
+                    sale.tally_sync_status = "NOT_APPLICABLE"
+                    db.commit()
+                    db.refresh(sale)
+            except Exception as tally_err:
+                logger.error(f"Tally sync failed for sale {sale.id}: {tally_err}")
+                sale.tally_sync_status = "FAILED"
                 db.commit()
                 db.refresh(sale)
-                tally_result = {"status": res.status, "reference": res.reference, "error_message": res.error_message}
-            else:
-                sale.tally_sync_status = "NOT_APPLICABLE"
-                db.commit()
-                db.refresh(sale)
+                tally_result = {"status": "FAILED", "error_message": str(tally_err)}
 
         receipt = _build_invoice_dto(sale)
         return {"message": "Sale completed successfully", "receipt": receipt, "tally_sync": tally_result}
@@ -317,10 +331,38 @@ def get_sales_history(
     invoice_number: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    return_status: Optional[str] = None, # None, "Partially Returned", "Fully Returned", "Active Sales"
     company_id: int = Depends(get_bkr_company_id), 
     db: Session = Depends(get_db)
 ):
-    query = db.query(Sale).filter(Sale.company_id == company_id)
+    # Subqueries for sold and returned totals
+    sold_subq = (
+        db.query(
+            SaleItem.sale_id,
+            func.sum(SaleItem.quantity).label("total_sold")
+        )
+        .group_by(SaleItem.sale_id)
+        .subquery()
+    )
+
+    returned_subq = (
+        db.query(
+            SalesReturn.sale_id,
+            func.sum(SalesReturnItem.returned_quantity).label("total_returned")
+        )
+        .join(SalesReturnItem, SalesReturn.id == SalesReturnItem.return_id)
+        .filter(SalesReturn.status == "Completed")
+        .group_by(SalesReturn.sale_id)
+        .subquery()
+    )
+
+    query = db.query(
+        Sale,
+        func.coalesce(sold_subq.c.total_sold, 0).label("total_sold"),
+        func.coalesce(returned_subq.c.total_returned, 0).label("total_returned")
+    ).outerjoin(sold_subq, Sale.id == sold_subq.c.sale_id) \
+     .outerjoin(returned_subq, Sale.id == returned_subq.c.sale_id) \
+     .filter(Sale.company_id == company_id)
     
     if search:
         search_term = f"%{search}%"
@@ -356,33 +398,131 @@ def get_sales_history(
             query = query.filter(Sale.sale_date <= dt.fromisoformat(date_to))
         except ValueError:
             pass
+            
+    if return_status:
+        # Note: the label names from subqueries can be referenced directly using their column objects
+        total_sold_col = func.coalesce(sold_subq.c.total_sold, 0)
+        total_returned_col = func.coalesce(returned_subq.c.total_returned, 0)
+        
+        if return_status == "None":
+            query = query.filter(total_returned_col == 0)
+        elif return_status == "Partially Returned":
+            query = query.filter((total_returned_col > 0) & (total_returned_col < total_sold_col))
+        elif return_status == "Fully Returned":
+            query = query.filter((total_returned_col > 0) & (total_returned_col >= total_sold_col))
+        elif return_status == "Active Sales":
+            query = query.filter(total_returned_col < total_sold_col)
         
     total = query.count()
-    sales = query.order_by(Sale.id.desc()).offset(skip).limit(limit).all()
+    results = query.order_by(Sale.id.desc()).offset(skip).limit(limit).all()
+    
+    response_items = []
+    for row in results:
+        s = row.Sale
+        t_sold = row.total_sold
+        t_ret = row.total_returned
+        net_qty = t_sold - t_ret
+        
+        computed_return_status = "None"
+        if t_ret > 0:
+            computed_return_status = "Fully Returned" if t_ret >= t_sold else "Partially Returned"
+            
+        # Get linked return ids efficiently without N+1 if needed, but since it's just a boolean/id list, 
+        # we can lazily load or omit if not strictly required for the list view (or query separately)
+        # We will query linked return ids for this page
+        
+        response_items.append({
+            "id": s.id,
+            "bill_number": s.bill_number,
+            "invoice_number": s.invoice_number,
+            "invoice_type": s.invoice_type,
+            "tally_sync_status": s.tally_sync_status,
+            "customer_name": s.customer_name,
+            "customer_gstin": s.customer_gstin,
+            "sale_date": s.sale_date,
+            "grand_total": s.grand_total,
+            "total_tax": s.total_tax,
+            "payment_method": s.payment_method,
+            "status": s.status,
+            "items_count": len(s.items),
+            "return_status": computed_return_status,
+            "returned_quantity": t_ret,
+            "remaining_quantity": net_qty,
+            "total_sold": t_sold
+        })
+    
+    # Enrich with linked return ids
+    if response_items:
+        sale_ids = [item["id"] for item in response_items]
+        linked_returns = db.query(SalesReturn.id, SalesReturn.sale_id).filter(SalesReturn.sale_id.in_(sale_ids)).all()
+        return_map = {}
+        for ret_id, s_id in linked_returns:
+            if s_id not in return_map:
+                return_map[s_id] = []
+            return_map[s_id].append(ret_id)
+            
+        for item in response_items:
+            item["linked_sales_return_ids"] = return_map.get(item["id"], [])
     
     return {
         "total": total,
-        "items": [
-            {
-                "id": s.id,
-                "bill_number": s.bill_number,
-                "invoice_number": s.invoice_number,
-                "invoice_type": s.invoice_type,
-                "tally_sync_status": s.tally_sync_status,
-                "customer_name": s.customer_name,
-                "customer_gstin": s.customer_gstin,
-                "sale_date": s.sale_date,
-                "grand_total": s.grand_total,
-                "total_tax": s.total_tax,
-                "payment_method": s.payment_method,
-                "status": s.status,
-                "items_count": len(s.items)
-            } for s in sales
-        ]
+        "items": response_items
     }
 
 
-def _build_invoice_dto(sale: Sale) -> dict:
+def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
+    # Fetch returns data if db is provided
+    returns_summary = []
+    item_return_map = {}
+    
+    if db:
+        returns = db.query(SalesReturn).filter(SalesReturn.sale_id == sale.id, SalesReturn.status != "Cancelled").all()
+        for r in returns:
+            # sum up returned items
+            ret_qty = sum(ri.returned_quantity for ri in r.items)
+            returns_summary.append({
+                "id": r.id,
+                "return_number": r.return_number,
+                "date": r.return_date.isoformat() if r.return_date else None,
+                "status": r.status,
+                "returned_quantity": ret_qty
+            })
+            
+            # Map item level returns for "Completed" returns
+            if r.status == "Completed":
+                for ri in r.items:
+                    if ri.sale_item_id:
+                        item_return_map[ri.sale_item_id] = item_return_map.get(ri.sale_item_id, 0) + ri.returned_quantity
+                        
+    dto_items = []
+    for i in (sale.items or []):
+        ret_qty = item_return_map.get(i.id, 0)
+        net_qty = i.quantity - ret_qty
+        
+        item_status = "Sold"
+        if ret_qty > 0:
+            item_status = "Returned" if ret_qty >= i.quantity else "Partial"
+            
+        dto_items.append({
+            "id": i.id,
+            "sku": i.sku,
+            "product_name": i.product_name or (i.product.name if i.product else None),
+            "hsn_sac": i.hsn_sac,
+            "gst_rate": i.gst_rate,
+            "quantity": i.quantity, # original sold
+            "returned_quantity": ret_qty,
+            "remaining_quantity": net_qty,
+            "item_status": item_status,
+            "unit": i.unit,
+            "rate": i.selling_price,
+            "discount": i.discount,
+            "taxable_value": i.taxable_amount,
+            "cgst": i.cgst,
+            "sgst": i.sgst,
+            "igst": i.igst,
+            "line_total": i.line_total,
+        })
+
     return {
         "id": sale.id,
         "bill_number": sale.bill_number,
@@ -433,33 +573,17 @@ def _build_invoice_dto(sale: Sale) -> dict:
             "reference": sale.tally_reference,
             "error_message": sale.tally_error_message,
         },
-        "items": [
-            {
-                "sku": i.sku,
-                "product_name": i.product_name or (i.product.name if i.product else None),
-                "hsn_sac": i.hsn_sac,
-                "gst_rate": i.gst_rate,
-                "quantity": i.quantity,
-                "unit": i.unit,
-                "rate": i.selling_price,
-                "discount": i.discount,
-                "taxable_value": i.taxable_amount,
-                "cgst": i.cgst,
-                "sgst": i.sgst,
-                "igst": i.igst,
-                "line_total": i.line_total,
-            }
-            for i in (sale.items or [])
-        ],
+        "items": dto_items,
+        "related_returns": returns_summary
     }
 
 
 @router.get("/sales/{sale_id}")
 def get_sale_invoice(sale_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == company_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
-    return {"receipt": _build_invoice_dto(sale)}
+    return {"receipt": _build_invoice_dto(sale, db)}
 
 
 @router.post("/sales/{sale_id}/retry-tally")
@@ -480,7 +604,7 @@ def retry_tally_sync(sale_id: int, company_id: int = Depends(get_bkr_company_id)
     res = TallyIntegrationService.sync_sale(db, sale_id=sale.id, mode="PROCESSING")
     db.commit()
     db.refresh(sale)
-    return {"tally_sync": {"status": res.status, "reference": res.reference, "error_message": res.error_message}, "receipt": _build_invoice_dto(sale)}
+    return {"tally_sync": {"status": res.status, "reference": res.reference, "error_message": res.error_message}, "receipt": _build_invoice_dto(sale, db)}
 
 @router.get("/sales/{sale_id}/tally-payload")
 def get_tally_payload(sale_id: int, company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db)):

@@ -62,6 +62,11 @@ def update_product(sku: str, product: ProductCreate, company_id: int = Depends(g
     existing = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
+        
+    if product.sku != sku:
+        check_dup = db.query(Product).filter(Product.sku == product.sku, Product.company_id == company_id).first()
+        if check_dup:
+            raise HTTPException(status_code=400, detail="Cannot change SKU to one that already exists")
     
     for key, value in product.model_dump(exclude_unset=True).items():
         setattr(existing, key, value)
@@ -72,7 +77,7 @@ def update_product(sku: str, product: ProductCreate, company_id: int = Depends(g
 
 @router.delete("/{sku}")
 def delete_product(sku: str, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    from app.models.schema import Inventory, InventoryMovement
+    from app.models.schema import Inventory, InventoryMovement, SaleItem, SalesReturnItem, DeliveryChallanItem, StockTransferItem, ServiceRecord
     
     existing = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
     if not existing:
@@ -81,11 +86,16 @@ def delete_product(sku: str, company_id: int = Depends(get_current_company_id), 
     # Check for historical dependencies before allowing hard delete
     has_inventory = db.query(Inventory).filter(Inventory.product_id == existing.id).first()
     has_movements = db.query(InventoryMovement).filter(InventoryMovement.product_id == existing.id).first()
+    has_sales = db.query(SaleItem).filter(SaleItem.product_id == existing.id).first()
+    has_returns = db.query(SalesReturnItem).filter(SalesReturnItem.product_id == existing.id).first()
+    has_challans = db.query(DeliveryChallanItem).filter(DeliveryChallanItem.product_id == existing.id).first()
+    has_transfers = db.query(StockTransferItem).filter(StockTransferItem.product_id == existing.id).first()
+    has_services = db.query(ServiceRecord).filter(ServiceRecord.product_id == existing.id).first()
     
-    if has_inventory or has_movements:
+    if any([has_inventory, has_movements, has_sales, has_returns, has_challans, has_transfers, has_services]):
         raise HTTPException(
             status_code=400, 
-            detail="Cannot hard-delete this product because it has historical inventory or order records. Please Deactivate it instead."
+            detail="Cannot hard-delete this product because it has historical inventory or order records (Sales, Returns, Challans, etc). Please Deactivate it instead."
         )
         
     db.delete(existing)

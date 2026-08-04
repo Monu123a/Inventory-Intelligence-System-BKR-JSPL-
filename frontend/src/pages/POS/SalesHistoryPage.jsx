@@ -14,6 +14,7 @@ const SalesHistoryPage = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [invoiceType, setInvoiceType] = useState('');
+  const [returnStatus, setReturnStatus] = useState('');
   const [tallyStatus, setTallyStatus] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -30,6 +31,7 @@ const SalesHistoryPage = () => {
       if (search) params.search = search;
       if (status) params.status = status;
       if (invoiceType) params.invoice_type = invoiceType;
+      if (returnStatus) params.return_status = returnStatus;
       if (tallyStatus) params.tally_status = tallyStatus;
       if (startDate) params.date_from = startDate;
       if (endDate) params.date_to = endDate;
@@ -42,7 +44,7 @@ const SalesHistoryPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [limit, search, skip, status, invoiceType, tallyStatus, startDate, endDate]);
+  }, [limit, search, skip, status, invoiceType, returnStatus, tallyStatus, startDate, endDate]);
 
   // Debounced fetch
   useEffect(() => {
@@ -82,6 +84,16 @@ const SalesHistoryPage = () => {
       default:
         return <span className={styles.tallyBadgeNA}>{sale.tally_sync_status}</span>;
     }
+  };
+
+  const renderReturnStatus = (status) => {
+    if (status === 'Fully Returned') {
+      return <span className={`${styles.returnBadge} ${styles.returnFull}`}>Fully Returned</span>;
+    }
+    if (status === 'Partially Returned') {
+      return <span className={`${styles.returnBadge} ${styles.returnPartial}`}>Partially Returned</span>;
+    }
+    return <span className={`${styles.returnBadge} ${styles.returnNone}`}>None</span>;
   };
 
   return (
@@ -146,6 +158,20 @@ const SalesHistoryPage = () => {
           </select>
           <select 
             className={styles.filterSelect}
+            value={returnStatus}
+            onChange={(e) => {
+              setReturnStatus(e.target.value);
+              setSkip(0);
+            }}
+          >
+            <option value="">All Return Statuses</option>
+            <option value="Active Sales">Active Sales</option>
+            <option value="None">None</option>
+            <option value="Partially Returned">Partially Returned</option>
+            <option value="Fully Returned">Fully Returned</option>
+          </select>
+          <select 
+            className={styles.filterSelect}
             value={tallyStatus}
             onChange={(e) => {
               setTallyStatus(e.target.value);
@@ -160,7 +186,7 @@ const SalesHistoryPage = () => {
           </select>
           
           <button className={styles.clearBtn} onClick={() => {
-            setSearch(''); setStatus(''); setInvoiceType(''); setTallyStatus(''); setStartDate(''); setEndDate(''); setSkip(0);
+            setSearch(''); setStatus(''); setInvoiceType(''); setReturnStatus(''); setTallyStatus(''); setStartDate(''); setEndDate(''); setSkip(0);
           }}>Clear Filters</button>
         </div>
       </div>
@@ -174,6 +200,8 @@ const SalesHistoryPage = () => {
               <th>Type</th>
               <th>Customer</th>
               <th>Total (₹)</th>
+              <th>Sold/Ret/Net Qty</th>
+              <th>Return Status</th>
               <th>Tally Sync</th>
               <th>Actions</th>
             </tr>
@@ -204,6 +232,12 @@ const SalesHistoryPage = () => {
                   </td>
                   <td style={{fontWeight: '600'}}>₹{sale.grand_total.toFixed(2)}</td>
                   <td>
+                    <div style={{ fontSize: '13px' }}>
+                      <span title="Total Sold">{sale.total_sold || 0}</span> / <span title="Total Returned" style={{ color: sale.returned_quantity > 0 ? '#c2410c' : 'inherit' }}>{sale.returned_quantity || 0}</span> / <span title="Net Quantity" style={{ fontWeight: 'bold' }}>{sale.remaining_quantity || 0}</span>
+                    </div>
+                  </td>
+                  <td>{renderReturnStatus(sale.return_status)}</td>
+                  <td>
                     {renderTallyStatus(sale)}
                   </td>
                   <td className={styles.actionsCell}>
@@ -214,6 +248,15 @@ const SalesHistoryPage = () => {
                     >
                       <FiEye /> View
                     </button>
+                    {sale.linked_sales_return_ids?.length > 0 && (
+                      <button 
+                        className={styles.actionBtn} 
+                        title="View Returns"
+                        onClick={() => navigate(`/sales-returns/${sale.linked_sales_return_ids[0]}`)}
+                      >
+                        <FiRefreshCw /> Returns
+                      </button>
+                    )}
                     {sale.invoice_type === 'B2B' && (sale.tally_sync_status === 'FAILED' || sale.tally_sync_status === 'PENDING') && (
                       <button 
                         className={`${styles.actionBtn} ${styles.retryBtn}`} 

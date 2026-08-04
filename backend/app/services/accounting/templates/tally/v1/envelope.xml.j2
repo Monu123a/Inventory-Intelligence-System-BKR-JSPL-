@@ -1,0 +1,25 @@
+<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Vouchers</ID>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>{{ company_name }}</SVCURRENTCOMPANY>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          {% for voucher in vouchers %}
+{{ voucher }}
+          {% endfor %}
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>

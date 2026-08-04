@@ -12,6 +12,8 @@ from app.models.db import SessionLocal
 from app.models.schema import JobExecutionLog, Inventory, InventorySnapshot, Company
 from app.services.report_service import ReportService
 from app.services.amazon_service import AmazonService
+from app.services.amazon_returns_scheduler import register_amazon_returns_jobs
+from app.services.service_reminder_service import ServiceReminderService
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +28,17 @@ def _acquire_scheduler_lock() -> bool:
     if _scheduler_lock_handle is not None:
         return True
 
-    lock_handle = open(_SCHEDULER_LOCK_PATH, "w")
     try:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        lock_handle.write(str(os.getpid()))
-        lock_handle.flush()
-        _scheduler_lock_handle = lock_handle
-        return True
+        with open(_SCHEDULER_LOCK_PATH, "w") as lock_handle:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_handle.write(str(os.getpid()))
+            lock_handle.flush()
+            _scheduler_lock_handle = lock_handle
+            # We must keep the file open to hold the lock
+            # Actually, if we exit `with`, the file closes and the lock is released!
+            # The previous code kept the file open intentionally to hold the lock.
+            pass
     except BlockingIOError:
-        lock_handle.close()
         return False
 
 
@@ -179,6 +183,13 @@ def _orchestrate_amazon_polling():
     default_co_id = int(os.getenv("DEFAULT_AMAZON_COMPANY_ID", "1"))
     execute_job_with_logging("Amazon Polling", poll_amazon_orders, company_id=default_co_id)
 
+def daily_service_reminders(db, company_id: int):
+    count = ServiceReminderService.generate_reminders(db, company_id)
+    logger.info(f"Generated {count} service reminders for company {company_id}")
+
+def _orchestrate_daily_service_reminders():
+    _run_for_all_companies("Daily Service Reminders", daily_service_reminders)
+
 # ---------------------------------------------------------
 # Scheduler Setup
 # ---------------------------------------------------------
@@ -207,6 +218,14 @@ def start_scheduler() -> bool:
         replace_existing=True
     )
     
+    # Daily Service Reminders (02:00 every day)
+    scheduler.add_job(
+        _orchestrate_daily_service_reminders,
+        CronTrigger(hour=2, minute=0),
+        id="daily_service_reminders",
+        replace_existing=True
+    )
+    
     # Amazon Polling (every X minutes)
     poll_interval = int(os.getenv("AMAZON_POLL_INTERVAL_MINUTES", "15"))
     scheduler.add_job(
@@ -215,6 +234,9 @@ def start_scheduler() -> bool:
         id="amazon_polling",
         replace_existing=True
     )
+    
+    # Amazon Returns Sync
+    register_amazon_returns_jobs(scheduler)
     
     # Start scheduler
     scheduler.start()

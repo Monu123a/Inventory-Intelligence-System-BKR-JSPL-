@@ -5,7 +5,7 @@ from datetime import datetime, date
 from typing import Dict, Any, List
 
 from app.models.db import get_db
-from app.models.schema import Company, Product, Warehouse, Inventory, InventoryMovement, AmazonSyncLog, ReportHistory, Alert, JobExecutionLog, Sale, SaleItem
+from app.models.schema import Company, Product, Warehouse, Inventory, InventoryMovement, AmazonSyncLog, ReportHistory, Alert, JobExecutionLog, Sale, SaleItem, SalesReturn, DeliveryChallan
 from app.api.dependencies import get_current_company_id
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -23,7 +23,7 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
     """
     Returns KPI metrics and System Health for the Overview Dashboard.
     """
-    today = date.today()
+    today = date.today().isoformat()
     
     # KPI Metrics
     total_products = db.query(Product).filter(Product.company_id == company_id).count()
@@ -114,6 +114,28 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
             func.date(Sale.sale_date) == today
         ).scalar() or 0
 
+    sales_returns_today = db.query(SalesReturn).filter(
+        SalesReturn.company_id == company_id,
+        SalesReturn.status == 'Completed',
+        func.date(SalesReturn.created_at) == today
+    ).count()
+
+    sales_return_value_today = db.query(func.sum(SalesReturn.grand_total)).filter(
+        SalesReturn.company_id == company_id,
+        SalesReturn.status == 'Completed',
+        func.date(SalesReturn.created_at) == today
+    ).scalar() or 0.0
+
+    pending_sales_returns = db.query(SalesReturn).filter(
+        SalesReturn.company_id == company_id,
+        SalesReturn.status == 'Draft'
+    ).count()
+
+    challans_today = db.query(DeliveryChallan).filter(
+        DeliveryChallan.company_id == company_id,
+        func.date(DeliveryChallan.created_at) == today
+    ).count()
+
     return {
         "kpis": {
             "total_products": total_products,
@@ -125,7 +147,11 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
             "active_alerts": active_alerts,
             "pos_revenue_today": pos_revenue_today,
             "pos_sales_count_today": pos_sales_count_today,
-            "pos_products_sold_today": pos_products_sold_today
+            "pos_products_sold_today": pos_products_sold_today,
+            "sales_returns_today": sales_returns_today,
+            "sales_return_value_today": sales_return_value_today,
+            "pending_sales_returns": pending_sales_returns,
+            "challans_today": challans_today
         },
         "health": {
             "amazon_sync": amazon_sync_data,

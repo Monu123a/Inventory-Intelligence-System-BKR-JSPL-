@@ -25,8 +25,14 @@ class InventoryEventEngine:
         """
         # Guard against negative quantities
         if quantity < 0:
-            raise ValueError(f"Quantity must be non-negative, got {quantity}")
+            if event_type == "ADD":
+                event_type = "DEDUCT"
+            elif event_type in ["DEDUCT", "SALE"]:
+                event_type = "ADD"
+            quantity = abs(quantity)
+            
         # Ensure product exists for this company
+        product_sku = product_sku.strip().upper()
         product = db.query(Product).filter(Product.sku == product_sku, Product.company_id == company_id).first()
         if not product:
             logger.warning(f"Product SKU {product_sku} not found for company {company_id}. Creating placeholder.")
@@ -39,7 +45,7 @@ class InventoryEventEngine:
             Inventory.product_id == product.id,
             Inventory.warehouse_id == warehouse_id,
             Inventory.company_id == company_id
-        ).first()
+        ).with_for_update().first()
 
         if not inventory:
             inventory = Inventory(
@@ -62,14 +68,20 @@ class InventoryEventEngine:
         elif event_type in ["DEDUCT", "SALE"]:
             qty_changed = -quantity
             inventory.current_qty -= quantity
+            # Release any reserved qty for this sale to prevent double-deduction of available_qty
+            if metadata_payload and metadata_payload.get("release_reservation"):
+                if inventory.reserved_qty and inventory.reserved_qty >= quantity:
+                    inventory.reserved_qty -= quantity
+                elif inventory.reserved_qty and inventory.reserved_qty > 0:
+                    inventory.reserved_qty = 0
         elif event_type == "REPLACE":
             qty_changed = quantity - qty_before
             inventory.current_qty = quantity
         else:
             raise ValueError(f"Unknown event_type: {event_type}")
 
-        # Keep available_qty in sync
-        inventory.available_qty = inventory.current_qty - inventory.reserved_qty
+        # Keep available_qty in sync: available = current - reserved
+        inventory.available_qty = inventory.current_qty - (inventory.reserved_qty or 0)
 
         qty_after = inventory.current_qty
         

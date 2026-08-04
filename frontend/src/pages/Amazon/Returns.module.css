@@ -1,0 +1,296 @@
+.container {
+    padding: 24px;
+    background-color: var(--color-surface);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.header h2 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+}
+
+.subtitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.syncStatus {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.statusBadge {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-top: 4px;
+}
+
+.statusBadge.success {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.statusBadge.running {
+    background-color: #e8f0fe;
+    color: #1967d2;
+}
+
+.statusBadge.failed {
+    background-color: #fce8e6;
+    color: #c5221f;
+}
+
+.statusBadge.unknown {
+    background-color: #f1f3f4;
+    color: #5f6368;
+}
+
+.syncButton {
+    padding: 8px 16px;
+    background-color: var(--color-primary, #3b82f6);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.syncButton:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.syncButton:disabled {
+    background-color: var(--border-color);
+    cursor: not-allowed;
+}
+
+.filters {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.searchInput, .selectInput {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background-color: var(--surface-secondary);
+    color: var(--text-primary);
+}
+
+.searchInput {
+    flex: 1;
+    max-width: 400px;
+}
+
+.tableContainer {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.table th, .table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table th {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.table td {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge.InTransit {
+    background-color: #fef7e0;
+    color: #b06000;
+}
+
+.badge.Received {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.badge.Pending {
+    background-color: #f1f3f4;
+    color: #5f6368;
+}
+
+.badge.RESTOCKED {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.badge.DEFECTIVE {
+    background-color: #fce8e6;
+    color: #c5221f;
+}
+
+.inspectBtn {
+    padding: 4px 12px;
+    background-color: #8b5cf6; /* A prominent purple to stand out */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.inspectBtn:hover {
+    background-color: #7c3aed;
+}
+
+.loading, .empty {
+    padding: 48px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Modal CSS */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal {
+    background-color: var(--color-surface, #ffffff);
+    padding: 24px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modal h3 {
+    margin: 0 0 16px 0;
+    font-size: 1.25rem;
+}
+
+.modalBody p {
+    margin: 8px 0;
+    font-size: 0.875rem;
+}
+
+.inspectForm {
+    margin-top: 24px;
+}
+
+.formGroup {
+    margin-bottom: 16px;
+}
+
+.formGroup label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.radioGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.radioGroup label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: normal;
+}
+
+.textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    resize: vertical;
+}
+
+.modalActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.cancelBtn {
+    padding: 8px 16px;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.cancelBtn:hover {
+    background-color: var(--surface-secondary);
+}
+
+.submitBtn {
+    padding: 8px 16px;
+    background-color: var(--color-primary, #3b82f6);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.submitBtn:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.submitBtn:disabled {
+    background-color: var(--border-color);
+    cursor: not-allowed;
+}

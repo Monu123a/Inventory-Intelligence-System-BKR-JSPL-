@@ -1,0 +1,126 @@
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  color: var(--text-color, #333);
+  font-family: 'Inter', sans-serif;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.contentWrapper {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th {
+  background: #f9fafb;
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table td {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+  color: #111827;
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge.generated { background: #dcfce7; color: #15803d; }
+.badge.failed { background: #fee2e2; color: #b91c1c; }
+.badge.queued { background: #fef3c7; color: #b45309; }
+
+.actionGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.btnIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnIcon:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.btnIcon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnIcon.primary:hover:not(:disabled) {
+  background: #dbeafe;
+  color: #2563eb;
+}

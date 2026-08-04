@@ -12,11 +12,11 @@ export const getActivity = async () => {
 };
 
 export const getAlerts = async () => {
-  const response = await api.get('/api/dashboard/alerts');
+  const response = await api.get(API_ROUTES.DASHBOARD.ALERTS);
   return response.data;
 };
 
 export const resolveAlert = async (alertId) => {
-  const response = await api.put(`/api/dashboard/alerts/${alertId}/resolve`);
+  const response = await api.put(`${API_ROUTES.DASHBOARD.ALERTS}/${alertId}/resolve`);
   return response.data;
 };

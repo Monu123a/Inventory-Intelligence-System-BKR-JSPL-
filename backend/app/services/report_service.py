@@ -51,7 +51,7 @@ class ReportService:
          
         df = pd.read_sql(query.statement, db.bind)
         if df.empty:
-            raise ValueError("No low stock items found.")
+            df = pd.DataFrame(columns=["product_sku", "name", "warehouse", "current_qty", "min_stock_level", "item_rate"])
             
         return ReportService._save_and_log_report(db, df, "Low Stock Report", format, company_id)
 
@@ -68,7 +68,7 @@ class ReportService:
          
         df = pd.read_sql(query.statement, db.bind)
         if df.empty:
-            raise ValueError("No negative stock items found.")
+            df = pd.DataFrame(columns=["product_sku", "name", "warehouse", "current_qty"])
             
         return ReportService._save_and_log_report(db, df, "Negative Stock Report", format, company_id)
 
@@ -81,14 +81,14 @@ class ReportService:
             Product.min_stock_level,
             Product.item_rate
         ).join(Inventory, Product.id == Inventory.product_id)\
-         .filter(Product.company_id == company_id, Product.min_stock_level > 0)\
+         .filter(Product.company_id == company_id, Inventory.company_id == company_id, Product.min_stock_level > 0)\
          .group_by(Product.sku, Product.name, Product.min_stock_level, Product.item_rate)\
          .having(func.sum(Inventory.current_qty) < Product.min_stock_level)
          
         df = pd.read_sql(query.statement, db.bind)
         if df.empty:
-            raise ValueError("No replenishment needed.")
-            
-        df["Required Quantity"] = df["min_stock_level"] - df["total_current_qty"]
+            df = pd.DataFrame(columns=["sku", "name", "total_current_qty", "min_stock_level", "item_rate", "Required Quantity"])
+        else:
+            df["Required Quantity"] = df["min_stock_level"] - df["total_current_qty"]
         
         return ReportService._save_and_log_report(db, df, "Daily Replenishment Report", format, company_id)

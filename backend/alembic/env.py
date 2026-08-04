@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models.db import Base, DATABASE_URL
 import app.models.schema
+import app.models.accounting_schema
 
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata

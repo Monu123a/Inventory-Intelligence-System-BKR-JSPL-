@@ -37,47 +37,35 @@ class AmazonService:
                 skipped_count += 1
                 continue
                 
-            items = order.get("items", [])
-            success = True
-            
-            # Process each item in the order
-            for item in items:
-                sku = item.get("sku")
-                quantity = item.get("quantity")
-                
-                try:
-                    movement = InventoryEventEngine.process_event(
-                        db=db,
-                        company_id=company_id,
-                        product_sku=sku,
-                        warehouse_id=default_wh.id,
-                        quantity=quantity,
-                        event_type="DEDUCT",
-                        source="Amazon",
-                        reference_id=order_id,
-                        metadata_payload={"amazon_order": order}
-                    )
-                    # Alert creation is handled by InventoryEventEngine.process_event()
+            # Use savepoint so we can rollback a single order without affecting others or caller
+            try:
+                with db.begin_nested():
+                    items = order.get("items", [])
+                    
+                    # Process each item in the order
+                    for item in items:
+                        sku = item.get("sku")
+                        quantity = item.get("quantity")
                         
-                except ValueError as e:
-                    logger.warning(f"Failed to process item {sku} in order {order_id}: {e}")
-                    # If it's a known error (e.g. product not found), we might still consider the order processed
-                    # or we can mark it failed. Let's raise to rollback the transaction.
-                    success = False
-                    break
-                except Exception as e:
-                    logger.error(f"Unexpected error processing item {sku} in order {order_id}: {e}")
-                    success = False
-                    break
-            
-            if success:
-                # Add AmazonSyncLog ONLY after successful processing
-                sync_log = AmazonSyncLog(company_id=company_id, order_id=order_id, status="Processed")
-                db.add(sync_log)
-                db.commit()
+                        movement = InventoryEventEngine.process_event(
+                            db=db,
+                            company_id=company_id,
+                            product_sku=sku,
+                            warehouse_id=default_wh.id,
+                            quantity=quantity,
+                            event_type="DEDUCT",
+                            source="Amazon",
+                            reference_id=order_id,
+                            metadata_payload={"amazon_order": order}
+                        )
+                        
+                    # Add AmazonSyncLog ONLY after successful processing
+                    sync_log = AmazonSyncLog(company_id=company_id, order_id=order_id, status="Processed")
+                    db.add(sync_log)
+                    
                 processed_count += 1
-            else:
-                db.rollback()
-                logger.error(f"Rolled back order {order_id} due to processing failures.")
+            except Exception as e:
+                logger.error(f"Failed to process order {order_id}: {e}")
+                # Savepoint rolls back automatically
                 
         return processed_count, skipped_count

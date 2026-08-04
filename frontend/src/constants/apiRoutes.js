@@ -6,7 +6,9 @@ export const API_ROUTES = {
   DASHBOARD: {
     METRICS: '/api/dashboard/metrics',
     ACTIVITY: '/api/dashboard/activity',
+    ALERTS: '/api/dashboard/alerts',
   },
+  COMPANIES: '/api/companies',
   PRODUCTS: '/api/products',
   WAREHOUSES: '/api/warehouses',
   INVENTORY: {

@@ -34,12 +34,9 @@ class InventoryAdapter:
 
             for _, row in df.iterrows():
                 sku_val = str(row[sku_col]).strip()
-                try:
-                    qty_val = int(float(row[qty_col]))
-                except (ValueError, TypeError):
-                    qty_val = 0
+                qty_val = row[qty_col]
                     
-                if sku_val and sku_val.lower() != "nan" and sku_val != "":
+                if sku_val and isinstance(sku_val, str) and sku_val.lower() != "nan" and sku_val != "":
                     results.append({
                         "sku": sku_val,
                         "quantity": qty_val

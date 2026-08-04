@@ -7,7 +7,7 @@ import styles from './HistoryFilters.module.css';
 export const HistoryFilters = ({
   setSearch,
   dateRange, setDateRange,
-  warehouseId, setWarehouseId,
+  warehouseId, setWarehouseId, warehouses,
   sourceFilter, setSourceFilter,
   skuFilter, setSkuFilter,
   onRefresh, isPending,
@@ -52,8 +52,9 @@ export const HistoryFilters = ({
           <label>Warehouse</label>
           <select className={styles.select} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
             <option value="">All Warehouses</option>
-            <option value="1">Main Warehouse</option>
-            <option value="2">Secondary Warehouse</option>
+            {warehouses?.map(wh => (
+              <option key={wh.id} value={wh.id}>{wh.name}</option>
+            ))}
           </select>
         </div>
 

@@ -6,7 +6,9 @@ const REPORTS = [
   { id: 'NEGATIVE_STOCK', label: 'Negative Stock' },
   { id: 'DAILY_REPLENISHMENT', label: 'Daily Replenishment' },
   { id: 'WAREHOUSE_SUMMARY', label: 'Warehouse Summary' },
-  { id: 'INVENTORY_VALUATION', label: 'Inventory Valuation' }
+  { id: 'INVENTORY_VALUATION', label: 'Inventory Valuation' },
+  { id: 'AMAZON_RETURNS', label: 'Amazon Returns' },
+  { id: 'DEFECTIVE_INVENTORY', label: 'Defective Inventory' }
 ];
 
 export const ReportSelector = ({ activeReport, onSelect }) => {

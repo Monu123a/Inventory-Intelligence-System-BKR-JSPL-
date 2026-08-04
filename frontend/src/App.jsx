@@ -11,6 +11,8 @@ const Overview = lazy(() => import('./pages/Overview/Overview'));
 const Products = lazy(() => import('./pages/Products/Products'));
 const Warehouses = lazy(() => import('./pages/Warehouses/Warehouses'));
 const Inventory = lazy(() => import('./pages/Inventory/Inventory'));
+const AmazonReturns = lazy(() => import('./pages/Amazon/Returns'));
+const DefectiveInventory = lazy(() => import('./pages/Inventory/DefectiveInventory'));
 const InventoryHistory = lazy(() => import('./pages/InventoryHistory/InventoryHistory'));
 const Reports = lazy(() => import('./pages/Reports/Reports'));
 const DownloadCentre = lazy(() => import('./pages/DownloadCentre/DownloadCentre'));
@@ -24,6 +26,42 @@ const JSPLReplenishmentView = lazy(() => import('./pages/Replenishment/JSPLReple
 const BKRRequirementsView = lazy(() => import('./pages/Replenishment/BKRRequirementsView'));
 const BKRInvoiceGenerator = lazy(() => import('./pages/Replenishment/BKRInvoiceGenerator'));
 const InterCompanyHistory = lazy(() => import('./pages/Replenishment/InterCompanyHistory'));
+
+const ExportCenter = lazy(() => import('./pages/Accounting/ExportCenter'));
+const MasterSync = lazy(() => import('./pages/Accounting/MasterSync'));
+const ExportHistory = lazy(() => import('./pages/Accounting/ExportHistory'));
+const Mapping = lazy(() => import('./pages/Accounting/Mapping'));
+const Configuration = lazy(() => import('./pages/Accounting/Configuration'));
+
+const SalesReturnsPage = lazy(() => import('./pages/SalesReturns/SalesReturnsPage'));
+const DeliveryChallansPage = lazy(() => import('./pages/DeliveryChallans/DeliveryChallansPage'));
+const CreateChallanPage = lazy(() => import('./pages/DeliveryChallans/CreateChallanPage'));
+
+// Service Management
+const ServiceDashboard = lazy(() => import('./pages/Service/ServiceDashboard'));
+const ServiceRecordsPage = lazy(() => import('./pages/Service/ServiceRecordsPage'));
+const ServiceHistoryPage = lazy(() => import('./pages/Service/ServiceHistoryPage'));
+const ServiceRemindersPage = lazy(() => import('./pages/Service/ServiceRemindersPage'));
+const CreateServicePage = lazy(() => import('./pages/Service/CreateServicePage'));
+const ServiceDetailPage = lazy(() => import('./pages/Service/ServiceDetailPage'));
+
+const DeliveryChallanPreviewPage = lazy(() => import('./pages/DeliveryChallans/DeliveryChallanPreviewPage'));
+
+// Warehouse Phase 8 Routes
+const WarehouseDashboard = lazy(() => import('./pages/Warehouse/WarehouseDashboard'));
+const StateHubsPage = lazy(() => import('./pages/Warehouse/StateHubsPage'));
+const WarehousesPage = lazy(() => import('./pages/Warehouse/WarehousesPage'));
+const WarehouseDetailPage = lazy(() => import('./pages/Warehouse/WarehouseDetailPage'));
+const WarehouseInventoryPage = lazy(() => import('./pages/Warehouse/WarehouseInventoryPage'));
+const WarehouseUsers = lazy(() => import('./pages/Warehouse/WarehouseUsers'));
+
+// Warehouse Logistics Routes
+const DispatchDashboard = lazy(() => import('./pages/WarehouseLogistics/DispatchDashboard'));
+const BatchDispatchCreator = lazy(() => import('./pages/WarehouseLogistics/BatchDispatchCreator'));
+const FCReturnsView = lazy(() => import('./pages/WarehouseLogistics/FCReturnsView'));
+const DamageClaimManager = lazy(() => import('./pages/WarehouseLogistics/DamageClaimManager'));
+const ReturnRecommendations = lazy(() => import('./pages/WarehouseLogistics/ReturnRecommendations'));
+
 const App = () => {
   return (
     <ErrorBoundary>
@@ -41,6 +79,8 @@ const App = () => {
                 <Route path={ROUTES.PRODUCTS} element={<Products />} />
                 <Route path={ROUTES.WAREHOUSES} element={<Warehouses />} />
                 <Route path={ROUTES.INVENTORY} element={<Inventory />} />
+                <Route path={ROUTES.DEFECTIVE_INVENTORY} element={<DefectiveInventory />} />
+                <Route path={ROUTES.AMAZON_RETURNS} element={<AmazonReturns />} />
                 <Route path={ROUTES.INVENTORY_HISTORY} element={<InventoryHistory />} />
                 <Route path={ROUTES.REPORTS} element={<Reports />} />
                 <Route path={ROUTES.DOWNLOAD_CENTRE} element={<DownloadCentre />} />
@@ -52,6 +92,43 @@ const App = () => {
                 <Route path={ROUTES.REPLENISHMENT_BKR} element={<BKRRequirementsView />} />
                 <Route path={ROUTES.REPLENISHMENT_BKR_INVOICE} element={<BKRInvoiceGenerator />} />
                 <Route path={ROUTES.INTER_COMPANY_HISTORY} element={<InterCompanyHistory />} />
+                
+                {/* Accounting Routes */}
+                <Route path={ROUTES.ACCOUNTING_EXPORT_CENTER} element={<ExportCenter />} />
+                <Route path={ROUTES.ACCOUNTING_MASTER_SYNC} element={<MasterSync />} />
+                <Route path={ROUTES.ACCOUNTING_HISTORY} element={<ExportHistory />} />
+                <Route path={ROUTES.ACCOUNTING_MAPPING} element={<Mapping />} />
+                <Route path={ROUTES.ACCOUNTING_CONFIG} element={<Configuration />} />
+
+                {/* Phase 6 Routes */}
+                <Route path={ROUTES.SALES_RETURNS} element={<SalesReturnsPage />} />
+                <Route path={ROUTES.DELIVERY_CHALLANS} element={<DeliveryChallansPage />} />
+                <Route path={ROUTES.DELIVERY_CHALLAN_CREATE} element={<CreateChallanPage />} />
+                
+                {/* Service Routes */}
+                <Route path={ROUTES.SERVICE_DASHBOARD} element={<ServiceDashboard />} />
+                <Route path={ROUTES.SERVICE_RECORDS} element={<ServiceRecordsPage />} />
+                <Route path={ROUTES.SERVICE_HISTORY} element={<ServiceHistoryPage />} />
+                <Route path={ROUTES.SERVICE_REMINDERS} element={<ServiceRemindersPage />} />
+                <Route path={ROUTES.SERVICE_CREATE} element={<CreateServicePage />} />
+                <Route path={ROUTES.SERVICE_DETAIL} element={<ServiceDetailPage />} />
+
+                <Route path={ROUTES.DELIVERY_CHALLAN_PREVIEW} element={<DeliveryChallanPreviewPage />} />
+
+                {/* Warehouse Phase 8 Routes */}
+                <Route path={ROUTES.WAREHOUSE_DASHBOARD} element={<WarehouseDashboard />} />
+                <Route path={ROUTES.WAREHOUSE_STATE_HUBS} element={<StateHubsPage />} />
+                <Route path={ROUTES.WAREHOUSE_MASTER_LIST} element={<WarehousesPage />} />
+                <Route path={ROUTES.WAREHOUSE_INVENTORY} element={<WarehouseInventoryPage />} />
+                <Route path={ROUTES.WAREHOUSE_USERS} element={<WarehouseUsers />} />
+                <Route path={ROUTES.WAREHOUSE_DETAIL} element={<WarehouseDetailPage />} />
+
+                {/* Warehouse Logistics Routes */}
+                <Route path={ROUTES.LOGISTICS_DISPATCH_DASHBOARD} element={<DispatchDashboard />} />
+                <Route path={ROUTES.LOGISTICS_BATCH_DISPATCH} element={<BatchDispatchCreator />} />
+                <Route path={ROUTES.LOGISTICS_RETURNS} element={<FCReturnsView />} />
+                <Route path={ROUTES.LOGISTICS_DAMAGE_CLAIMS} element={<DamageClaimManager />} />
+                <Route path={ROUTES.LOGISTICS_RETURN_RECOMMENDATIONS} element={<ReturnRecommendations />} />
               </Route>
             </Route>
             

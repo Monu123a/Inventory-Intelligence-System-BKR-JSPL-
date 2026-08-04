@@ -6,9 +6,9 @@ import { SystemHealthCard } from './components/SystemHealthCard';
 import { RecentActivity } from './components/RecentActivity';
 import { AlertsPanel } from './components/AlertsPanel';
 import { ROUTES } from '../../constants/routes';
-import { useDashboardMetrics, useDashboardActivity, useDashboardAlerts } from '../../hooks/useDashboard';
+import { useDashboardMetrics, useDashboardActivity, useDashboardAlerts, useReturnMetrics } from '../../hooks/useDashboard';
 import useCompanyStore from '../../stores/useCompanyStore';
-import { FiBox, FiLayers, FiDatabase, FiAlertCircle, FiTrendingDown, FiBell, FiRefreshCw, FiShoppingCart, FiDollarSign } from 'react-icons/fi';
+import { FiBox, FiLayers, FiDatabase, FiAlertCircle, FiTrendingDown, FiBell, FiRefreshCw, FiShoppingCart, FiDollarSign, FiRefreshCcw, FiClock, FiCheckCircle, FiXCircle, FiFileText } from 'react-icons/fi';
 import styles from './Overview.module.css';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -30,6 +30,7 @@ const Overview = () => {
   const isBkr = currentCompany?.code === 'BKR';
   
   const { data: metricsData, isPending: metricsPending, error: metricsError } = useDashboardMetrics();
+  const { data: returnData, isPending: returnPending } = useReturnMetrics();
   const { data: activityData, isPending: activityPending, error: activityError } = useDashboardActivity();
   const { data: alertsData, isPending: alertsPending, error: alertsError } = useDashboardAlerts();
 
@@ -37,7 +38,7 @@ const Overview = () => {
     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
   };
 
-  if (metricsPending || activityPending || alertsPending) {
+  if (metricsPending || activityPending || alertsPending || returnPending) {
     return (
       <PageContainer title="Overview Dashboard">
         <DashboardSkeleton />
@@ -131,6 +132,34 @@ const Overview = () => {
               color="primary"
               navigateTo={ROUTES.POS_HISTORY}
             />
+            <MetricCard 
+              title="Sales Returns Today" 
+              value={kpis?.sales_returns_today ?? 0}
+              icon={FiRefreshCcw} 
+              color="warning"
+              navigateTo={ROUTES.SALES_RETURNS}
+            />
+            <MetricCard 
+              title="Return Value Today" 
+              value={`₹${(kpis?.sales_return_value_today ?? 0).toFixed(2)}`}
+              icon={FiDollarSign} 
+              color="danger"
+              navigateTo={ROUTES.SALES_RETURNS}
+            />
+            <MetricCard 
+              title="Pending Returns" 
+              value={kpis?.pending_sales_returns ?? 0}
+              icon={FiClock} 
+              color="warning"
+              navigateTo={ROUTES.SALES_RETURNS}
+            />
+            <MetricCard 
+              title="Challans Today" 
+              value={kpis?.challans_today ?? 0}
+              icon={FiFileText} 
+              color="primary"
+              navigateTo={ROUTES.DELIVERY_CHALLANS}
+            />
           </>
         )}
 
@@ -146,6 +175,43 @@ const Overview = () => {
           value={kpis?.active_alerts ?? 0} 
           icon={FiBell} 
           color={kpis?.active_alerts > 0 ? "danger" : "success"}
+        />
+
+        {/* Return Metrics */}
+        <MetricCard 
+          title="Returns Today" 
+          value={returnData?.returns_today ?? 0} 
+          icon={FiRefreshCcw} 
+          color="primary"
+          navigateTo={ROUTES.AMAZON_RETURNS}
+        />
+        <MetricCard 
+          title="Awaiting Inspection" 
+          value={returnData?.awaiting_inspection ?? 0} 
+          icon={FiClock} 
+          color="warning"
+          navigateTo={ROUTES.AMAZON_RETURNS}
+        />
+        <MetricCard 
+          title="Restocked" 
+          value={returnData?.restocked ?? 0} 
+          icon={FiCheckCircle} 
+          color="success"
+          navigateTo={ROUTES.AMAZON_RETURNS}
+        />
+        <MetricCard 
+          title="Defective" 
+          value={returnData?.defective ?? 0} 
+          icon={FiXCircle} 
+          color="danger"
+          navigateTo={ROUTES.DEFECTIVE_INVENTORY}
+        />
+        <MetricCard 
+          title="Pending > 2 Days" 
+          value={returnData?.inspection_pending_old ?? 0} 
+          icon={FiAlertCircle} 
+          color="danger"
+          navigateTo={ROUTES.AMAZON_RETURNS}
         />
       </div>
 

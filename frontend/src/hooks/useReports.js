@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as inventoryService from '../services/inventory';
 import * as productService from '../services/products';
 import * as warehouseService from '../services/warehouses';
+import api from '../services/api';
 import { useMemo } from 'react';
 import { 
   buildJoinedDataset, 
@@ -21,12 +22,16 @@ export const useReports = ({ reportType = 'LOW_STOCK', search = '', warehouseId 
   const invQuery = useQuery({ queryKey: ['inventory', 'all', companyId], queryFn: () => inventoryService.getInventory(null) });
   const prodQuery = useQuery({ queryKey: ['products', companyId], queryFn: () => productService.getProducts(), enabled: !!companyId });
   const whQuery = useQuery({ queryKey: ['warehouses', companyId], queryFn: warehouseService.getWarehouses });
+  const returnsQuery = useQuery({ queryKey: ['reports', 'returns', companyId], queryFn: async () => (await api.get('/api/reports/returns/amazon-returns')).data, enabled: reportType === 'AMAZON_RETURNS' });
+  const defectiveQuery = useQuery({ queryKey: ['reports', 'defective', companyId], queryFn: async () => (await api.get('/api/reports/returns/defective-inventory')).data, enabled: reportType === 'DEFECTIVE_INVENTORY' });
 
   const rawInventory = invQuery.data ?? EMPTY_ARRAY;
   const products = prodQuery.data ?? EMPTY_ARRAY;
   const warehouses = whQuery.data ?? EMPTY_ARRAY;
 
-  const isPending = invQuery.isPending || prodQuery.isPending || whQuery.isPending;
+  const isPending = invQuery.isPending || prodQuery.isPending || whQuery.isPending || 
+                    (reportType === 'AMAZON_RETURNS' && returnsQuery.isPending) ||
+                    (reportType === 'DEFECTIVE_INVENTORY' && defectiveQuery.isPending);
   const error = invQuery.error || prodQuery.error || whQuery.error;
   
   // 1. Memoize Base Joined Data
@@ -44,11 +49,21 @@ export const useReports = ({ reportType = 'LOW_STOCK', search = '', warehouseId 
       case 'WAREHOUSE_SUMMARY': return buildWarehouseSummary(joinedData, warehouses);
       case 'INVENTORY_VALUATION': return buildInventoryValuation(joinedData);
       case 'DAILY_REPLENISHMENT': return buildReplenishmentReport(joinedData);
+      case 'AMAZON_RETURNS': return {
+          data: returnsQuery.data || [],
+          columns: [ { key: 'return_id', label: 'Return ID' }, { key: 'sku', label: 'SKU' }, { key: 'product', label: 'Product' }, { key: 'reason', label: 'Reason' }, { key: 'inspection_status', label: 'Status' }, { key: 'inspector', label: 'Inspector' }, { key: 'date', label: 'Date' } ],
+          summary: { label: 'Total Returns', value: (returnsQuery.data || []).length }
+      };
+      case 'DEFECTIVE_INVENTORY': return {
+          data: defectiveQuery.data || [],
+          columns: [ { key: 'sku', label: 'SKU' }, { key: 'product', label: 'Product' }, { key: 'defect_status', label: 'Status' }, { key: 'quantity', label: 'Qty' }, { key: 'inspection_date', label: 'Date' } ],
+          summary: { label: 'Total Defective Items', value: (defectiveQuery.data || []).length }
+      };
       case 'LOW_STOCK':
       default:
         return buildLowStockReport(joinedData);
     }
-  }, [joinedData, warehouses, reportType]);
+  }, [joinedData, warehouses, reportType, returnsQuery.data, defectiveQuery.data]);
 
   // 3. Filter, Search, Sort, Paginate Data
   const processedData = useMemo(() => {
@@ -63,9 +78,10 @@ export const useReports = ({ reportType = 'LOW_STOCK', search = '', warehouseId 
     if (search) {
       const lowerSearch = search.toLowerCase();
       filtered = filtered.filter(r => 
-        (r.product_sku || '').toLowerCase().includes(lowerSearch) ||
-        (r.product_name || '').toLowerCase().includes(lowerSearch) ||
-        (r.warehouse_name || '').toLowerCase().includes(lowerSearch)
+        (r.product_sku || r.sku || '').toLowerCase().includes(lowerSearch) ||
+        (r.product_name || r.product || '').toLowerCase().includes(lowerSearch) ||
+        (r.warehouse_name || '').toLowerCase().includes(lowerSearch) ||
+        (r.return_id || '').toLowerCase().includes(lowerSearch)
       );
     }
 

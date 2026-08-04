@@ -1,0 +1,106 @@
+.container {
+    padding: 24px;
+    background-color: var(--color-surface);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.header h2 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+}
+
+.subtitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.filters {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.searchInput, .selectInput {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background-color: var(--surface-secondary);
+    color: var(--text-primary);
+}
+
+.searchInput {
+    flex: 1;
+    max-width: 400px;
+}
+
+.tableContainer {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.table th, .table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table th {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.table td {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge.NEW {
+    background-color: #fef7e0;
+    color: #b06000;
+}
+
+.badge.UNDER_REVIEW {
+    background-color: #e8f0fe;
+    color: #1967d2;
+}
+
+.badge.REPAIR, .badge.RETURN_VENDOR {
+    background-color: #e6f4ea;
+    color: #137333;
+}
+
+.badge.SCRAPPED, .badge.DISPOSED {
+    background-color: #f1f3f4;
+    color: #5f6368;
+}
+
+.loading, .empty {
+    padding: 48px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}

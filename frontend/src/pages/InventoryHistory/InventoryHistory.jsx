@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { getWarehouses } from '../../services/warehouses';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
@@ -36,6 +38,11 @@ const InventoryHistory = () => {
 
   const { data, allFilteredData, totalPages, isPending, refetch } = useInventoryHistory({
     search, dateRange, warehouseId, sourceFilter, skuFilter, page, limit: 15
+  });
+
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: getWarehouses,
   });
 
   const { exportToCsv } = useInventoryHistoryExport();
@@ -94,6 +101,7 @@ const InventoryHistory = () => {
           search={search} setSearch={handleSearch}
           dateRange={dateRange} setDateRange={setDateRange}
           warehouseId={warehouseId} setWarehouseId={setWarehouseId}
+          warehouses={warehouses}
           sourceFilter={sourceFilter} setSourceFilter={setSourceFilter}
           skuFilter={skuFilter} setSkuFilter={setSkuFilter}
           onRefresh={refetch} isPending={isPending}

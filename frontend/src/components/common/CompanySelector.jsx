@@ -1,13 +1,13 @@
 import React from 'react';
-import { useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { FiBox } from 'react-icons/fi';
 import { getCompanies } from '../../services/companies';
 import useCompanyStore from '../../stores/useCompanyStore';
 import styles from './CompanySelector.module.css';
 
+// Fallback companies used only if the API fails to fetch the companies list
 const FALLBACK_COMPANIES = [
   { id: 1, code: 'JSPL', name: 'JSPL' },
   { id: 2, code: 'BKR', name: 'BKR' },
@@ -15,7 +15,6 @@ const FALLBACK_COMPANIES = [
 
 const CompanySelector = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { companyId, companyCode, currentCompany, setCompany } = useCompanyStore();
   
   const { data: companies, isLoading, error } = useQuery({
@@ -24,11 +23,12 @@ const CompanySelector = () => {
   });
 
   const availableCompanies = companies?.length ? companies : FALLBACK_COMPANIES;
-  const selectedCompany =
+  const selectedCompany = useMemo(() => (
     availableCompanies.find((company) => company.id === companyId) ||
     currentCompany ||
     availableCompanies.find((company) => company.code === companyCode) ||
-    FALLBACK_COMPANIES[0];
+    FALLBACK_COMPANIES[0]
+  ), [availableCompanies, companyId, currentCompany, companyCode]);
 
   useEffect(() => {
     if (
@@ -46,7 +46,6 @@ const CompanySelector = () => {
     const selected = availableCompanies.find((company) => company.id === newId);
     setCompany(newId, selected?.code || '', selected?.name || selected?.code || '');
     queryClient.invalidateQueries();
-    navigate('/');
   };
   
   let badgeClass = styles.badgeDefault;

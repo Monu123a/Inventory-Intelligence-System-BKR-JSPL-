@@ -40,9 +40,19 @@ class InvoiceNumberService:
             .first()
         )
         if not seq:
-            seq = InvoiceSequence(company_id=company_id, fiscal_year=fy, last_number=0)
-            db.add(seq)
-            db.flush()
+            from sqlalchemy.exc import IntegrityError
+            try:
+                with db.begin_nested():
+                    seq = InvoiceSequence(company_id=company_id, fiscal_year=fy, last_number=0)
+                    db.add(seq)
+                    db.flush()
+            except IntegrityError:
+                seq = (
+                    db.query(InvoiceSequence)
+                    .filter(InvoiceSequence.company_id == company_id, InvoiceSequence.fiscal_year == fy)
+                    .with_for_update()
+                    .first()
+                )
 
         seq.last_number = (seq.last_number or 0) + 1
         db.flush()
