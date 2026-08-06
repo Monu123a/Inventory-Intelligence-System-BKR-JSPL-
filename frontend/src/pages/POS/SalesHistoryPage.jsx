@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
+import Button from '../../components/forms/Button';
 import styles from './SalesHistoryPage.module.css';
 import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock } from 'react-icons/fi';
 
@@ -96,6 +98,77 @@ const SalesHistoryPage = () => {
     return <span className={`${styles.returnBadge} ${styles.returnNone}`}>None</span>;
   };
 
+  const columns = [
+    { key: 'sale_date', label: 'Date', render: (val) => formatDate(val) },
+    { 
+      key: 'bill_number', 
+      label: 'Bill / Invoice No.', 
+      render: (_, sale) => (
+        <>
+          <div className={styles.billNumber}>{sale.bill_number}</div>
+          {sale.invoice_number && <div className={styles.invoiceNumber}>{sale.invoice_number}</div>}
+        </>
+      )
+    },
+    { key: 'invoice_type', label: 'Type', render: (val) => <span className={styles.typeBadge}>{val || 'B2C'}</span> },
+    {
+      key: 'customer',
+      label: 'Customer',
+      render: (_, sale) => (
+        <>
+          <div className={styles.customerName}>{sale.customer_name || 'Walk-in'}</div>
+          {sale.customer_gstin && <div className={styles.customerGstin}>{sale.customer_gstin}</div>}
+        </>
+      )
+    },
+    { key: 'grand_total', label: 'Total (₹)', render: (val) => <span style={{fontWeight: '600'}}>₹{val.toFixed(2)}</span> },
+    {
+      key: 'quantities',
+      label: 'Sold/Ret/Net Qty',
+      render: (_, sale) => (
+        <div style={{ fontSize: '13px' }}>
+          <span title="Total Sold">{sale.total_sold || 0}</span> / <span title="Total Returned" style={{ color: sale.returned_quantity > 0 ? '#c2410c' : 'inherit' }}>{sale.returned_quantity || 0}</span> / <span title="Net Quantity" style={{ fontWeight: 'bold' }}>{sale.remaining_quantity || 0}</span>
+        </div>
+      )
+    },
+    { key: 'return_status', label: 'Return Status', render: (val) => renderReturnStatus(val) },
+    { key: 'tally_sync_status', label: 'Tally Sync', render: (_, sale) => renderTallyStatus(sale) },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, sale) => (
+        <div className={styles.actionsCell}>
+          <button 
+            className={styles.actionBtn} 
+            title="View Invoice"
+            onClick={() => navigate(`/sales/${sale.id}/invoice`)}
+          >
+            <FiEye /> View
+          </button>
+          {sale.linked_sales_return_ids?.length > 0 && (
+            <button 
+              className={styles.actionBtn} 
+              title="View Returns"
+              onClick={() => navigate(`/sales-returns/${sale.linked_sales_return_ids[0]}`)}
+            >
+              <FiRefreshCw /> Returns
+            </button>
+          )}
+          {sale.invoice_type === 'B2B' && (sale.tally_sync_status === 'FAILED' || sale.tally_sync_status === 'PENDING') && (
+            <button 
+              className={`${styles.actionBtn} ${styles.retryBtn}`} 
+              title="Retry Tally Sync"
+              onClick={() => handleRetryTally(sale.id)}
+              disabled={retryingId === sale.id}
+            >
+              <FiRefreshCw className={retryingId === sale.id ? styles.spinning : ''} /> Retry
+            </button>
+          )}
+        </div>
+      )
+    }
+  ];
+
   return (
     <div className={styles.historyContainer}>
       <div className={styles.header}>
@@ -112,6 +185,7 @@ const SalesHistoryPage = () => {
               setSearch(e.target.value);
               setSkip(0);
             }}
+            autoFocus
           />
           <div className={styles.dateFilters}>
             <input 
@@ -192,107 +266,32 @@ const SalesHistoryPage = () => {
       </div>
 
       <div className={styles.tableContainer}>
-        <table className={styles.historyTable}>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Bill / Invoice No.</th>
-              <th>Type</th>
-              <th>Customer</th>
-              <th>Total (₹)</th>
-              <th>Sold/Ret/Net Qty</th>
-              <th>Return Status</th>
-              <th>Tally Sync</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+        <DataTable>
+          <TableHeader columns={columns} />
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{textAlign: 'center'}}>Loading...</td>
+                <td colSpan={columns.length} style={{textAlign: 'center', padding: '2rem'}}>Loading...</td>
               </tr>
             ) : sales.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{textAlign: 'center'}}>No sales found matching your filters.</td>
+                <td colSpan={columns.length} style={{textAlign: 'center', padding: '2rem'}}>No sales found matching your filters.</td>
               </tr>
             ) : (
               sales.map((sale) => (
-                <tr key={sale.id}>
-                  <td>{formatDate(sale.sale_date)}</td>
-                  <td>
-                    <div className={styles.billNumber}>{sale.bill_number}</div>
-                    {sale.invoice_number && <div className={styles.invoiceNumber}>{sale.invoice_number}</div>}
-                  </td>
-                  <td>
-                    <span className={styles.typeBadge}>{sale.invoice_type || 'B2C'}</span>
-                  </td>
-                  <td>
-                    <div className={styles.customerName}>{sale.customer_name || 'Walk-in'}</div>
-                    {sale.customer_gstin && <div className={styles.customerGstin}>{sale.customer_gstin}</div>}
-                  </td>
-                  <td style={{fontWeight: '600'}}>₹{sale.grand_total.toFixed(2)}</td>
-                  <td>
-                    <div style={{ fontSize: '13px' }}>
-                      <span title="Total Sold">{sale.total_sold || 0}</span> / <span title="Total Returned" style={{ color: sale.returned_quantity > 0 ? '#c2410c' : 'inherit' }}>{sale.returned_quantity || 0}</span> / <span title="Net Quantity" style={{ fontWeight: 'bold' }}>{sale.remaining_quantity || 0}</span>
-                    </div>
-                  </td>
-                  <td>{renderReturnStatus(sale.return_status)}</td>
-                  <td>
-                    {renderTallyStatus(sale)}
-                  </td>
-                  <td className={styles.actionsCell}>
-                    <button 
-                      className={styles.actionBtn} 
-                      title="View Invoice"
-                      onClick={() => navigate(`/sales/${sale.id}/invoice`)}
-                    >
-                      <FiEye /> View
-                    </button>
-                    {sale.linked_sales_return_ids?.length > 0 && (
-                      <button 
-                        className={styles.actionBtn} 
-                        title="View Returns"
-                        onClick={() => navigate(`/sales-returns/${sale.linked_sales_return_ids[0]}`)}
-                      >
-                        <FiRefreshCw /> Returns
-                      </button>
-                    )}
-                    {sale.invoice_type === 'B2B' && (sale.tally_sync_status === 'FAILED' || sale.tally_sync_status === 'PENDING') && (
-                      <button 
-                        className={`${styles.actionBtn} ${styles.retryBtn}`} 
-                        title="Retry Tally Sync"
-                        onClick={() => handleRetryTally(sale.id)}
-                        disabled={retryingId === sale.id}
-                      >
-                        <FiRefreshCw className={retryingId === sale.id ? styles.spinning : ''} /> Retry
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                <TableRow key={sale.id} row={sale} columns={columns} />
               ))
             )}
           </tbody>
-        </table>
+        </DataTable>
         
-        <div className={styles.pagination}>
-          <span>Showing {Math.min(skip + 1, total)} - {Math.min(skip + sales.length, total)} of {total}</span>
-          <div className={styles.pageBtns}>
-            <button 
-              className={styles.pageBtn}
-              disabled={skip === 0}
-              onClick={() => setSkip(skip - limit)}
-            >
-              Previous
-            </button>
-            <button 
-              className={styles.pageBtn}
-              disabled={skip + limit >= total}
-              onClick={() => setSkip(skip + limit)}
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        {total > limit && (
+          <TablePagination 
+            currentPage={Math.floor(skip / limit) + 1} 
+            totalPages={Math.ceil(total / limit)} 
+            onPageChange={(p) => setSkip((p - 1) * limit)} 
+          />
+        )}
       </div>
     </div>
   );

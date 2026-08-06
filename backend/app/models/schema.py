@@ -105,6 +105,21 @@ class StateHub(Base):
     warehouses = relationship("Warehouse", back_populates="hub")
 
 
+import enum
+from sqlalchemy import Enum
+
+class WarehouseType(str, enum.Enum):
+    CENTRAL = "CENTRAL"
+    FULFILLMENT_CENTER = "FULFILLMENT_CENTER"
+    REGIONAL = "REGIONAL"
+    TRANSIT = "TRANSIT"
+
+class WarehouseStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    UNDER_MAINTENANCE = "UNDER_MAINTENANCE"
+    BLOCKED = "BLOCKED"
+
 class Warehouse(Base):
     __tablename__ = "warehouses"
 
@@ -113,7 +128,8 @@ class Warehouse(Base):
     hub_id = Column(Integer, ForeignKey("state_hubs.id"), nullable=True)
     name = Column(String, nullable=False)
     code = Column(String, index=True)
-    status = Column(String, default="Active")
+    warehouse_type = Column(Enum(WarehouseType), default=WarehouseType.FULFILLMENT_CENTER)
+    status = Column(Enum(WarehouseStatus), default=WarehouseStatus.ACTIVE)
     address = Column(String, nullable=True)
     contact_person = Column(String, nullable=True)
     manager = Column(String, nullable=True)
@@ -129,6 +145,19 @@ class Warehouse(Base):
     inventories = relationship("Inventory", back_populates="warehouse", cascade="all, delete-orphan")
     movements = relationship("InventoryMovement", back_populates="warehouse", cascade="all, delete-orphan")
     users = relationship("WarehouseUser", back_populates="warehouse", cascade="all, delete-orphan")
+    external_mappings = relationship("WarehouseExternalMapping", back_populates="warehouse", cascade="all, delete-orphan")
+
+class WarehouseExternalMapping(Base):
+    __tablename__ = "warehouse_external_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
+    marketplace = Column(String, nullable=False) # e.g. Amazon, Zepto
+    external_code = Column(String, nullable=False, index=True) # e.g. BOM1
+    
+    __table_args__ = (UniqueConstraint('warehouse_id', 'marketplace', name='uix_warehouse_marketplace'),)
+    
+    warehouse = relationship("Warehouse", back_populates="external_mappings")
 
 class WarehouseUser(Base):
     __tablename__ = "warehouse_users"
@@ -289,6 +318,9 @@ class CompanySettings(Base):
 
     # Billing default text
     declaration = Column(Text, nullable=True)
+
+    # Integration Settings
+    export_internal_distribution_to_accounting = Column(Boolean, default=False)
     terms_of_delivery_default = Column(String, nullable=True)
 
     # Tally Integration (optional)
@@ -375,6 +407,7 @@ class Sale(Base):
     # Invoice identity
     invoice_number = Column(String, nullable=True, index=True)
     invoice_type = Column(String, default="B2C")  # B2C | B2B
+    transaction_origin = Column(String, nullable=True)  # POS, AMAZON, FC_DISPATCH, INTERNAL_DISTRIBUTION, SERVICE, MANUAL
 
     # Customer snapshot
     customer_gstin = Column(String, nullable=True)
@@ -843,6 +876,7 @@ class FCDispatch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     invoice_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
     delivery_challan_id = Column(Integer, ForeignKey("delivery_challans.id"), nullable=True)
@@ -856,10 +890,26 @@ class FCDispatch(Base):
     
     # Relationships
     company = relationship("Company")
-    warehouse = relationship("Warehouse")
+    source_warehouse = relationship("Warehouse", foreign_keys=[source_warehouse_id])
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
     invoice = relationship("Sale")
     delivery_challan = relationship("DeliveryChallan")
     items = relationship("FCDispatchItem", back_populates="dispatch", cascade="all, delete-orphan")
+    timeline = relationship("DispatchTimeline", back_populates="dispatch", cascade="all, delete-orphan")
+
+class DispatchTimeline(Base):
+    __tablename__ = "dispatch_timeline"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dispatch_id = Column(Integer, ForeignKey("fc_dispatches.id"), nullable=False)
+    step = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    performed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    performed_at = Column(DateTime, default=datetime.utcnow)
+    remarks = Column(Text, nullable=True)
+
+    dispatch = relationship("FCDispatch", back_populates="timeline")
+    user = relationship("User")
 
 
 class FCDispatchItem(Base):

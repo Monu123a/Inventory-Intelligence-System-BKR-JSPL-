@@ -30,9 +30,8 @@ from app.api.routers.products import router as products_router
 from app.api.routers import pos, auth, companies, products, warehouses, inventory, dashboard, reports, company_settings, replenishment, transfers, accounting, amazon_returns, defective_inventory, returns_reports
 from app.api.routers.sales_returns import router as sales_returns_router
 from app.api.routers.delivery_challans import router as delivery_challans_router
-from app.api.routers.services import router as services_router
-from app.api.routers.service_reminders import router as service_reminders_router
-from app.api.routers.documents import router as documents_router
+from app.api.routers.fc_returns import router as fc_returns_router
+from app.api.routers.business_reports import router as business_reports_router
 from app.api.routers.warehouses import router as warehouses_router
 from app.api.routers.inventory import router as inventory_router
 from app.api.routers.state_hubs import router as state_hubs_router
@@ -48,6 +47,9 @@ from app.api.routers.transfers import router as transfers_router
 from app.api.routers.fc_dispatches import router as fc_dispatches_router
 from app.api.routers.fc_returns import router as fc_returns_router
 from app.api.routers.damage_claims import router as damage_claims_router
+from app.api.routers.services import router as services_router
+from app.api.routers.service_reminders import router as service_reminders_router
+from app.api.routers.documents import router as documents_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -146,9 +148,12 @@ app.include_router(services_router, prefix="/api")
 app.include_router(service_reminders_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 
-# Phase 9: Warehouse Logistics
+# Phase 9: Warehouse Logistics & Fulfillment Center Dispatch
 app.include_router(fc_dispatches_router, prefix="/api")
 app.include_router(fc_returns_router, prefix="/api")
+
+# Phase 10A: Business Reports
+app.include_router(business_reports_router, prefix="/api")
 app.include_router(damage_claims_router, prefix="/api")
 
 # ---------------------------------------------------------------------------

@@ -1,49 +1,102 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
+import PageContainer from '../../components/layout/PageContainer';
+import { Card } from '../../components/Card/Card';
+import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
+import styles from '../Warehouse/Warehouse.module.css';
 
 const DispatchDashboard = () => {
   const [dispatches, setDispatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [originFilter, setOriginFilter] = useState('ALL');
 
   useEffect(() => {
-    // Fetch /api/fc-dispatches
-    axios.get('/api/fc-dispatches')
-      .then(res => setDispatches(res.data))
-      .catch(err => console.error(err));
+    api.get('/api/fc-dispatches')
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          setDispatches(res.data);
+        } else {
+          setDispatches([]);
+        }
+      })
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
+  const columns = [
+    { key: 'dispatch_number', label: 'Dispatch ID' },
+    { key: 'origin', label: 'Origin' },
+    { key: 'dispatch_status', label: 'Status' },
+    { key: 'created_at', label: 'Date' }
+  ];
+
+  const filteredDispatches = dispatches.filter(d => {
+    if (originFilter === 'ALL') return true;
+    const isCentral = d.source_type === 'CENTRAL_WAREHOUSE';
+    if (originFilter === 'CENTRAL') return isCentral;
+    if (originFilter === 'BKR') return !isCentral;
+    return true;
+  });
+
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4 text-gray-800">FC Dispatch Dashboard</h1>
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {dispatches.map(dispatch => (
-              <tr key={dispatch.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{dispatch.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${dispatch.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    {dispatch.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {dispatch.createdAt ? new Date(dispatch.createdAt).toLocaleDateString() : '-'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {dispatches.length === 0 && (
-          <div className="p-8 text-center text-gray-500">No dispatches found.</div>
-        )}
+    <PageContainer title="FC Dispatch Dashboard">
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <label style={{ fontWeight: '500' }}>Filter by Origin:</label>
+        <select 
+          value={originFilter}
+          onChange={(e) => setOriginFilter(e.target.value)}
+          style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+        >
+          <option value="ALL">All</option>
+          <option value="BKR">BKR Main Warehouse</option>
+          <option value="CENTRAL">Central Warehouse</option>
+        </select>
       </div>
-    </div>
+      <Card noPadding>
+        <div className={styles.tableWrapper}>
+          <DataTable>
+            <TableHeader columns={columns} />
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>Loading dispatches...</td>
+                </tr>
+              ) : filteredDispatches.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+                    No dispatches found.
+                  </td>
+                </tr>
+              ) : (
+                filteredDispatches.map(dispatch => (
+                  <TableRow 
+                    key={dispatch.id} 
+                    row={{
+                      dispatch_number: dispatch.dispatch_number || dispatch.id,
+                      origin: dispatch.source_type === 'CENTRAL_WAREHOUSE' ? 'Central Warehouse' : 'BKR Main',
+                      dispatch_status: (
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          backgroundColor: dispatch.dispatch_status === 'Completed' ? '#dcfce7' : '#fef9c3',
+                          color: dispatch.dispatch_status === 'Completed' ? '#166534' : '#854d0e'
+                        }}>
+                          {dispatch.dispatch_status}
+                        </span>
+                      ),
+                      created_at: dispatch.created_at ? new Date(dispatch.created_at).toLocaleDateString() : '-'
+                    }} 
+                    columns={columns} 
+                  />
+                ))
+              )}
+            </tbody>
+          </DataTable>
+        </div>
+      </Card>
+    </PageContainer>
   );
 };
 

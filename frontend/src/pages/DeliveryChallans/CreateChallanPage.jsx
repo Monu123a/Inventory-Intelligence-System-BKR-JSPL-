@@ -77,6 +77,7 @@ export default function CreateChallanPage() {
             value={selectedSaleId}
             onChange={(e) => setSelectedSaleId(e.target.value)}
             style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+            autoFocus
           >
             <option value="">-- Select an Invoice --</option>
             {sales.map(sale => (
@@ -133,10 +134,11 @@ export default function CreateChallanPage() {
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px', justifyContent: 'flex-end' }}>
           <button 
             onClick={() => navigate('/delivery-challans')}
-            style={{ padding: '10px 20px', background: '#f3f4f6', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
+            style={{ padding: '10px 20px', background: '#f3f4f6', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', flex: 1, maxWidth: '120px' }}
+            disabled={creating}
           >
             Cancel
           </button>
@@ -144,7 +146,7 @@ export default function CreateChallanPage() {
             className={styles.primaryButton}
             onClick={handleCreate}
             disabled={creating}
-            style={{ flex: 1, justifyContent: 'center' }}
+            style={{ flex: 1, display: 'flex', justifyContent: 'center' }}
           >
             {creating ? 'Creating...' : 'Create Challan'}
           </button>

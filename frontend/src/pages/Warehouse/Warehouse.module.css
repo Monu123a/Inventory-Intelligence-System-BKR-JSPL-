@@ -10,3 +10,155 @@
   color: #2c3e50;
   margin: 0.5rem 0;
 }
+
+/* Toolbar styling for lists */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+/* State Hub Hierarchy Styling */
+.hubList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.hubCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  transition: all 0.2s ease-in-out;
+}
+
+.hubCard:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+}
+
+.hubHeader {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  background-color: #ffffff;
+}
+
+.hubHeaderExpanded {
+  background-color: #f0fdf4; /* Light green tint when expanded */
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.hubHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hubIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10b981;
+  font-size: 1.2rem;
+  width: 24px;
+}
+
+.hubTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hubSubtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.hubHeaderRight {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.hubBody {
+  padding: 1rem 1.5rem 1.5rem 3.5rem;
+  background-color: #ffffff;
+}
+
+.warehouseList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.warehouseRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background-color: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.warehouseRow:hover {
+  background-color: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+.warehouseInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.warehouseIcon {
+  color: #9ca3af;
+  font-size: 1.1rem;
+}
+
+.warehouseName {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.warehouseCode {
+  background-color: #e5e7eb;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #4b5563;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+}
+
+.warehouseActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.emptyState {
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-style: italic;
+  padding: 0.5rem 0;
+}

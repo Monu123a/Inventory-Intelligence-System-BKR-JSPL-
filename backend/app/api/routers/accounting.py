@@ -17,9 +17,18 @@ from datetime import datetime
 
 router = APIRouter(prefix="/accounting", tags=["Accounting Integration"])
 
-# --- Models ---
+DOCUMENT_REGISTRY = {
+    "Sales": ["B2C", "B2B"],
+    "Warehouse": ["Dispatches", "Returns"],
+    "Accounting": ["Credit Notes", "Debit Notes"],
+    "Purchases": []
+}
+
 class ExportBatchRequest(BaseModel):
-    sale_ids: List[int]
+    category: str
+    subtype: str
+    document_ids: List[int]
+    force_reexport: bool = False
 
 class MappingCreate(BaseModel):
     mapping_type: str
@@ -33,13 +42,26 @@ class ConfigurationUpdate(BaseModel):
 
 # --- Endpoints ---
 
-@router.get("/invoices")
+@router.get("/invoices", deprecated=True)
 def get_ready_invoices(profile: str = "all", company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     """
-    Returns all sales along with their export lifecycle status.
-    Supports profile: 'today', 'yesterday', 'pending', 'failed', 'all'
+    Deprecated: Use /documents instead.
     """
-    query = db.query(Sale).filter(Sale.company_id == company_id)
+    # Fallback for backward compatibility
+    return get_ready_documents(category="Sales", subtype="B2C", profile=profile, company_id=company_id, db=db)
+
+@router.get("/documents")
+def get_ready_documents(category: str = "Sales", subtype: str = "B2C", profile: str = "all", company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    """
+    Returns documents for a specific category and subtype.
+    """
+    if category not in DOCUMENT_REGISTRY or subtype not in DOCUMENT_REGISTRY.get(category, []):
+        raise HTTPException(status_code=400, detail="Invalid document category or subtype")
+        
+    if category == "Sales":
+        query = db.query(Sale).filter(Sale.company_id == company_id, Sale.invoice_type == subtype)
+    else:
+        return []
     
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
@@ -50,8 +72,12 @@ def get_ready_invoices(profile: str = "all", company_id: int = Depends(get_curre
         
     sales = query.order_by(desc(Sale.sale_date)).limit(200).all()
     
-    # Get latest export log for each sale
-    logs = db.query(AccountingExportLog).filter(AccountingExportLog.company_id == company_id).all()
+    # Get latest export log for each sale for this batch subtype
+    logs = db.query(AccountingExportLog).join(AccountingExportBatch).filter(
+        AccountingExportLog.company_id == company_id,
+        AccountingExportBatch.batch_type == category,
+        AccountingExportBatch.batch_subtype == subtype
+    ).all()
     log_map = {log.sale_id: log for log in logs}
     
     results = []
@@ -80,10 +106,22 @@ def get_ready_invoices(profile: str = "all", company_id: int = Depends(get_curre
 @router.post("/export/batch")
 def export_batch(request: ExportBatchRequest, company_id: int = Depends(get_current_company_id), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Generates a batch XML for the requested invoices.
+    Generates a batch XML for the requested documents.
     """
+    if request.category not in DOCUMENT_REGISTRY or request.subtype not in DOCUMENT_REGISTRY.get(request.category, []):
+        raise HTTPException(status_code=400, detail="Invalid document category or subtype")
+        
     engine = AccountingIntegrationEngine(db, company_id)
-    batch = engine.export_invoices(request.sale_ids, user_id=user.id)
+    try:
+        batch = engine.export_documents(
+            category=request.category, 
+            subtype=request.subtype,
+            document_ids=request.document_ids, 
+            user_id=user.id,
+            force_reexport=request.force_reexport
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     return {
         "batch_id": batch.id,
@@ -100,6 +138,7 @@ def get_export_history(company_id: int = Depends(get_current_company_id), db: Se
         results.append({
             "id": b.id,
             "batch_type": b.batch_type,
+            "batch_subtype": b.batch_subtype,
             "generated_at": b.generated_at,
             "generated_by": b.creator.username if b.creator else "System",
             "status": b.status,
@@ -141,15 +180,40 @@ def download_batch_xml(batch_id: int, format: str = "xml", company_id: int = Dep
         return FileResponse(path=batch.file_path, filename=f"Tally_Export_Batch_{batch_id}.xml", media_type='application/xml')
 
 @router.get("/statistics")
-def get_statistics(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def get_statistics(category: str = "Sales", subtype: str = "B2C", company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    if category not in DOCUMENT_REGISTRY or subtype not in DOCUMENT_REGISTRY.get(category, []):
+        raise HTTPException(status_code=400, detail="Invalid document category or subtype")
+        
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # Simple KPIs
-    pending = db.query(Sale).filter(Sale.company_id == company_id).count() - db.query(AccountingExportLog).filter(AccountingExportLog.company_id == company_id, AccountingExportLog.status.in_(["Generated", "Downloaded", "Imported"])).count()
-    generated_today = db.query(AccountingExportBatch).filter(AccountingExportBatch.company_id == company_id, AccountingExportBatch.generated_at >= today).count()
-    failed = db.query(AccountingExportLog).filter(AccountingExportLog.company_id == company_id, AccountingExportLog.status == "Failed").count()
-    
-    # Optional: We could do sum of Grand Total of all today's batches.
+    if category == "Sales":
+        total_docs = db.query(Sale).filter(Sale.company_id == company_id, Sale.invoice_type == subtype).count()
+        
+        exported_docs = db.query(AccountingExportLog).join(AccountingExportBatch).filter(
+            AccountingExportLog.company_id == company_id,
+            AccountingExportLog.status.in_(["Generated", "Downloaded", "Imported"]),
+            AccountingExportBatch.batch_type == category,
+            AccountingExportBatch.batch_subtype == subtype
+        ).count()
+        pending = total_docs - exported_docs
+        
+        generated_today = db.query(AccountingExportBatch).filter(
+            AccountingExportBatch.company_id == company_id, 
+            AccountingExportBatch.batch_type == category,
+            AccountingExportBatch.batch_subtype == subtype,
+            AccountingExportBatch.generated_at >= today
+        ).count()
+        
+        failed = db.query(AccountingExportLog).join(AccountingExportBatch).filter(
+            AccountingExportLog.company_id == company_id, 
+            AccountingExportLog.status == "Failed",
+            AccountingExportBatch.batch_type == category,
+            AccountingExportBatch.batch_subtype == subtype
+        ).count()
+    else:
+        pending = 0
+        generated_today = 0
+        failed = 0
     
     return {
         "pending_exports": max(0, pending),

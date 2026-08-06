@@ -30,16 +30,24 @@ export default function CreateServicePage() {
 
   useEffect(() => {
     if (selectedSaleId) {
-      const sale = sales.find(s => s.id === parseInt(selectedSaleId));
-      if (sale && sale.items) {
-        setSaleItems(sale.items);
-        setSelectedItemId('');
-      }
+      api.get(`/api/pos/sales/${selectedSaleId}`)
+        .then(res => {
+          const invoice = res.data?.receipt;
+          if (invoice && invoice.items) {
+            setSaleItems(invoice.items);
+            setSelectedItemId('');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          setSaleItems([]);
+          setSelectedItemId('');
+        });
     } else {
       setSaleItems([]);
       setSelectedItemId('');
     }
-  }, [selectedSaleId, sales]);
+  }, [selectedSaleId]);
 
   const handleCreate = async () => {
     if (!selectedSaleId) {

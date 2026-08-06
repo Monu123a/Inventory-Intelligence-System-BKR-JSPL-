@@ -509,6 +509,7 @@ const POSPage = () => {
               placeholder="Search by SKU or Name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
             />
             {searchResults.length > 0 && (
               <div className={styles.searchResults}>

@@ -10,6 +10,10 @@ const ReplenishmentDashboard = () => {
   const [pendingTransfers, setPendingTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters State
+  const [selectedHub, setSelectedHub] = useState('');
+  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+
   useEffect(() => {
     // Mock API call
     setTimeout(() => {
@@ -22,12 +26,18 @@ const ReplenishmentDashboard = () => {
         nextRun: new Date(Date.now() + 3600000).toISOString()
       });
       setPendingTransfers([
-        { id: 'TRF-001', from: 'Main Warehouse', to: 'Store A', items: 5, value: 1200 },
-        { id: 'TRF-002', from: 'Main Warehouse', to: 'Store B', items: 12, value: 3400 }
+        { id: 'TRF-001', from: 'Main Warehouse', to: 'Store A', items: 5, value: 1200, hub: 'Hub 1', warehouse: 'Store A' },
+        { id: 'TRF-002', from: 'Main Warehouse', to: 'Store B', items: 12, value: 3400, hub: 'Hub 2', warehouse: 'Store B' }
       ]);
       setLoading(false);
     }, 500);
   }, []);
+
+  const filteredTransfers = pendingTransfers.filter(t => {
+    const matchesHub = selectedHub ? t.hub === selectedHub : true;
+    const matchesWarehouse = selectedWarehouse ? t.warehouse === selectedWarehouse : true;
+    return matchesHub && matchesWarehouse;
+  });
 
   if (loading) return <div className={styles.loading}>Loading Dashboard...</div>;
 
@@ -41,6 +51,9 @@ const ReplenishmentDashboard = () => {
           </button>
           <button className={styles.secondaryBtn} onClick={() => navigate(ROUTES.REPLENISHMENT_TRANSFERS)}>
             All Transfers
+          </button>
+          <button className={styles.primaryBtn} style={{ marginLeft: '10px' }} onClick={() => navigate(`${ROUTES.LOGISTICS_BATCH_DISPATCH}?source=CENTRAL`)}>
+            Create Internal Distribution
           </button>
         </div>
       </div>
@@ -62,8 +75,31 @@ const ReplenishmentDashboard = () => {
       </div>
 
       <div className={styles.widget}>
-        <h2>Pending Transfers</h2>
-        {pendingTransfers.length === 0 ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2>Pending Transfers</h2>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <select 
+              value={selectedHub} 
+              onChange={(e) => { setSelectedHub(e.target.value); setSelectedWarehouse(''); }}
+              style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="">All State Hubs</option>
+              <option value="Hub 1">Hub 1</option>
+              <option value="Hub 2">Hub 2</option>
+            </select>
+            <select 
+              value={selectedWarehouse} 
+              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="">All Warehouses / FCs</option>
+              <option value="Store A">Store A</option>
+              <option value="Store B">Store B</option>
+            </select>
+          </div>
+        </div>
+        
+        {filteredTransfers.length === 0 ? (
           <p>No pending transfers.</p>
         ) : (
           <table className={styles.table}>
@@ -78,7 +114,7 @@ const ReplenishmentDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {pendingTransfers.map((t) => (
+              {filteredTransfers.map((t) => (
                 <tr key={t.id}>
                   <td>{t.id}</td>
                   <td>{t.from}</td>
@@ -86,7 +122,7 @@ const ReplenishmentDashboard = () => {
                   <td>{t.items}</td>
                   <td>₹{t.value.toFixed(2)}</td>
                   <td>
-                    <button className={styles.linkBtn} onClick={() => navigate(ROUTES.REPLENISHMENT_TRANSFER_DETAIL.replace(':transferId', t.id))}>
+                    <button className={styles.linkBtn} onClick={() => navigate(ROUTES.REPLENISHMENT_TRANSFER_DETAIL?.replace(':transferId', t.id) || '#')}>
                       View
                     </button>
                   </td>

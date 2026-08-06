@@ -1,7 +1,9 @@
 .layout {
   display: flex;
   height: 100vh;
+  width: 100vw;
   overflow: hidden;
+  background-color: var(--color-bg, #f5f7f9);
 }
 
 .contentWrapper {
@@ -11,8 +13,29 @@
   overflow: hidden;
 }
 
+/* Ensure sticky header within the content wrapper */
+.contentWrapper > :first-child {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
 .main {
   flex: 1;
   overflow-y: auto;
-  background-color: var(--color-bg);
+  overflow-x: hidden;
+  padding: var(--spacing-6, 1.5rem);
+  background-color: var(--color-bg, #f5f7f9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Utilize large screens well by constraining max-width and centering, but letting it expand up to a large threshold */
+.main > * {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
 }

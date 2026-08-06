@@ -14,11 +14,13 @@ class WarehouseInventoryResponse(BaseModel):
     id: int
     product_id: int
     warehouse_id: int
-    current_qty: int
+    sku: str
+    name: str
+    category: Optional[str] = None
+    quantity: int
     reserved_qty: int
     available_qty: int
     last_updated: Optional[datetime]
-    product_sku: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,4 +32,22 @@ def get_warehouse_inventory(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    return WarehouseInventoryViewService.get_inventory_view(db, company_id, warehouse_id, category, sku)
+    items = WarehouseInventoryViewService.get_inventory_view(db, company_id, warehouse_id, category, sku)
+    
+    response_items = []
+    for item in items:
+        # The query joins Product, so item.product is loaded
+        response_items.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "warehouse_id": item.warehouse_id,
+            "sku": item.product.sku if item.product else "UNKNOWN",
+            "name": item.product.name if item.product else "Unknown Product",
+            "category": item.product.category if item.product else "Uncategorized",
+            "quantity": item.current_qty,
+            "reserved_qty": item.reserved_qty,
+            "available_qty": item.available_qty,
+            "last_updated": item.last_updated
+        })
+        
+    return response_items

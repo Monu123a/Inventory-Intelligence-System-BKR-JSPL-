@@ -15,7 +15,7 @@ const Configuration = () => {
 
   const fetchConfig = async () => {
     try {
-      const res = await api.get('/accounting/configuration');
+      const res = await api.get('/api/accounting/configuration');
       if (res.data) {
         setConfig({
           default_sales_ledger: res.data.default_sales_ledger || '',
@@ -38,7 +38,7 @@ const Configuration = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post('/accounting/configuration', config);
+      await api.post('/api/accounting/configuration', config);
       addNotification({ type: 'success', message: 'Configuration saved successfully' });
     } catch (err) {
       addNotification({ type: 'error', message: 'Failed to save configuration' });

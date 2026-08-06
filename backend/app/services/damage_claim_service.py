@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.schema import DamageClaim, Product, Warehouse
-from app.services.inventory_engine import InventoryEventEngine
+from app.services.inventory_event_engine import InventoryEventEngine
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -75,26 +75,13 @@ class DamageClaimService:
         
         if status == "Approved":
             # Approved: Stock is permanently written off. Remove from reserved. 
-            # In our InventoryEventEngine, typically we might do an ADJ_MINUS or handle reserved deduction.
-            # Assuming UNRESERVE + SCRAP (or just TRANSFER_OUT for scrap).
             InventoryEventEngine.process_event(
                 db=db,
                 company_id=company_id,
                 product_sku=product.sku,
                 warehouse_id=claim.warehouse_id,
                 quantity=claim.quantity,
-                event_type="UNRESERVE",
-                source="DAMAGE_CLAIM_APPROVED",
-                reference_id=claim.claim_number,
-                metadata_payload={"damage_claim_id": claim.id}
-            )
-            InventoryEventEngine.process_event(
-                db=db,
-                company_id=company_id,
-                product_sku=product.sku,
-                warehouse_id=claim.warehouse_id,
-                quantity=claim.quantity,
-                event_type="ADJ_MINUS", # Scrap adjustment
+                event_type="DAMAGE_WRITE_OFF",
                 source="DAMAGE_CLAIM_APPROVED",
                 reference_id=claim.claim_number,
                 metadata_payload={"damage_claim_id": claim.id}

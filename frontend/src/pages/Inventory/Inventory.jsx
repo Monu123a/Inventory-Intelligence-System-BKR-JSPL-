@@ -4,6 +4,7 @@ import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import useCompanyStore from '../../stores/useCompanyStore';
 import Button from '../../components/forms/Button';
 import { SearchBar } from '../../components/forms/SearchBar';
 import { UploadModal } from './components/UploadModal';
@@ -22,6 +23,8 @@ const Inventory = () => {
   
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [adjustingItem, setAdjustingItem] = useState(null);
+  const { currentCompany } = useCompanyStore();
+  const isBkr = currentCompany?.code === 'BKR';
 
   const { data: inventoryData, totalPages, isPending, refetch, warehouses } = useInventory({
     search, warehouseId: warehouseFilter, filterStatus: statusFilter, page, limit: 15
@@ -95,9 +98,11 @@ const Inventory = () => {
           <Button variant="secondary" onClick={() => refetch()} isLoading={isPending}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
-          <Button variant="primary" onClick={() => setIsUploadModalOpen(true)}>
-            <FiUploadCloud style={{ marginRight: '8px' }} /> Upload Inventory
-          </Button>
+          {isBkr && (
+            <Button variant="primary" onClick={() => setIsUploadModalOpen(true)}>
+              <FiUploadCloud style={{ marginRight: '8px' }} /> Upload Inventory
+            </Button>
+          )}
         </>
       }
     >

@@ -22,11 +22,7 @@ class AmazonService:
         processed_count = 0
         skipped_count = 0
         
-        # For now, we will use the first available warehouse for this company.
-        default_wh = db.query(Warehouse).filter(Warehouse.company_id == company_id).first()
-        if not default_wh:
-            logger.error("No warehouse found. Cannot process Amazon orders.")
-            return 0, 0
+        # We no longer use a default warehouse. FC code must be mapped.
             
         for order in orders:
             order_id = order.get("order_id")
@@ -41,6 +37,32 @@ class AmazonService:
             try:
                 with db.begin_nested():
                     items = order.get("items", [])
+                    fc_code = order.get("fulfillment_center")
+                    
+                    if not fc_code:
+                        raise ValueError("No fulfillment center in order")
+                        
+                    # Lookup External Mapping
+                    from app.models.schema import WarehouseExternalMapping
+                    mapping = db.query(WarehouseExternalMapping).filter(
+                        WarehouseExternalMapping.marketplace == "Amazon",
+                        WarehouseExternalMapping.external_code == fc_code
+                    ).first()
+                    
+                    if not mapping:
+                        # Log to quarantine
+                        sync_log = AmazonSyncLog(
+                            company_id=company_id, 
+                            order_id=order_id, 
+                            status="Quarantined", 
+                            errors="Needs Mapping",
+                            unknown_skus=f'["{fc_code}"]' # Hack to store FC code for UI for now
+                        )
+                        db.add(sync_log)
+                        skipped_count += 1
+                        continue
+                        
+                    warehouse_id = mapping.warehouse_id
                     
                     # Process each item in the order
                     for item in items:
@@ -51,7 +73,7 @@ class AmazonService:
                             db=db,
                             company_id=company_id,
                             product_sku=sku,
-                            warehouse_id=default_wh.id,
+                            warehouse_id=warehouse_id,
                             quantity=quantity,
                             event_type="DEDUCT",
                             source="Amazon",

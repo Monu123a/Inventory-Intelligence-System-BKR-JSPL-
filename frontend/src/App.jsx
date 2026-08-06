@@ -9,7 +9,6 @@ import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 
 const Overview = lazy(() => import('./pages/Overview/Overview'));
 const Products = lazy(() => import('./pages/Products/Products'));
-const Warehouses = lazy(() => import('./pages/Warehouses/Warehouses'));
 const Inventory = lazy(() => import('./pages/Inventory/Inventory'));
 const AmazonReturns = lazy(() => import('./pages/Amazon/Returns'));
 const DefectiveInventory = lazy(() => import('./pages/Inventory/DefectiveInventory'));
@@ -50,7 +49,7 @@ const DeliveryChallanPreviewPage = lazy(() => import('./pages/DeliveryChallans/D
 // Warehouse Phase 8 Routes
 const WarehouseDashboard = lazy(() => import('./pages/Warehouse/WarehouseDashboard'));
 const StateHubsPage = lazy(() => import('./pages/Warehouse/StateHubsPage'));
-const WarehousesPage = lazy(() => import('./pages/Warehouse/WarehousesPage'));
+const WarehouseMasterList = lazy(() => import('./pages/Warehouse/WarehouseMasterList'));
 const WarehouseDetailPage = lazy(() => import('./pages/Warehouse/WarehouseDetailPage'));
 const WarehouseInventoryPage = lazy(() => import('./pages/Warehouse/WarehouseInventoryPage'));
 const WarehouseUsers = lazy(() => import('./pages/Warehouse/WarehouseUsers'));
@@ -77,7 +76,6 @@ const App = () => {
               <Route element={<MainLayout />}>
                 <Route path={ROUTES.OVERVIEW} element={<Overview />} />
                 <Route path={ROUTES.PRODUCTS} element={<Products />} />
-                <Route path={ROUTES.WAREHOUSES} element={<Warehouses />} />
                 <Route path={ROUTES.INVENTORY} element={<Inventory />} />
                 <Route path={ROUTES.DEFECTIVE_INVENTORY} element={<DefectiveInventory />} />
                 <Route path={ROUTES.AMAZON_RETURNS} element={<AmazonReturns />} />
@@ -118,7 +116,7 @@ const App = () => {
                 {/* Warehouse Phase 8 Routes */}
                 <Route path={ROUTES.WAREHOUSE_DASHBOARD} element={<WarehouseDashboard />} />
                 <Route path={ROUTES.WAREHOUSE_STATE_HUBS} element={<StateHubsPage />} />
-                <Route path={ROUTES.WAREHOUSE_MASTER_LIST} element={<WarehousesPage />} />
+                <Route path={ROUTES.WAREHOUSE_MASTER_LIST} element={<WarehouseMasterList />} />
                 <Route path={ROUTES.WAREHOUSE_INVENTORY} element={<WarehouseInventoryPage />} />
                 <Route path={ROUTES.WAREHOUSE_USERS} element={<WarehouseUsers />} />
                 <Route path={ROUTES.WAREHOUSE_DETAIL} element={<WarehouseDetailPage />} />

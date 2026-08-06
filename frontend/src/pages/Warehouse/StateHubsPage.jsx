@@ -4,149 +4,389 @@ import { Card } from '../../components/Card/Card';
 import Button from '../../components/forms/Button';
 import Input from '../../components/forms/Input';
 import { Modal } from '../../components/Modal/Modal';
+import { FiChevronDown, FiChevronRight, FiMapPin, FiPackage, FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import api from '../../services/api';
+import styles from './Warehouse.module.css';
 
 const StateHubsPage = () => {
   const [hubs, setHubs] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [warehouses, setWarehouses] = useState([]);
+  const [expandedHubs, setExpandedHubs] = useState({});
+  const [isHubModalOpen, setIsHubModalOpen] = useState(false);
+  const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
   const [editingHub, setEditingHub] = useState(null);
-  const [formData, setFormData] = useState({ hub_code: '', hub_name: '', state: '' });
+  const [editingWarehouse, setEditingWarehouse] = useState(null);
+  const [hubFormData, setHubFormData] = useState({ hub_code: '', hub_name: '', state: '', gstin: '', address: '', city: '', state_code: '', contact_person: '', phone: '', email: '' });
+  const [warehouseFormData, setWarehouseFormData] = useState({ name: '', code: '', hub_id: '', warehouse_type: 'FC', status: 'Active', external_mappings: [] });
+  const [isAssignMode, setIsAssignMode] = useState(false);
+  const [selectedUnassignedWhId, setSelectedUnassignedWhId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchHubs = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/state-hubs');
-      setHubs(response.data || []);
+      const [hubsRes, whRes] = await Promise.all([
+        api.get('/api/state-hubs'),
+        api.get('/api/warehouses')
+      ]);
+      setHubs(hubsRes.data || []);
+      setWarehouses(whRes.data || []);
       setError('');
     } catch (err) {
       console.error(err);
-      setError('Failed to load state hubs');
+      setError('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHubs();
+    fetchData();
   }, []);
 
-  const handleOpenModal = (hub = null) => {
+  const toggleHub = (hubId) => {
+    setExpandedHubs(prev => ({ ...prev, [hubId]: !prev[hubId] }));
+  };
+
+  // Hub Modal Handlers
+  const handleOpenHubModal = (hub = null) => {
     if (hub) {
       setEditingHub(hub);
-      setFormData({ hub_code: hub.hub_code || '', hub_name: hub.hub_name || '', state: hub.state || '' });
+      setHubFormData({ 
+        hub_code: hub.hub_code || '', 
+        hub_name: hub.hub_name || '', 
+        state: hub.state || '',
+        gstin: hub.gstin || '',
+        address: hub.address || '',
+        city: hub.city || '',
+        state_code: hub.state_code || '',
+        contact_person: hub.contact_person || '',
+        phone: hub.phone || '',
+        email: hub.email || ''
+      });
     } else {
       setEditingHub(null);
-      setFormData({ hub_code: '', hub_name: '', state: '' });
+      setHubFormData({ hub_code: '', hub_name: '', state: '', gstin: '', address: '', city: '', state_code: '', contact_person: '', phone: '', email: '' });
     }
-    setIsModalOpen(true);
+    setIsHubModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const handleCloseHubModal = () => {
+    setIsHubModalOpen(false);
     setEditingHub(null);
-    setFormData({ hub_code: '', hub_name: '', state: '' });
   };
 
-  const handleSubmit = async (e) => {
+  const handleHubSubmit = async (e) => {
     e.preventDefault();
     try {
       if (editingHub) {
-        await api.put(`/api/state-hubs/${editingHub.id}`, formData);
+        await api.put(`/api/state-hubs/${editingHub.id}`, hubFormData);
       } else {
-        await api.post('/api/state-hubs', formData);
+        await api.post('/api/state-hubs', hubFormData);
       }
-      handleCloseModal();
-      fetchHubs();
+      handleCloseHubModal();
+      fetchData();
     } catch (err) {
-      console.error(err);
       alert('Failed to save hub: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteHub = async (id) => {
     if (window.confirm('Are you sure you want to delete this hub?')) {
       try {
         await api.delete(`/api/state-hubs/${id}`);
-        fetchHubs();
+        fetchData();
       } catch (err) {
-        console.error(err);
         alert('Failed to delete hub');
+      }
+    }
+  };
+
+  // Warehouse Modal Handlers
+  const handleOpenWarehouseModal = (hubId = null, wh = null) => {
+    setIsAssignMode(false);
+    setSelectedUnassignedWhId('');
+    if (wh) {
+      setEditingWarehouse(wh);
+      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wh.warehouse_type || 'FC', status: wh.status || 'Active', external_mappings: wh.external_mappings || [] });
+    } else {
+      setEditingWarehouse(null);
+      setWarehouseFormData({ name: '', code: '', hub_id: hubId || '', warehouse_type: 'FC', status: 'Active', external_mappings: [] });
+    }
+    setIsWarehouseModalOpen(true);
+  };
+
+  const handleCloseWarehouseModal = () => {
+    setIsWarehouseModalOpen(false);
+    setEditingWarehouse(null);
+  };
+
+  const handleWarehouseSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (!editingWarehouse && isAssignMode) {
+        if (!selectedUnassignedWhId) {
+          alert('Please select a warehouse to assign');
+          return;
+        }
+        const existingWh = warehouses.find(w => w.id === parseInt(selectedUnassignedWhId, 10));
+        const payload = { ...existingWh, hub_id: parseInt(warehouseFormData.hub_id, 10) };
+        await api.put(`/api/warehouses/${existingWh.id}`, payload);
+        handleCloseWarehouseModal();
+        fetchData();
+        if (payload.hub_id) {
+          setExpandedHubs(prev => ({ ...prev, [payload.hub_id]: true }));
+        }
+        return;
+      }
+
+      const payload = {
+        ...warehouseFormData,
+        hub_id: warehouseFormData.hub_id ? parseInt(warehouseFormData.hub_id, 10) : null
+      };
+      
+      if (editingWarehouse) {
+        await api.put(`/api/warehouses/${editingWarehouse.id}`, payload);
+      } else {
+        await api.post('/api/warehouses', payload);
+      }
+      handleCloseWarehouseModal();
+      fetchData();
+      if (payload.hub_id) {
+        setExpandedHubs(prev => ({ ...prev, [payload.hub_id]: true }));
+      }
+    } catch (err) {
+      alert('Failed to save warehouse: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleDeleteWarehouse = async (id) => {
+    if (window.confirm('Are you sure you want to delete this warehouse?')) {
+      try {
+        await api.delete(`/api/warehouses/${id}`);
+        fetchData();
+      } catch (err) {
+        alert('Failed to delete warehouse');
       }
     }
   };
 
   return (
     <PageContainer 
-      title="State Hubs"
-      actions={<Button variant="primary" onClick={() => handleOpenModal()}>Add Hub</Button>}
+      title="Warehouse Hierarchy"
+      actions={<Button variant="primary" onClick={() => handleOpenHubModal()}>Add State Hub</Button>}
     >
       {error && <div style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
       <Card>
         {loading ? (
           <p>Loading...</p>
         ) : (
-          <table style={{ width: '100%', textAlign: 'left' }}>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Hub Code</th>
-                <th>Hub Name</th>
-                <th>State</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hubs.map(hub => (
-                <tr key={hub.id}>
-                  <td>{hub.id}</td>
-                  <td>{hub.hub_code}</td>
-                  <td>{hub.hub_name}</td>
-                  <td>{hub.state}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Button variant="secondary" size="small" onClick={() => handleOpenModal(hub)}>Edit</Button>
-                      <Button variant="danger" size="small" onClick={() => handleDelete(hub.id)}>Delete</Button>
+          <div className={styles.hubList}>
+            {hubs.map(hub => {
+              const hubWarehouses = warehouses.filter(w => w.hub_id === hub.id);
+              const isExpanded = expandedHubs[hub.id];
+              return (
+                <div key={hub.id} className={styles.hubCard}>
+                  <div 
+                    className={`${styles.hubHeader} ${isExpanded ? styles.hubHeaderExpanded : ''}`}
+                    onClick={() => toggleHub(hub.id)}
+                  >
+                    <div className={styles.hubHeaderLeft}>
+                      <span className={styles.hubIconWrapper}>
+                        {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
+                      </span>
+                      <span className={styles.hubTitle}>
+                        <FiMapPin style={{ color: '#3b82f6' }} />
+                        {hub.hub_name} ({hub.hub_code})
+                      </span>
+                      <span className={styles.hubSubtitle}>- {hub.state}</span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-              {hubs.length === 0 && (
-                <tr>
-                  <td colSpan="5" style={{ textAlign: 'center' }}>No state hubs found</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <div className={styles.hubHeaderRight} onClick={e => e.stopPropagation()}>
+                      <Button variant="secondary" size="small" onClick={() => handleOpenWarehouseModal(hub.id)}>
+                        <FiPlus style={{ marginRight: '4px' }} /> FC
+                      </Button>
+                      <Button variant="secondary" size="small" onClick={() => handleOpenHubModal(hub)}>
+                        <FiEdit2 />
+                      </Button>
+                      <Button variant="danger" size="small" onClick={() => handleDeleteHub(hub.id)}>
+                        <FiTrash2 />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className={styles.hubBody}>
+                      {hubWarehouses.length > 0 ? (
+                        <div className={styles.warehouseList}>
+                          {hubWarehouses.map(wh => (
+                            <div key={wh.id} className={styles.warehouseRow}>
+                              <div className={styles.warehouseInfo}>
+                                <FiPackage className={styles.warehouseIcon} />
+                                <span className={styles.warehouseName}>{wh.name}</span>
+                                <span className={styles.warehouseCode}>{wh.code}</span>
+                                <span style={{ marginLeft: '1rem', fontSize: '0.75rem', backgroundColor: '#e5e7eb', padding: '0.125rem 0.5rem', borderRadius: '1rem' }}>{wh.warehouse_type || 'Unknown'}</span>
+                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: wh.status === 'Active' ? 'green' : 'gray' }}>{wh.status || 'Active'}</span>
+                              </div>
+                              <div className={styles.warehouseActions}>
+                                <Button variant="secondary" size="small" onClick={() => handleOpenWarehouseModal(hub.id, wh)}>Edit</Button>
+                                <Button variant="danger" size="small" onClick={() => handleDeleteWarehouse(wh.id)}>Delete</Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className={styles.emptyState}>No warehouses/FCs found for this hub.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {hubs.length === 0 && (
+              <p style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>No state hubs found. Add one to get started.</p>
+            )}
+          </div>
         )}
       </Card>
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={handleCloseModal} 
-        title={editingHub ? 'Edit Hub' : 'Add Hub'}
-      >
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <Input 
-            label="Hub Code" 
-            value={formData.hub_code} 
-            onChange={(e) => setFormData({ ...formData, hub_code: e.target.value })} 
-            required 
-          />
-          <Input 
-            label="Hub Name" 
-            value={formData.hub_name} 
-            onChange={(e) => setFormData({ ...formData, hub_name: e.target.value })} 
-            required 
-          />
-          <Input 
-            label="State" 
-            value={formData.state} 
-            onChange={(e) => setFormData({ ...formData, state: e.target.value })} 
-          />
+      {/* Hub Modal */}
+      <Modal isOpen={isHubModalOpen} onClose={handleCloseHubModal} title={editingHub ? 'Edit State Hub' : 'Add State Hub'}>
+        <form onSubmit={handleHubSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <Input label="Hub Code *" value={hubFormData.hub_code} onChange={(e) => setHubFormData({ ...hubFormData, hub_code: e.target.value })} required />
+            <Input label="Legal Hub Name *" value={hubFormData.hub_name} onChange={(e) => setHubFormData({ ...hubFormData, hub_name: e.target.value })} required />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <Input label="GSTIN *" value={hubFormData.gstin} onChange={(e) => setHubFormData({ ...hubFormData, gstin: e.target.value })} required />
+            <Input label="Contact Person" value={hubFormData.contact_person} onChange={(e) => setHubFormData({ ...hubFormData, contact_person: e.target.value })} />
+          </div>
+          <Input label="Billing Address *" value={hubFormData.address} onChange={(e) => setHubFormData({ ...hubFormData, address: e.target.value })} required />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+            <Input label="City" value={hubFormData.city} onChange={(e) => setHubFormData({ ...hubFormData, city: e.target.value })} />
+            <Input label="State *" value={hubFormData.state} onChange={(e) => setHubFormData({ ...hubFormData, state: e.target.value })} required />
+            <Input label="State Code" value={hubFormData.state_code} onChange={(e) => setHubFormData({ ...hubFormData, state_code: e.target.value })} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <Input label="Phone" value={hubFormData.phone} onChange={(e) => setHubFormData({ ...hubFormData, phone: e.target.value })} />
+            <Input label="Email" value={hubFormData.email} onChange={(e) => setHubFormData({ ...hubFormData, email: e.target.value })} type="email" />
+          </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-            <Button type="button" variant="secondary" onClick={handleCloseModal}>Cancel</Button>
+            <Button type="button" variant="secondary" onClick={handleCloseHubModal}>Cancel</Button>
+            <Button type="submit" variant="primary">Save</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Warehouse Modal */}
+      <Modal isOpen={isWarehouseModalOpen} onClose={handleCloseWarehouseModal} title={editingWarehouse ? 'Edit Warehouse / FC' : 'Add Warehouse / FC'}>
+        <form onSubmit={handleWarehouseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          
+          {!editingWarehouse && (
+            <div style={{ display: 'flex', gap: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input type="radio" checked={!isAssignMode} onChange={() => setIsAssignMode(false)} /> 
+                Create New
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input type="radio" checked={isAssignMode} onChange={() => setIsAssignMode(true)} /> 
+                Assign Existing
+              </label>
+            </div>
+          )}
+
+          {!editingWarehouse && isAssignMode ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Select Unassigned Warehouse</label>
+              <select 
+                value={selectedUnassignedWhId} 
+                onChange={(e) => setSelectedUnassignedWhId(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                required
+              >
+                <option value="">Select a warehouse...</option>
+                {warehouses.filter(w => !w.hub_id).map(w => (
+                  <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <Input label="Warehouse Name" value={warehouseFormData.name} onChange={(e) => setWarehouseFormData({ ...warehouseFormData, name: e.target.value })} required />
+              <Input label="Warehouse Code" value={warehouseFormData.code} onChange={(e) => setWarehouseFormData({ ...warehouseFormData, code: e.target.value })} required />
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Warehouse Type</label>
+                <select 
+                  value={warehouseFormData.warehouse_type} 
+                  onChange={(e) => setWarehouseFormData({ ...warehouseFormData, warehouse_type: e.target.value })}
+                  style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                >
+                  <option value="FC">FC (Fulfillment Center)</option>
+                  <option value="DC">DC (Distribution Center)</option>
+                  <option value="Store">Store</option>
+                </select>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Status</label>
+                <select 
+                  value={warehouseFormData.status} 
+                  onChange={(e) => setWarehouseFormData({ ...warehouseFormData, status: e.target.value })}
+                  style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>External Mappings</label>
+                  <Button type="button" variant="secondary" size="small" onClick={() => setWarehouseFormData({ ...warehouseFormData, external_mappings: [...warehouseFormData.external_mappings, { marketplace: '', external_code: '' }] })}>
+                    <FiPlus /> Add
+                  </Button>
+                </div>
+                {warehouseFormData.external_mappings.map((mapping, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                    <Input placeholder="Marketplace (e.g. Amazon)" value={mapping.marketplace} onChange={(e) => {
+                      const newMappings = [...warehouseFormData.external_mappings];
+                      newMappings[idx].marketplace = e.target.value;
+                      setWarehouseFormData({ ...warehouseFormData, external_mappings: newMappings });
+                    }} />
+                    <Input placeholder="External Code" value={mapping.external_code} onChange={(e) => {
+                      const newMappings = [...warehouseFormData.external_mappings];
+                      newMappings[idx].external_code = e.target.value;
+                      setWarehouseFormData({ ...warehouseFormData, external_mappings: newMappings });
+                    }} />
+                    <Button type="button" variant="danger" size="small" onClick={() => {
+                      const newMappings = warehouseFormData.external_mappings.filter((_, i) => i !== idx);
+                      setWarehouseFormData({ ...warehouseFormData, external_mappings: newMappings });
+                    }}>
+                      <FiTrash2 />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Assigned Hub</label>
+            <select 
+              value={warehouseFormData.hub_id} 
+              onChange={(e) => setWarehouseFormData({ ...warehouseFormData, hub_id: e.target.value })}
+              style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}
+              required
+            >
+              <option value="">Select a Hub</option>
+              {hubs.map(hub => (
+                <option key={hub.id} value={hub.id}>{hub.hub_name}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+            <Button type="button" variant="secondary" onClick={handleCloseWarehouseModal}>Cancel</Button>
             <Button type="submit" variant="primary">Save</Button>
           </div>
         </form>

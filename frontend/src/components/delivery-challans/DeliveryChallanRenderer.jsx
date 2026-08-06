@@ -56,7 +56,7 @@ export default function DeliveryChallanRenderer({ challan }) {
       
       <div className={styles.mainBorder}>
         <InvoiceHeader invoice={mockInvoice} company={challan.seller_snapshot} />
-        <InvoiceParties invoice={mockInvoice} company={challan.seller_snapshot} customer={challan.buyer_snapshot} />
+        <InvoiceParties invoice={mockInvoice} company={challan.seller_snapshot} customer={challan.buyer_snapshot} shipping={challan.shipping_snapshot} />
         
         {/* Challan Meta Details */}
         <div className={styles.metaSection}>

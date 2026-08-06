@@ -12,8 +12,19 @@ class WarehouseService:
 
     @staticmethod
     def create(db: Session, company_id: int, data: dict):
+        mappings = data.pop("external_mappings", [])
         warehouse = Warehouse(company_id=company_id, **data)
         db.add(warehouse)
+        
+        from app.models.schema import WarehouseExternalMapping
+        for m in mappings:
+            mapping = WarehouseExternalMapping(
+                warehouse=warehouse,
+                marketplace=m["marketplace"],
+                external_code=m["external_code"]
+            )
+            db.add(mapping)
+            
         db.commit()
         db.refresh(warehouse)
         return warehouse
@@ -23,20 +34,48 @@ class WarehouseService:
         warehouse = WarehouseService.get_by_id(db, warehouse_id, company_id)
         if not warehouse:
             raise ValueError("Warehouse not found")
+            
+        mappings = data.pop("external_mappings", None)
+        
         for key, value in data.items():
             setattr(warehouse, key, value)
+            
+        if mappings is not None:
+            from app.models.schema import WarehouseExternalMapping
+            db.query(WarehouseExternalMapping).filter(WarehouseExternalMapping.warehouse_id == warehouse.id).delete()
+            for m in mappings:
+                mapping = WarehouseExternalMapping(
+                    warehouse_id=warehouse.id,
+                    marketplace=m["marketplace"],
+                    external_code=m["external_code"]
+                )
+                db.add(mapping)
+                
         db.commit()
         db.refresh(warehouse)
         return warehouse
 
     @staticmethod
     def delete(db: Session, warehouse_id: int, company_id: int):
+        from app.models.schema import FCDispatch, FCReturn
+        
         warehouse = WarehouseService.get_by_id(db, warehouse_id, company_id)
         if not warehouse:
             raise ValueError("Warehouse not found")
         # Ensure it has no inventory before deleting
         if warehouse.inventories:
             raise ValueError("Cannot delete warehouse with inventory")
+        
+        # Ensure it has no FC Dispatches
+        dispatches = db.query(FCDispatch).filter(FCDispatch.warehouse_id == warehouse_id).first()
+        if dispatches:
+            raise ValueError("Cannot delete warehouse with linked FC Dispatches")
+            
+        # Ensure it has no FC Returns
+        returns = db.query(FCReturn).filter(FCReturn.warehouse_id == warehouse_id).first()
+        if returns:
+            raise ValueError("Cannot delete warehouse with linked FC Returns")
+
         db.delete(warehouse)
         db.commit()
         return True

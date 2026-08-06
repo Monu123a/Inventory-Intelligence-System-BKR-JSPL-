@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from '../InvoiceRenderer.module.css';
 
-const InvoiceParties = ({ company, customer }) => {
+const InvoiceParties = ({ company, customer, shipping }) => {
   return (
     <div className={styles.partiesGrid}>
       <div className={styles.partyBox}>
@@ -22,6 +22,16 @@ const InvoiceParties = ({ company, customer }) => {
         <div className={styles.partyDetail}><strong>GSTIN:</strong> {customer?.gstin}</div>
         {customer?.place_of_supply && <div className={styles.partyDetail}><strong>Place of Supply:</strong> {customer.place_of_supply}</div>}
       </div>
+
+      {shipping && (
+        <div className={styles.partyBox}>
+          <div className={styles.partyLabel}>Shipping / Ship To</div>
+          <div className={styles.partyName}>{shipping?.name}</div>
+          <div className={styles.partyDetail}>{shipping?.address}</div>
+          <div className={styles.partyDetail}>{shipping?.state} {shipping?.state_code ? `(Code: ${shipping.state_code})` : ''}</div>
+          {shipping?.gstin && <div className={styles.partyDetail}><strong>GSTIN:</strong> {shipping?.gstin}</div>}
+        </div>
+      )}
     </div>
   );
 };

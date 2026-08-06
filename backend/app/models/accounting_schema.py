@@ -45,7 +45,8 @@ class AccountingExportBatch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    batch_type = Column(String, nullable=False) # Invoices, Masters
+    batch_type = Column(String, nullable=False) # e.g. Sales, Warehouse
+    batch_subtype = Column(String, nullable=True) # e.g. B2C, B2B, Returns
     generated_at = Column(DateTime, default=datetime.utcnow)
     generated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     status = Column(String, default="Queued") # Queued, Generating, Generated, Downloaded, Awaiting Import, Imported

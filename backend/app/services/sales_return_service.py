@@ -141,7 +141,7 @@ class SalesReturnService:
                     product_sku=item.sku_snapshot,
                     warehouse_id=warehouse_id,
                     quantity=item.returned_quantity,
-                    event_type="ADD",
+                    event_type="RETURN",
                     source="Customer Return",
                     reference_id=sales_return.return_number,
                     user_id=user_id,

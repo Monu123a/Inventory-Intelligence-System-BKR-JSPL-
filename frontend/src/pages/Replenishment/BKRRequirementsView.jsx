@@ -35,6 +35,15 @@ const BKRRequirementsView = () => {
         <div className={styles.titleArea}>
           <h1>JSPL Replenishment Requirements</h1>
         </div>
+        <div className={styles.actions}>
+          <button 
+            className={styles.primaryBtn}
+            onClick={() => navigate(ROUTES.LOGISTICS_BATCH_DISPATCH + '?source=BKR')}
+            style={{ padding: '0.75rem 1.5rem', backgroundColor: '#2563eb', color: 'white', borderRadius: '6px', border: 'none', fontWeight: '500', cursor: 'pointer' }}
+          >
+            + New External Replenishment
+          </button>
+        </div>
       </div>
 
       <div className={styles.tableContainer}>

@@ -27,36 +27,9 @@ class AmazonReturnsClient(abc.ABC):
 class MockAmazonReturnsClient(AmazonReturnsClient):
     def fetch_returns(self, since: datetime = None) -> List[Dict[str, Any]]:
         """
-        Mock client for returning dummy amazon returns data.
+        Mock client. Disabled per user request to prevent dummy data generation.
         """
-        # Generate some dummy data
-        now = datetime.utcnow()
-        dummy_returns = []
-        
-        # We'll create a few random returns
-        statuses = ["In Transit", "Received"]
-        reasons = ["DEFECTIVE", "NO_LONGER_NEEDED", "SWITCHEROO", "MISSED_ESTIMATED_DELIVERY", "DAMAGED_BY_CARRIER"]
-        
-        for i in range(1, random.randint(3, 8)):
-            status = random.choice(statuses)
-            requested = now - timedelta(days=random.randint(1, 10))
-            received = requested + timedelta(days=random.randint(1, 4)) if status == "Received" else None
-            
-            dummy_returns.append({
-                "amazon_return_id": f"RMA-{random.randint(1000000, 9999999)}",
-                "amazon_order_id": f"404-{random.randint(1000000, 9999999)}-{random.randint(1000000, 9999999)}",
-                "order_item_id": f"{random.randint(10000000000000, 99999999999999)}",
-                "sku": f"SKU-MOCK-{random.randint(100, 999)}",
-                "asin": f"B0{random.randint(10000000, 99999999)}",
-                "product_name": f"Mock Product {i}",
-                "quantity": random.randint(1, 3),
-                "return_reason": random.choice(reasons),
-                "return_status": status,
-                "requested_at": requested.isoformat(),
-                "received_at": received.isoformat() if received else None
-            })
-            
-        return dummy_returns
+        return []
 
 class SPAPIAmazonReturnsClient(AmazonReturnsClient):
     def __init__(self):

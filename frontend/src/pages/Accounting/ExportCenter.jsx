@@ -4,9 +4,18 @@ import api from '../../services/api';
 import { useNotificationStore } from '../../stores/notificationStore';
 import styles from './ExportCenter.module.css';
 
+const CATEGORY_CONFIG = [
+  { id: 'Sales', label: 'Sales', subtypes: [{ id: 'B2C', label: 'B2C Sales' }, { id: 'B2B', label: 'B2B Transfers' }] },
+  { id: 'Warehouse', label: 'Warehouse', subtypes: [{ id: 'Dispatches', label: 'Dispatches' }, { id: 'Returns', label: 'Returns' }] },
+  { id: 'Accounting', label: 'Accounting', subtypes: [{ id: 'Credit Notes', label: 'Credit Notes' }, { id: 'Debit Notes', label: 'Debit Notes' }] },
+];
+
 const ExportCenter = () => {
+  const [documentCategory, setDocumentCategory] = useState(CATEGORY_CONFIG[0].id);
+  const [documentSubtype, setDocumentSubtype] = useState(CATEGORY_CONFIG[0].subtypes[0].id);
+  
   const [stats, setStats] = useState({ pending_exports: 0, generated_today: 0, failed_exports: 0, total_value: 0 });
-  const [invoices, setInvoices] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -15,22 +24,25 @@ const ExportCenter = () => {
 
   const fetchStats = async () => {
     try {
-      const res = await api.get('/accounting/statistics');
+      const res = await api.get(`/api/accounting/statistics?category=${documentCategory}&subtype=${documentSubtype}`);
       setStats(res.data);
     } catch (err) {
       console.error('Failed to fetch stats', err);
     }
   };
 
-  const fetchInvoices = async (filterProfile) => {
+  const fetchDocuments = async (filterProfile) => {
     setLoading(true);
     try {
-      const res = await api.get(`/accounting/invoices?profile=${filterProfile}`);
-      setInvoices(res.data);
-      // reset selection
+      const res = await api.get(`/api/accounting/documents?category=${documentCategory}&subtype=${documentSubtype}&profile=${filterProfile}`);
+      setDocuments(res.data);
       setSelectedIds(new Set());
     } catch (err) {
-      addNotification({ type: 'error', message: 'Failed to fetch invoices' });
+      if (err.response?.status !== 400) {
+        addNotification({ type: 'error', message: 'Failed to fetch documents' });
+      } else {
+        setDocuments([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -38,12 +50,26 @@ const ExportCenter = () => {
 
   useEffect(() => {
     fetchStats();
-    fetchInvoices(profile);
-  }, [profile]);
+    fetchDocuments(profile);
+  }, [profile, documentCategory, documentSubtype]);
+
+  const handleCategoryChange = (catId) => {
+    setDocumentCategory(catId);
+    const cat = CATEGORY_CONFIG.find(c => c.id === catId);
+    if (cat && cat.subtypes.length > 0) {
+      setDocumentSubtype(cat.subtypes[0].id);
+    }
+    setSelectedIds(new Set()); // Reset selections on tab change
+  };
+
+  const handleSubtypeChange = (subId) => {
+    setDocumentSubtype(subId);
+    setSelectedIds(new Set());
+  };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      const allSelectable = invoices.filter(i => i.export_status === 'Ready' || i.export_status === 'Failed').map(i => i.id);
+      const allSelectable = documents.filter(i => i.export_status === 'Ready' || i.export_status === 'Failed').map(i => i.id);
       setSelectedIds(new Set(allSelectable));
     } else {
       setSelectedIds(new Set());
@@ -64,12 +90,15 @@ const ExportCenter = () => {
     if (selectedIds.size === 0) return;
     setGenerating(true);
     try {
-      const res = await api.post('/accounting/export/batch', {
-        sale_ids: Array.from(selectedIds)
+      const res = await api.post('/api/accounting/export/batch', {
+        category: documentCategory,
+        subtype: documentSubtype,
+        document_ids: Array.from(selectedIds),
+        force_reexport: false
       });
       addNotification({ type: 'success', message: `Export batch created successfully. Status: ${res.data.status}` });
       fetchStats();
-      fetchInvoices(profile);
+      fetchDocuments(profile);
     } catch (err) {
       addNotification({ type: 'error', message: err.response?.data?.detail || 'Failed to generate export batch' });
     } finally {
@@ -79,11 +108,59 @@ const ExportCenter = () => {
 
   const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
 
+  const currentCatObj = CATEGORY_CONFIG.find(c => c.id === documentCategory);
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <h1 className={styles.title}>Export Center</h1>
       </header>
+
+      {/* Primary Category Tabs */}
+      <div style={{ display: 'flex', gap: '16px', borderBottom: '1px solid #e2e8f0', marginBottom: '16px', paddingBottom: '8px' }}>
+        {CATEGORY_CONFIG.map(cat => (
+          <button 
+            key={cat.id}
+            onClick={() => handleCategoryChange(cat.id)}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: 'none',
+              fontSize: '16px',
+              fontWeight: documentCategory === cat.id ? 600 : 400,
+              color: documentCategory === cat.id ? '#2563eb' : '#64748b',
+              borderBottom: documentCategory === cat.id ? '2px solid #2563eb' : 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Secondary Subtype Tabs */}
+      {currentCatObj && currentCatObj.subtypes.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+          {currentCatObj.subtypes.map(sub => (
+            <button
+              key={sub.id}
+              onClick={() => handleSubtypeChange(sub.id)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '999px',
+                border: '1px solid',
+                borderColor: documentSubtype === sub.id ? '#2563eb' : '#cbd5e1',
+                background: documentSubtype === sub.id ? '#eff6ff' : '#fff',
+                color: documentSubtype === sub.id ? '#1d4ed8' : '#475569',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className={styles.kpiGrid}>
         <div className={styles.kpiCard}>
@@ -136,12 +213,12 @@ const ExportCenter = () => {
                   <input 
                     type="checkbox" 
                     onChange={handleSelectAll}
-                    checked={invoices.length > 0 && selectedIds.size === invoices.filter(i => i.export_status === 'Ready' || i.export_status === 'Failed').length}
+                    checked={documents.length > 0 && selectedIds.size === documents.filter(i => i.export_status === 'Ready' || i.export_status === 'Failed').length}
                   />
                 </th>
-                <th>Invoice No</th>
+                <th>Document No</th>
                 <th>Date</th>
-                <th>Customer</th>
+                <th>Party</th>
                 <th>Amount</th>
                 <th>Status</th>
               </tr>
@@ -149,33 +226,33 @@ const ExportCenter = () => {
             <tbody>
               {loading ? (
                 <tr><td colSpan="6" style={{ textAlign: 'center', padding: '24px' }}>Loading...</td></tr>
-              ) : invoices.length === 0 ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '24px' }}>No invoices found.</td></tr>
+              ) : documents.length === 0 ? (
+                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '24px' }}>No documents found for this category.</td></tr>
               ) : (
-                invoices.map(inv => {
-                  const isSelectable = inv.export_status === 'Ready' || inv.export_status === 'Failed';
-                  const isSelected = selectedIds.has(inv.id);
+                documents.map(doc => {
+                  const isSelectable = doc.export_status === 'Ready' || doc.export_status === 'Failed';
+                  const isSelected = selectedIds.has(doc.id);
                   return (
-                    <tr key={inv.id} className={isSelected ? styles.selected : ''}>
+                    <tr key={doc.id} className={isSelected ? styles.selected : ''}>
                       <td>
                         {isSelectable && (
                           <input 
                             type="checkbox" 
                             checked={isSelected}
-                            onChange={() => handleSelectRow(inv.id)}
+                            onChange={() => handleSelectRow(doc.id)}
                           />
                         )}
                       </td>
-                      <td style={{ fontWeight: 500 }}>{inv.invoice_number}</td>
-                      <td>{new Date(inv.invoice_date).toLocaleDateString()}</td>
-                      <td>{inv.customer_name}</td>
-                      <td>{formatCurrency(inv.grand_total)}</td>
+                      <td style={{ fontWeight: 500 }}>{doc.invoice_number}</td>
+                      <td>{new Date(doc.invoice_date).toLocaleDateString()}</td>
+                      <td>{doc.customer_name}</td>
+                      <td>{formatCurrency(doc.grand_total)}</td>
                       <td>
-                        <span className={`${styles.badge} ${styles[inv.export_status.toLowerCase().replace(' ', '')] || ''}`}>
-                          {inv.export_status}
+                        <span className={`${styles.badge} ${styles[(doc.export_status || 'Ready').toLowerCase().replace(' ', '')] || ''}`}>
+                          {doc.export_status || 'Ready'}
                         </span>
-                        {inv.last_error && (
-                          <span title={inv.last_error} style={{ marginLeft: 8, color: '#ef4444', cursor: 'help' }}>
+                        {doc.last_error && (
+                          <span title={doc.last_error} style={{ marginLeft: 8, color: '#ef4444', cursor: 'help' }}>
                             <FiAlertCircle />
                           </span>
                         )}

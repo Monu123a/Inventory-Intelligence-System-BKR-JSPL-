@@ -11,7 +11,9 @@ const MainLayout = () => {
       <div className={styles.contentWrapper}>
         <Topbar />
         <main className={styles.main}>
-          <Outlet />
+          <div className={styles.pageContent}>
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

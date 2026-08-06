@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNotificationStore } from '../../stores/notificationStore';
 import styles from './JSPLReplenishmentView.module.css';
 import api from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../constants/routes';
 
 const JSPLReplenishmentView = () => {
+  const navigate = useNavigate();
   const addNotification = useNotificationStore(state => state.addNotification);
   const [recommendations, setRecommendations] = useState([]);
   const [activeTransfers, setActiveTransfers] = useState([]);
@@ -90,13 +93,21 @@ const JSPLReplenishmentView = () => {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>Need Replenishment</h1>
-        <button 
-          className={styles.approveBtn} 
-          onClick={handleApprove}
-          disabled={selectedItems.size === 0 || loading}
-        >
-          {loading ? 'Processing...' : `Approve Replenishment (${selectedItems.size})`}
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            className={styles.approveBtn} 
+            onClick={() => navigate(`${ROUTES.LOGISTICS_BATCH_DISPATCH}?source=CENTRAL`)}
+          >
+            Create Internal Distribution
+          </button>
+          <button 
+            className={styles.approveBtn} 
+            onClick={handleApprove}
+            disabled={selectedItems.size === 0 || loading}
+          >
+            {loading ? 'Processing...' : `Approve Replenishment (${selectedItems.size})`}
+          </button>
+        </div>
       </div>
 
       <div className={styles.card}>

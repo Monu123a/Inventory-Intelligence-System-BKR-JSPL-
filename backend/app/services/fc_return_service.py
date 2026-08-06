@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from datetime import datetime
 from app.models.schema import FCReturn, FCReturnItem, FCDispatch, FCDispatchItem, Warehouse, Product
-from app.services.inventory_engine import InventoryEventEngine
+from app.services.inventory_event_engine import InventoryEventEngine
 from pydantic import BaseModel
 
 class FCReturnRequestItem(BaseModel):

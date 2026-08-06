@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
+import PageContainer from '../../components/layout/PageContainer';
+import { Card } from '../../components/Card/Card';
+import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
+import Button from '../../components/forms/Button';
+import styles from '../Warehouse/Warehouse.module.css';
 
 const ReturnRecommendations = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    axios.get('/api/fc-dispatches/recommendations')
+    api.get('/api/fc-dispatches/recommendations')
       .then(res => {
         // Handle both direct array or wrapped data response
         setRecommendations(Array.isArray(res.data) ? res.data : (res.data.data || []));
@@ -15,64 +22,101 @@ const ReturnRecommendations = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  const columns = [
+    { key: 'product', label: 'Product' },
+    { key: 'warehouse', label: 'FC Warehouse' },
+    { key: 'daysAging', label: 'Days Aging' },
+    { key: 'quantity', label: 'Quantity' },
+    { key: 'action', label: 'Action' }
+  ];
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Return Recommendations</h1>
-        <p className="text-gray-600 mt-1">45-Day Aging FC Inventory Recommendations</p>
+    <PageContainer 
+      title="Return Recommendations"
+      actions={
+        <Button 
+          variant="primary"
+          onClick={() => navigate('/logistics/dispatch')}
+        >
+          Create New Dispatch
+        </Button>
+      }
+    >
+      <div style={{ marginBottom: '1.5rem', color: '#4b5563' }}>
+        45-Day Aging FC Inventory Recommendations
       </div>
 
-      <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FC Warehouse</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days Aging</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {recommendations.map((rec, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{rec.product || rec.productName}</div>
-                  {rec.sku && <div className="text-xs text-gray-500">{rec.sku}</div>}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{rec.warehouse || rec.warehouseName}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                    ${(rec.daysSinceDispatch || rec.daysAging) > 60 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    {rec.daysSinceDispatch || rec.daysAging} days
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{rec.quantity || 1} units</td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button className="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md border border-blue-200 transition-colors">
-                    Initiate Return
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        {!loading && recommendations.length === 0 && (
-          <div className="p-12 text-center bg-gray-50">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No pending recommendations</h3>
-            <p className="mt-1 text-sm text-gray-500">All inventory within healthy aging limits.</p>
-          </div>
-        )}
-        
-        {loading && (
-          <div className="p-8 text-center text-gray-500">Analyzing inventory aging...</div>
-        )}
-      </div>
-    </div>
+      <Card noPadding>
+        <div className={styles.tableWrapper}>
+          <DataTable>
+            <TableHeader columns={columns} />
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>Analyzing inventory aging...</td>
+                </tr>
+              ) : recommendations.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
+                    <svg style={{ margin: '0 auto', height: '3rem', width: '3rem', color: '#9ca3af', marginBottom: '0.5rem' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div style={{ fontSize: '1.125rem', fontWeight: '500', color: '#111827' }}>No pending recommendations</div>
+                    <div style={{ marginTop: '0.25rem' }}>All inventory within healthy aging limits.</div>
+                  </td>
+                </tr>
+              ) : (
+                recommendations.map((rec, index) => {
+                  const days = rec.daysSinceDispatch || rec.daysAging;
+                  return (
+                    <TableRow 
+                      key={index} 
+                      row={{
+                        product: (
+                          <div>
+                            <div style={{ fontWeight: '500', color: '#111827' }}>{rec.product || rec.productName}</div>
+                            {rec.sku && <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>{rec.sku}</div>}
+                          </div>
+                        ),
+                        warehouse: rec.warehouse || rec.warehouseName,
+                        daysAging: (
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            backgroundColor: days > 60 ? '#fee2e2' : '#fef9c3',
+                            color: days > 60 ? '#991b1b' : '#854d0e'
+                          }}>
+                            {days} days
+                          </span>
+                        ),
+                        quantity: `${rec.quantity || 1} units`,
+                        action: (
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <Button variant="secondary" size="small">
+                              Initiate Return
+                            </Button>
+                            <Button 
+                              variant="primary" 
+                              size="small"
+                              onClick={() => navigate('/logistics/dispatch', { state: { prefill: rec } })}
+                            >
+                              Create Dispatch
+                            </Button>
+                          </div>
+                        )
+                      }} 
+                      columns={columns} 
+                    />
+                  );
+                })
+              )}
+            </tbody>
+          </DataTable>
+        </div>
+      </Card>
+    </PageContainer>
   );
 };
 

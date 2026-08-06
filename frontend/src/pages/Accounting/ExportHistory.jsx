@@ -11,7 +11,7 @@ const ExportHistory = () => {
 
   const fetchHistory = async () => {
     try {
-      const res = await api.get('/accounting/export/history');
+      const res = await api.get('/api/accounting/export/history');
       setBatches(res.data);
     } catch (err) {
       addNotification({ type: 'error', message: 'Failed to fetch export history' });
@@ -26,7 +26,7 @@ const ExportHistory = () => {
 
   const handleDownload = async (batchId, format) => {
     try {
-      const res = await api.get(`/accounting/export/download/${batchId}?format=${format}`, {
+      const res = await api.get(`/api/accounting/export/download/${batchId}?format=${format}`, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));

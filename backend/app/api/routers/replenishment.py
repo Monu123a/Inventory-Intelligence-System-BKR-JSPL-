@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.models.schema import User, Inventory, Product
 from app.api.dependencies import get_current_user, get_db, get_current_company_id
 from app.services.replenishment_service import ReplenishmentService
@@ -25,16 +26,28 @@ def verify_amazon_sync(company_id: int = Depends(get_current_company_id), db: Se
 from sqlalchemy import func
 
 @router.get("/recommendations")
-def get_recommendations(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    # Group inventory by product_id across all warehouses
-    results = db.query(
+def get_recommendations(
+    company_id: int = Depends(get_current_company_id), 
+    db: Session = Depends(get_db),
+    state_hub_id: Optional[int] = None,
+    warehouse_id: Optional[int] = None
+):
+    from app.models.schema import Warehouse
+    
+    # Group inventory by product_id
+    query = db.query(
         Inventory.product_id,
         func.sum(Inventory.available_qty).label("total_qty")
     ).filter(
         Inventory.company_id == company_id
-    ).group_by(
-        Inventory.product_id
-    ).all()
+    )
+
+    if warehouse_id:
+        query = query.filter(Inventory.warehouse_id == warehouse_id)
+    elif state_hub_id:
+        query = query.join(Warehouse, Inventory.warehouse_id == Warehouse.id).filter(Warehouse.hub_id == state_hub_id)
+
+    results = query.group_by(Inventory.product_id).all()
 
     recommendations = []
     for product_id, total_qty in results:

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.models.schema import Inventory, InventoryMovement, Warehouse
-from app.database import SessionLocal
+from app.models.db import SessionLocal
 import logging
 
 logger = logging.getLogger(__name__)

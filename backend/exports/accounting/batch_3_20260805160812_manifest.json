@@ -1,0 +1,9 @@
+{
+  "batch": "BATCH-20260805-003",
+  "template": "v1",
+  "erp_version": "1.0.0",
+  "generated_at": "2026-08-05T16:08:12.616846",
+  "invoice_count": 2,
+  "total_value": 59000.0,
+  "checksum": "6dbed2ecd692384507a9eea0dd0910257bfded4461e9fac40e5d6606255a6bb8"
+}

@@ -18,7 +18,8 @@ const SettingsPage = () => {
     terms_of_delivery_default: '',
     tally_enabled: false,
     tally_endpoint_url: '',
-    tally_payload_format: 'XML'
+    tally_payload_format: 'XML',
+    export_internal_distribution_to_accounting: false
   });
 
   const [loading, setLoading] = useState(true);
@@ -213,6 +214,15 @@ const SettingsPage = () => {
                     <option value="XML">XML</option>
                     <option value="JSON">JSON</option>
                   </select>
+                </div>
+                <div className={styles.formGroupToggle}>
+                  <label className={styles.toggleLabel}>
+                    <span className={styles.toggleText}>Export Internal Distribution to Accounting</span>
+                    <div className={styles.toggleSwitch}>
+                      <input type="checkbox" name="export_internal_distribution_to_accounting" checked={settings.export_internal_distribution_to_accounting || false} onChange={handleChange} />
+                      <span className={styles.slider}></span>
+                    </div>
+                  </label>
                 </div>
               </>
             )}

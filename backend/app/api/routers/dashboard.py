@@ -5,7 +5,12 @@ from datetime import datetime, date
 from typing import Dict, Any, List
 
 from app.models.db import get_db
-from app.models.schema import Company, Product, Warehouse, Inventory, InventoryMovement, AmazonSyncLog, ReportHistory, Alert, JobExecutionLog, Sale, SaleItem, SalesReturn, DeliveryChallan
+from app.models.schema import (
+    Company, Product, Warehouse, Inventory, InventoryMovement, AmazonSyncLog, 
+    ReportHistory, Alert, JobExecutionLog, Sale, SaleItem, SalesReturn, DeliveryChallan,
+    FCDispatch, FCReturn, ServiceRecord
+)
+from app.models.accounting_schema import AccountingExportBatch
 from app.api.dependencies import get_current_company_id
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -24,6 +29,8 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
     Returns KPI metrics and System Health for the Overview Dashboard.
     """
     today = date.today().isoformat()
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    tomorrow_start = datetime.combine(date.today(), datetime.max.time())
     
     # KPI Metrics
     total_products = db.query(Product).filter(Product.company_id == company_id).count()
@@ -52,7 +59,7 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
         
     today_updates = db.query(InventoryMovement).filter(
         InventoryMovement.company_id == company_id,
-        func.date(InventoryMovement.timestamp) == today
+        InventoryMovement.timestamp >= today_start, InventoryMovement.timestamp <= tomorrow_start
     ).count()
     
     active_alerts = db.query(Alert).filter(Alert.company_id == company_id, Alert.is_resolved == False).count()
@@ -99,31 +106,31 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
         pos_revenue_today = db.query(func.sum(Sale.grand_total)).filter(
             Sale.company_id == company_id,
             Sale.status == "Completed",
-            func.date(Sale.sale_date) == today
+            Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
         ).scalar() or 0
         
         pos_sales_count_today = db.query(Sale).filter(
             Sale.company_id == company_id,
             Sale.status == "Completed",
-            func.date(Sale.sale_date) == today
+            Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
         ).count()
         
         pos_products_sold_today = db.query(func.sum(SaleItem.quantity)).join(Sale).filter(
             Sale.company_id == company_id,
             Sale.status == "Completed",
-            func.date(Sale.sale_date) == today
+            Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
         ).scalar() or 0
 
     sales_returns_today = db.query(SalesReturn).filter(
         SalesReturn.company_id == company_id,
         SalesReturn.status == 'Completed',
-        func.date(SalesReturn.created_at) == today
+        SalesReturn.created_at >= today_start, SalesReturn.created_at <= tomorrow_start
     ).count()
 
     sales_return_value_today = db.query(func.sum(SalesReturn.grand_total)).filter(
         SalesReturn.company_id == company_id,
         SalesReturn.status == 'Completed',
-        func.date(SalesReturn.created_at) == today
+        SalesReturn.created_at >= today_start, SalesReturn.created_at <= tomorrow_start
     ).scalar() or 0.0
 
     pending_sales_returns = db.query(SalesReturn).filter(
@@ -133,8 +140,23 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
 
     challans_today = db.query(DeliveryChallan).filter(
         DeliveryChallan.company_id == company_id,
-        func.date(DeliveryChallan.created_at) == today
+        DeliveryChallan.created_at >= today_start, DeliveryChallan.created_at <= tomorrow_start
     ).count()
+
+    pending_dispatches = db.query(FCDispatch).filter(
+        FCDispatch.company_id == company_id,
+        FCDispatch.dispatch_status == 'DRAFT'
+    ).count()
+
+    failed_amazon_syncs = db.query(AmazonSyncLog).filter(
+        AmazonSyncLog.company_id == company_id,
+        AmazonSyncLog.status == 'FAILED'
+    ).count()
+
+    pending_accounting_exports = db.query(AccountingExportBatch).filter(
+        AccountingExportBatch.company_id == company_id,
+        AccountingExportBatch.status == 'PENDING'
+    ).count() if (company and company.code == "BKR") else 0
 
     return {
         "kpis": {
@@ -151,7 +173,10 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
             "sales_returns_today": sales_returns_today,
             "sales_return_value_today": sales_return_value_today,
             "pending_sales_returns": pending_sales_returns,
-            "challans_today": challans_today
+            "challans_today": challans_today,
+            "pending_dispatches": pending_dispatches,
+            "failed_amazon_syncs": failed_amazon_syncs,
+            "pending_accounting_exports": pending_accounting_exports
         },
         "health": {
             "amazon_sync": amazon_sync_data,
@@ -165,35 +190,63 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
 @router.get("/activity")
 def get_recent_activity(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     """
-    Returns latest activities for the dashboard activity feed with presentation metadata.
+    Returns latest activities for the dashboard activity feed across multiple operational tables.
     """
-    movements = db.query(InventoryMovement).filter(InventoryMovement.company_id == company_id).order_by(InventoryMovement.timestamp.desc()).limit(10).all()
-    
     activity_feed = []
-    for mov in movements:
-        desc = ""
-        if mov.source == "Amazon":
-            desc = f"Amazon Order {mov.reference_id} processed for {mov.product_sku}"
-        elif mov.source == "Upload":
-            desc = f"Inventory updated via Excel upload for {mov.product_sku}"
-        else:
-            desc = f"Manual adjustment of {mov.qty_changed} for {mov.product_sku}"
-            
+
+    # 1. Inventory Uploads
+    uploads = db.query(InventoryMovement).filter(
+        InventoryMovement.company_id == company_id,
+        InventoryMovement.source == 'Upload'
+    ).order_by(InventoryMovement.timestamp.desc()).limit(5).all()
+    for u in uploads:
         activity_feed.append({
-            "id": mov.id,
-            "timestamp": mov.timestamp,
-            "type": mov.source,
-            "description": desc,
-            "status": "Success" if mov.qty_after >= 0 else "Warning",
-            "metadata": {
-                "sku": mov.product_sku,
-                "qty_changed": mov.qty_changed
-            }
+            "id": f"inv_{u.id}", "timestamp": u.timestamp, "type": "Inventory Upload",
+            "description": f"Inventory updated via Excel upload for {u.product_sku}",
+            "status": "Success", "metadata": {"sku": u.product_sku, "qty_changed": u.qty_changed}
         })
-        
-    return {
-        "recent_activity": activity_feed
-    }
+
+    # 2. Dispatch Created
+    dispatches = db.query(FCDispatch).filter(FCDispatch.company_id == company_id).order_by(FCDispatch.created_at.desc()).limit(5).all()
+    for d in dispatches:
+        activity_feed.append({
+            "id": f"disp_{d.id}", "timestamp": d.created_at, "type": "Dispatch Created",
+            "description": f"Dispatch {d.dispatch_number} created",
+            "status": "Success", "metadata": {"dispatch_number": d.dispatch_number}
+        })
+
+    # 3. Return Completed
+    returns = db.query(FCReturn).filter(FCReturn.company_id == company_id, FCReturn.status == 'COMPLETED').order_by(FCReturn.created_at.desc()).limit(5).all()
+    for r in returns:
+        activity_feed.append({
+            "id": f"ret_{r.id}", "timestamp": r.created_at, "type": "Return Completed",
+            "description": f"Return {r.return_number} marked as completed",
+            "status": "Success", "metadata": {"return_number": r.return_number}
+        })
+
+    # 4. Amazon Sync
+    syncs = db.query(AmazonSyncLog).filter(AmazonSyncLog.company_id == company_id).order_by(AmazonSyncLog.sync_start_time.desc()).limit(5).all()
+    for s in syncs:
+        activity_feed.append({
+            "id": f"sync_{s.id}", "timestamp": s.sync_start_time, "type": "Amazon Sync",
+            "description": f"Amazon Sync: {s.orders_processed} orders processed",
+            "status": "Success" if s.status == 'SUCCESS' else "Warning", "metadata": {"status": s.status}
+        })
+
+    # 5. Service Completed
+    services = db.query(ServiceRecord).filter(ServiceRecord.company_id == company_id, ServiceRecord.status == 'Completed').order_by(ServiceRecord.created_at.desc()).limit(5).all()
+    for s in services:
+        activity_feed.append({
+            "id": f"srv_{s.id}", "timestamp": s.created_at, "type": "Service Completed",
+            "description": f"Service {s.service_number} completed for {s.customer_name}",
+            "status": "Success", "metadata": {"service_number": s.service_number}
+        })
+
+    # Sort all by timestamp descending and take top 15
+    activity_feed.sort(key=lambda x: x["timestamp"], reverse=True)
+    activity_feed = activity_feed[:15]
+
+    return {"recent_activity": activity_feed}
 
 @router.get("/alerts")
 def get_active_alerts(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):

@@ -62,10 +62,45 @@ class InventoryEventEngine:
         qty_before = inventory.current_qty
         qty_changed = 0
 
+        # Handle Explicit Business Events
         if event_type == "ADD":
             qty_changed = quantity
             inventory.current_qty += quantity
-        elif event_type in ["DEDUCT", "SALE"]:
+            
+        elif event_type == "RETURN":
+            qty_changed = quantity
+            inventory.current_qty += quantity
+            
+        elif event_type == "TRANSFER_IN":
+            qty_changed = quantity
+            inventory.current_qty += quantity
+            
+        elif event_type == "RESTOCK":
+            qty_changed = quantity
+            inventory.current_qty += quantity
+            
+        elif event_type == "DEDUCT":
+            qty_changed = -quantity
+            inventory.current_qty -= quantity
+            
+        elif event_type == "TRANSFER_OUT":
+            qty_changed = -quantity
+            inventory.current_qty -= quantity
+            
+        elif event_type == "ADJ_MINUS":
+            qty_changed = -quantity
+            inventory.current_qty -= quantity
+            
+        elif event_type == "DAMAGE_WRITE_OFF":
+            qty_changed = -quantity
+            inventory.current_qty -= quantity
+            # Write off removes it from reserved as well
+            if inventory.reserved_qty and inventory.reserved_qty >= quantity:
+                inventory.reserved_qty -= quantity
+            elif inventory.reserved_qty and inventory.reserved_qty > 0:
+                inventory.reserved_qty = 0
+
+        elif event_type == "SALE":
             qty_changed = -quantity
             inventory.current_qty -= quantity
             # Release any reserved qty for this sale to prevent double-deduction of available_qty
@@ -74,16 +109,37 @@ class InventoryEventEngine:
                     inventory.reserved_qty -= quantity
                 elif inventory.reserved_qty and inventory.reserved_qty > 0:
                     inventory.reserved_qty = 0
+                    
         elif event_type == "REPLACE":
             qty_changed = quantity - qty_before
             inventory.current_qty = quantity
+            
+        elif event_type in ("RESERVE", "RESERVED"):
+            qty_changed = 0  # Does not change current_qty
+            inventory.reserved_qty = (inventory.reserved_qty or 0) + quantity
+            
+        elif event_type == "UNRESERVE":
+            qty_changed = 0  # Does not change current_qty
+            if inventory.reserved_qty and inventory.reserved_qty >= quantity:
+                inventory.reserved_qty -= quantity
+            elif inventory.reserved_qty and inventory.reserved_qty > 0:
+                inventory.reserved_qty = 0
+                
         else:
             raise ValueError(f"Unknown event_type: {event_type}")
 
         # Keep available_qty in sync: available = current - reserved
         inventory.available_qty = inventory.current_qty - (inventory.reserved_qty or 0)
+        
+        # Explicit Inventory Reconciliation Verification
+        if inventory.available_qty != inventory.current_qty - (inventory.reserved_qty or 0):
+             raise ValueError("Inventory reconciliation failed: Available Qty must equal Current Qty - Reserved Qty")
 
         qty_after = inventory.current_qty
+        
+        # Inject explicit event_type into metadata_payload for history tracking
+        actual_metadata = metadata_payload or {}
+        actual_metadata["event_type"] = event_type
         
         # Record Movement
         movement = InventoryMovement(
@@ -96,7 +152,7 @@ class InventoryEventEngine:
             source=source,
             reference_id=reference_id,
             user_id=user_id,
-            metadata_payload=metadata_payload or {}
+            metadata_payload=actual_metadata
         )
         db.add(movement)
         

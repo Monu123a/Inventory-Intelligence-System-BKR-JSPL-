@@ -94,6 +94,10 @@ class PosCheckoutRequest(BaseModel):
     lr_rr_number: Optional[str] = None
     terms_of_delivery: Optional[str] = None
 
+    # Internal routing overrides (for cross-module calls)
+    origin_warehouse_id: Optional[int] = None
+    skip_inventory_update: bool = False
+
     payment_method: str
     payment_reference: Optional[str] = None
     payment_date: Optional[datetime] = None
@@ -151,29 +155,35 @@ def search_products(q: str = "", company_id: int = Depends(get_bkr_company_id), 
     ]
 
 @router.post("/sale")
-def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db)):
+def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db), commit: bool = True):
     if not request.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
-    default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
+    if request.origin_warehouse_id:
+        default_warehouse = db.query(Warehouse).filter(Warehouse.id == request.origin_warehouse_id).first()
+        if not default_warehouse:
+            raise HTTPException(status_code=400, detail="Origin warehouse not found")
+    else:
+        default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
 
     try:
         # 1. Validate Stock (Aggregated to prevent overselling on duplicate items)
-        required_quantities = {}
-        for item in request.items:
-            required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
+        if not request.skip_inventory_update:
+            required_quantities = {}
+            for item in request.items:
+                required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
 
-        for product_id, total_qty in required_quantities.items():
-            inv = db.query(Inventory).filter(
-                Inventory.product_id == product_id,
-                Inventory.warehouse_id == default_warehouse.id,
-                Inventory.company_id == company_id
-            ).with_for_update().first() # Lock row
+            for product_id, total_qty in required_quantities.items():
+                inv = db.query(Inventory).filter(
+                    Inventory.product_id == product_id,
+                    Inventory.warehouse_id == default_warehouse.id,
+                    Inventory.company_id == company_id
+                ).with_for_update().first() # Lock row
 
-            if not inv or inv.available_qty < total_qty:
-                product = db.query(Product).filter(Product.id == product_id).first()
-                sku_name = product.sku if product else str(product_id)
-                raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
+                if not inv or inv.available_qty < total_qty:
+                    product = db.query(Product).filter(Product.id == product_id).first()
+                    sku_name = product.sku if product else str(product_id)
+                    raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
         # 2. Generate Bill Number
         bill_number = _generate_bill_number()
@@ -261,21 +271,26 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
             
             # 5. Inventory Deduction via Event Engine
             # Use the verified DB product SKU, not the client-supplied SKU
-            verified_sku = product.sku if product else item.sku
-            InventoryEventEngine.process_event(
-                db=db,
-                company_id=company_id,
-                product_sku=verified_sku,
-                warehouse_id=default_warehouse.id,
-                quantity=item.quantity,
-                event_type="SALE",
-                source="OFFLINE_POS",
-                reference_id=bill_number,
-                metadata_payload={"sale_id": sale.id}
-            )
+            # Deduct from Inventory using Event Engine (if not skipped)
+            if not request.skip_inventory_update:
+                verified_sku = product.sku if product else item.sku
+                InventoryEventEngine.process_event(
+                    db=db,
+                    company_id=company_id,
+                    product_sku=verified_sku,
+                    warehouse_id=default_warehouse.id,
+                    quantity=item.quantity,
+                    event_type="SALE",
+                    source="OFFLINE_POS",
+                    reference_id=bill_number,
+                    metadata_payload={"sale_id": sale.id}
+                )
 
-        db.commit()
-        db.refresh(sale)
+        if commit:
+            db.commit()
+            db.refresh(sale)
+        else:
+            db.flush()
 
         # Audit: invoice created (we treat Sale as invoice carrier for now)
         AuditLogService.log(
@@ -287,37 +302,56 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
             message="Invoice created from POS checkout",
             metadata={"invoice_number": sale.invoice_number, "invoice_type": sale.invoice_type},
         )
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         
         # Tally sync (B2B only, configurable) - runs AFTER sale is committed
         # Tally failures should NOT rollback the sale
         tally_result = {"status": sale.tally_sync_status}
         if sale.invoice_type == "B2B":
             try:
+                import logging
+                tally_logger = logging.getLogger("pos.tally")
                 if TallyIntegrationService.is_enabled_for_company(db, company_id):
-                    res = TallyIntegrationService.sync_sale(db, sale_id=sale.id, mode="PROCESSING")
-                    db.commit()
-                    db.refresh(sale)
-                    tally_result = {"status": res.status, "reference": res.reference, "error_message": res.error_message}
+                    # Only attempt Tally Sync if we are actually committing
+                    if commit:
+                        res = TallyIntegrationService.sync_sale(db, sale_id=sale.id, mode="PROCESSING")
+                        db.commit()
+                        db.refresh(sale)
+                        tally_result = {"status": res.status, "reference": res.reference, "error_message": res.error_message}
+                    else:
+                        sale.tally_sync_status = "PENDING"  # Will be synced later
+                        db.flush()
+                        tally_result = {"status": "PENDING"}
                 else:
                     sale.tally_sync_status = "NOT_APPLICABLE"
+                    if commit:
+                        db.commit()
+                        db.refresh(sale)
+                    else:
+                        db.flush()
+            except Exception as tally_err:
+                tally_logger.error(f"Tally sync failed for sale {sale.id}: {tally_err}")
+                sale.tally_sync_status = "FAILED"
+                if commit:
                     db.commit()
                     db.refresh(sale)
-            except Exception as tally_err:
-                logger.error(f"Tally sync failed for sale {sale.id}: {tally_err}")
-                sale.tally_sync_status = "FAILED"
-                db.commit()
-                db.refresh(sale)
+                else:
+                    db.flush()
                 tally_result = {"status": "FAILED", "error_message": str(tally_err)}
 
         receipt = _build_invoice_dto(sale)
         return {"message": "Sale completed successfully", "receipt": receipt, "tally_sync": tally_result}
         
     except HTTPException:
-        db.rollback()
+        if commit:
+            db.rollback()
         raise
     except Exception as e:
-        db.rollback()
+        if commit:
+            db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/history")
@@ -580,9 +614,16 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
 
 @router.get("/sales/{sale_id}")
 def get_sale_invoice(sale_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == company_id).first()
+    from app.models.schema import StockTransfer
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
+        
+    if sale.company_id != company_id:
+        transfer = db.query(StockTransfer).filter(StockTransfer.invoice_id == sale_id).first()
+        if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
+            raise HTTPException(status_code=404, detail="Sale not found")
+            
     return {"receipt": _build_invoice_dto(sale, db)}
 
 

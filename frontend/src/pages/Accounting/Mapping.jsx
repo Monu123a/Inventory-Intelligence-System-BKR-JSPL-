@@ -17,7 +17,7 @@ const Mapping = () => {
   const fetchMappings = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/accounting/mapping');
+      const res = await api.get('/api/accounting/mapping');
       setMappings(res.data);
     } catch (err) {
       addNotification({ type: 'error', message: 'Failed to fetch mappings' });
@@ -35,7 +35,7 @@ const Mapping = () => {
     if (!erpRef || !accName) return;
     
     try {
-      await api.post('/accounting/mapping', {
+      await api.post('/api/accounting/mapping', {
         mapping_type: activeTab,
         erp_reference: erpRef,
         accounting_name: accName

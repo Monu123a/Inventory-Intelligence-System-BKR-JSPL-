@@ -9,20 +9,34 @@ from app.services.warehouse_service import WarehouseService
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 
+from app.models.schema import WarehouseType, WarehouseStatus
+
+class ExternalMappingBase(BaseModel):
+    marketplace: str
+    external_code: str
+
+class ExternalMappingResponse(ExternalMappingBase):
+    id: int
+    warehouse_id: int
+    model_config = ConfigDict(from_attributes=True)
+
 class WarehouseBase(BaseModel):
     name: str
-    code: Optional[str] = None
-    status: str = "Active"
+    code: str
+    hub_id: Optional[int] = None
+    warehouse_type: WarehouseType = WarehouseType.FULFILLMENT_CENTER
+    status: WarehouseStatus = WarehouseStatus.ACTIVE
     address: Optional[str] = None
     contact_person: Optional[str] = None
     manager: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None
-    hub_id: Optional[int] = None
+    external_mappings: Optional[List[ExternalMappingBase]] = []
 
 class WarehouseResponse(WarehouseBase):
     id: int
     company_id: int
+    external_mappings: List[ExternalMappingResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 class WarehouseUserBase(BaseModel):

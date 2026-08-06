@@ -23,6 +23,7 @@ const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
             <InvoiceParties 
               company={invoice.company} 
               customer={invoice.customer} 
+              shipping={invoice.shipping}
             />
           </div>
           <div className={styles.rightColumn}>

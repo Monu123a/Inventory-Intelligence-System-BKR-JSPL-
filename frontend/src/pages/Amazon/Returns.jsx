@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { useNotificationStore } from '../../stores/notificationStore';
+import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
+import Button from '../../components/forms/Button';
 import styles from './Returns.module.css';
 
 const AmazonReturns = () => {
@@ -83,6 +85,48 @@ const AmazonReturns = () => {
         });
     };
 
+    const columns = [
+        { key: 'amazon_return_id', label: 'Return ID' },
+        { key: 'amazon_order_id', label: 'Amazon Order' },
+        { key: 'sku', label: 'SKU' },
+        { key: 'quantity', label: 'Quantity' },
+        { key: 'return_reason', label: 'Return Reason' },
+        { 
+            key: 'return_status', 
+            label: 'Status', 
+            render: (val) => <span className={`${styles.badge} ${styles[val?.replace(' ', '') || '']}`}>{val}</span> 
+        },
+        { 
+            key: 'inspection_status', 
+            label: 'Inspection Status', 
+            render: (val) => <span className={`${styles.badge} ${styles[val || 'Pending']}`}>{val || 'Pending'}</span> 
+        },
+        { 
+            key: 'requested_at', 
+            label: 'Requested Date', 
+            render: (val) => val ? new Date(val).toLocaleDateString() : '-' 
+        },
+        { 
+            key: 'received_at', 
+            label: 'Received Date', 
+            render: (val) => val ? new Date(val).toLocaleDateString() : '-' 
+        },
+        {
+            key: 'actions',
+            label: 'Actions',
+            render: (_, ret) => (
+                ret.return_status === 'Received' && !ret.inspection_status ? (
+                    <Button 
+                        variant="secondary" 
+                        onClick={() => setInspectingReturn(ret)}
+                    >
+                        Inspect
+                    </Button>
+                ) : null
+            )
+        }
+    ];
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -97,13 +141,13 @@ const AmazonReturns = () => {
                             {syncStatus?.status || 'Unknown'}
                         </span>
                     </div>
-                    <button 
-                        className={styles.syncButton} 
+                    <Button 
+                        variant="primary" 
                         onClick={handleSync}
-                        disabled={manualSyncMutation.isLoading}
+                        isLoading={manualSyncMutation.isPending}
                     >
-                        {manualSyncMutation.isLoading ? 'Syncing...' : 'Sync Now'}
-                    </button>
+                        Sync Now
+                    </Button>
                 </div>
             </div>
 
@@ -114,6 +158,7 @@ const AmazonReturns = () => {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className={styles.searchInput}
+                    autoFocus
                 />
                 <select 
                     value={statusFilter} 
@@ -126,63 +171,20 @@ const AmazonReturns = () => {
                 </select>
             </div>
 
-            <div className={styles.tableContainer}>
-                {isLoading ? (
-                    <div className={styles.loading}>Loading returns...</div>
-                ) : returns.length === 0 ? (
-                    <div className={styles.empty}>No Amazon returns found.</div>
-                ) : (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>Return ID</th>
-                                <th>Amazon Order</th>
-                                <th>SKU</th>
-                                <th>Quantity</th>
-                                <th>Return Reason</th>
-                                <th>Status</th>
-                                <th>Inspection Status</th>
-                                <th>Requested Date</th>
-                                <th>Received Date</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {returns.map(ret => (
-                                <tr key={ret.id}>
-                                    <td>{ret.amazon_return_id}</td>
-                                    <td>{ret.amazon_order_id}</td>
-                                    <td>{ret.sku}</td>
-                                    <td>{ret.quantity}</td>
-                                    <td>{ret.return_reason}</td>
-                                    <td>
-                                        <span className={`${styles.badge} ${styles[ret.return_status.replace(' ', '')]}`}>
-                                            {ret.return_status}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span className={`${styles.badge} ${styles[ret.inspection_status || 'Pending']}`}>
-                                            {ret.inspection_status || 'Pending'}
-                                        </span>
-                                    </td>
-                                    <td>{ret.requested_at ? new Date(ret.requested_at).toLocaleDateString() : '-'}</td>
-                                    <td>{ret.received_at ? new Date(ret.received_at).toLocaleDateString() : '-'}</td>
-                                    <td>
-                                        {ret.return_status === 'Received' && !ret.inspection_status && (
-                                            <button 
-                                                className={styles.inspectBtn}
-                                                onClick={() => setInspectingReturn(ret)}
-                                            >
-                                                Inspect
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+            <DataTable>
+                <TableHeader columns={columns} />
+                <tbody>
+                    {isLoading ? (
+                        <tr><td colSpan={columns.length} style={{textAlign: 'center', padding: '2rem'}}>Loading returns...</td></tr>
+                    ) : returns.length === 0 ? (
+                        <tr><td colSpan={columns.length} style={{textAlign: 'center', padding: '2rem'}}>No Amazon returns found.</td></tr>
+                    ) : (
+                        returns.map(ret => (
+                            <TableRow key={ret.id} row={ret} columns={columns} />
+                        ))
+                    )}
+                </tbody>
+            </DataTable>
 
             {inspectingReturn && (
                 <div className={styles.modalOverlay}>
@@ -231,21 +233,22 @@ const AmazonReturns = () => {
                                     />
                                 </div>
                                 <div className={styles.modalActions}>
-                                    <button 
-                                        type="button" 
-                                        className={styles.cancelBtn}
+                                    {/* Standardized Layout: Cancel left, Save right */}
+                                    <Button 
+                                        type="button"
+                                        variant="secondary"
                                         onClick={() => setInspectingReturn(null)}
-                                        disabled={inspectMutation.isLoading}
+                                        disabled={inspectMutation.isPending}
                                     >
                                         Cancel
-                                    </button>
-                                    <button 
+                                    </Button>
+                                    <Button 
                                         type="submit" 
-                                        className={styles.submitBtn}
-                                        disabled={inspectMutation.isLoading}
+                                        variant="primary"
+                                        isLoading={inspectMutation.isPending}
                                     >
-                                        {inspectMutation.isLoading ? 'Saving...' : 'Submit'}
-                                    </button>
+                                        Submit
+                                    </Button>
                                 </div>
                             </form>
                         </div>

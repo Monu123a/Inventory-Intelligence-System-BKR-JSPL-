@@ -1,13 +1,73 @@
 .wrapper {
-  width: 100%;
+  background: white;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--color-border, #e2e8f0);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tableResponsive {
   overflow-x: auto;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  width: 100%;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  font-size: 0.875rem;
+}
+
+.table th, .table td {
+  padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.table th {
+  background-color: var(--color-surface, #f8fafc);
+  font-weight: 600;
+  color: var(--color-neutral-700, #334155);
+}
+
+.table tbody tr:hover {
+  background-color: var(--color-surface-hover, #f1f5f9);
+}
+
+.stateCell {
+  padding: 3rem 1rem !important;
+  text-align: center;
+}
+
+.stateContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--color-neutral-500, #64748b);
+  font-size: 0.95rem;
+}
+
+.errorState {
+  color: var(--color-danger, #ef4444);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--color-primary, #3b82f6);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.paginationWrapper {
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
+  background-color: var(--color-surface, #f8fafc);
 }

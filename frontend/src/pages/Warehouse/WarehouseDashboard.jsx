@@ -37,15 +37,15 @@ const WarehouseDashboard = () => {
       ) : (
         <div className={styles.grid}>
           <Card>
-            <h3>Total Products</h3>
+            <h3 style={{ color: '#6b7280', fontSize: '0.875rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Total Products</h3>
             <p className={styles.metric}>{metrics.totalProducts}</p>
           </Card>
           <Card>
-            <h3>Inventory Value</h3>
-            <p className={styles.metric}>${metrics.inventoryValue.toFixed(2)}</p>
+            <h3 style={{ color: '#6b7280', fontSize: '0.875rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Inventory Value</h3>
+            <p className={styles.metric}>₹{metrics.inventoryValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </Card>
           <Card>
-            <h3>Low Stock Items</h3>
+            <h3 style={{ color: '#6b7280', fontSize: '0.875rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Low Stock Items</h3>
             <p className={styles.metric}>{metrics.lowStock}</p>
           </Card>
         </div>
