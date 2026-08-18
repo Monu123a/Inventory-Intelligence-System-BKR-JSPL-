@@ -91,25 +91,32 @@ const Products = () => {
   };
 
   const executeConfirmAction = () => {
+    // Open password modal for all confirm actions
+    setPasswordModalOpen(true);
+  };
+
+  const executeActionWithPassword = (adminPassword) => {
     if (confirmDialog.type === 'bulk_activate') {
-      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Active' }, products: products }, {
-        onSuccess: () => { setSelectedSkus(new Set()); setConfirmDialog({ isOpen: false }); }
+      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Active' }, products: products, adminPassword }, {
+        onSuccess: () => { setSelectedSkus(new Set()); setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
       });
     } else if (confirmDialog.type === 'bulk_deactivate') {
-      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Inactive' }, products: products }, {
-        onSuccess: () => { setSelectedSkus(new Set()); setConfirmDialog({ isOpen: false }); }
+      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Inactive' }, products: products, adminPassword }, {
+        onSuccess: () => { setSelectedSkus(new Set()); setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
       });
     } else if (confirmDialog.type === 'status_toggle') {
       const prod = products.find(p => p.sku === confirmDialog.sku);
       if (prod) {
         const newStatus = prod.status === 'Active' ? 'Inactive' : 'Active';
         const updatedData = { ...prod, status: newStatus };
-        updateMutation.mutate({ sku: prod.sku, data: updatedData }, {
-          onSuccess: () => setConfirmDialog({ isOpen: false })
+        updateMutation.mutate({ sku: prod.sku, data: updatedData, adminPassword }, {
+          onSuccess: () => { setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
         });
       }
     } else if (confirmDialog.type === 'hard_delete') {
-      setPasswordModalOpen(true); // Deletions also require password in this flow
+      deleteMutation.mutate({ sku: confirmDialog.sku, adminPassword }, {
+        onSuccess: () => { setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
+      });
     }
   };
 
@@ -174,11 +181,9 @@ const Products = () => {
           <Button variant="secondary" onClick={() => refetch()} isLoading={isPending}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
-          {isAdmin && (
-            <Button variant="primary" onClick={() => { setEditingProduct(null); setIsFormModalOpen(true); }}>
-              <FiPlus style={{ marginRight: '8px' }} /> Add Product
-            </Button>
-          )}
+          <Button variant="primary" onClick={() => { setEditingProduct(null); setIsFormModalOpen(true); }}>
+            <FiPlus style={{ marginRight: '8px' }} /> Add Product
+          </Button>
         </>
       }
     >
@@ -280,8 +285,8 @@ const Products = () => {
         isOpen={passwordModalOpen}
         onClose={() => { setPasswordModalOpen(false); setPendingFormData(null); }}
         onSubmit={(pwd) => {
-          if (confirmDialog.type === 'hard_delete') {
-            executeDeleteWithPassword(pwd);
+          if (confirmDialog.isOpen && confirmDialog.type) {
+            executeActionWithPassword(pwd);
           } else {
             handlePasswordSubmit(pwd);
           }

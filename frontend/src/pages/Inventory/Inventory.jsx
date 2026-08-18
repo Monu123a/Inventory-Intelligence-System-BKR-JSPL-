@@ -98,11 +98,9 @@ const Inventory = () => {
           <Button variant="secondary" onClick={() => refetch()} isLoading={isPending}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
-          {isBkr && (
-            <Button variant="primary" onClick={() => setIsUploadModalOpen(true)}>
-              <FiUploadCloud style={{ marginRight: '8px' }} /> Upload Inventory
-            </Button>
-          )}
+          <Button variant="primary" onClick={() => setIsUploadModalOpen(true)}>
+            <FiUploadCloud style={{ marginRight: '8px' }} /> Upload Inventory
+          </Button>
         </>
       }
     >

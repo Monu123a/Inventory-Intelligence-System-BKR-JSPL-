@@ -13,7 +13,9 @@ import {
   FiPhoneCall,
   FiMessageSquare,
   FiChevronDown,
-  FiChevronUp
+  FiChevronUp,
+  FiUploadCloud,
+  FiDownload
 } from 'react-icons/fi';
 import styles from './UserManualPage.module.css';
 
@@ -28,6 +30,7 @@ const UserManualPage = () => {
     { id: 'technician', name: 'Service & Repair', icon: FiTool },
     { id: 'warehouse', name: 'Warehouse & Logistics', icon: FiPackage },
     { id: 'accounting', name: 'Tally & Accounts', icon: FiBriefcase },
+    { id: 'uploads', name: 'Data Uploads & Templates', icon: FiUploadCloud },
   ];
 
   const MANUAL_CONTENT = {
@@ -78,6 +81,18 @@ const UserManualPage = () => {
       ],
       actionText: "Open Export Center",
       actionRoute: ROUTES.ACCOUNTING_EXPORT_CENTER
+    },
+    uploads: {
+      title: "Data Uploads & Templates",
+      description: "Download sample CSV files to see how your data should be formatted before bulk importing.",
+      steps: [
+        { title: "Product Master", desc: "Required Headers: sku, name, tax_rate, base_price. Optional: description, category, brand, hsn_code, mrp." },
+        { title: "Inventory Balance", desc: "Required Headers: sku, warehouse_name, quantity." },
+        { title: "Formatting Rules", desc: "Always save files as UTF-8 CSV. Do not include extra spaces in headers. Do not use special characters in SKUs." },
+        { title: "Upload Errors", desc: "If an upload fails, check for missing required fields, zero quantity, or duplicate SKUs in the same file." }
+      ],
+      actionText: "View Products",
+      actionRoute: ROUTES.PRODUCTS
     }
   };
 
@@ -87,6 +102,27 @@ const UserManualPage = () => {
     { q: "How do I fix incorrect GST rates on an invoice?", a: "GST rates are pulled from the Product Master. If it's wrong, an Admin needs to update the product in the 'Products' section before you generate the bill." },
     { q: "Why can't I generate a Service Invoice?", a: "You can only generate a Service Invoice if the associated Job Card is marked as 'COMPLETED'." },
   ];
+
+  const handleDownloadSample = (type) => {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    let filename = "";
+    if (type === 'products') {
+      csvContent += "sku,name,description,category,brand,hsn_code,tax_rate,base_price,mrp\n";
+      csvContent += "PROD-001,Demo Power Drill,12V Drill,Power Tools,Bosch,8467,18,1500,2000\n";
+      filename = "sample_products.csv";
+    } else if (type === 'inventory') {
+      csvContent += "sku,warehouse_name,quantity\n";
+      csvContent += "PROD-001,Main Warehouse,50\n";
+      filename = "sample_inventory.csv";
+    }
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const activeContent = MANUAL_CONTENT[activeRole];
 
@@ -166,6 +202,26 @@ const UserManualPage = () => {
               </button>
             </div>
             
+            {activeRole === 'uploads' && (
+              <div className={styles.sampleDownloads}>
+                <h3 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>Download Sample Files</h3>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                  <button 
+                    onClick={() => handleDownloadSample('products')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--surface-color)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: '500' }}
+                  >
+                    <FiDownload /> Product Master CSV
+                  </button>
+                  <button 
+                    onClick={() => handleDownloadSample('inventory')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--surface-color)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: '500' }}
+                  >
+                    <FiDownload /> Inventory Balance CSV
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className={styles.stepsGrid}>
               {filteredSteps.length > 0 ? filteredSteps.map((step, index) => (
                 <div key={index} className={styles.stepBox}>

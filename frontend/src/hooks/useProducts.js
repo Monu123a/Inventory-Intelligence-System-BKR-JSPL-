@@ -101,7 +101,7 @@ export const useUpdateProduct = () => {
 
   return useMutation({
     mutationFn: async ({ sku, data, adminPassword }) => {
-      const response = await api.put(`/api/products/${sku}`, { ...data, admin_password: adminPassword });
+      const response = await api.put(`/api/products/${encodeURIComponent(sku)}`, { ...data, admin_password: adminPassword });
       return response.data;
     },
     onMutate: async ({ sku, data }) => {
@@ -134,7 +134,7 @@ export const useDeleteProduct = () => {
 
   return useMutation({
     mutationFn: async ({ sku, adminPassword }) => {
-      const response = await api.delete(`/api/products/${sku}`, {
+      const response = await api.delete(`/api/products/${encodeURIComponent(sku)}`, {
         data: { admin_password: adminPassword }
       });
       return response.data;
@@ -157,12 +157,12 @@ export const useBulkUpdateProducts = () => {
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: async ({ skus, data, products }) => {
+    mutationFn: async ({ skus, data, products, adminPassword }) => {
       const updates = skus.map(sku => {
         const prod = products.find(p => p.sku === sku);
         if (!prod) return Promise.resolve();
-        const updatedData = { ...prod, ...data };
-        return productService.updateProduct(sku, updatedData);
+        const updatedData = { ...prod, ...data, admin_password: adminPassword };
+        return api.put(`/api/products/${encodeURIComponent(sku)}`, updatedData);
       });
       return Promise.all(updates);
     },

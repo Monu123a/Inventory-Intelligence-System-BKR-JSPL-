@@ -10,7 +10,7 @@ from app.models.schema import Product
 from app.api.dependencies import get_current_company_id, require_admin
 from app.api.routers.auth import verify_admin_action_password
 from app.services.audit_log_service import AuditLogService
-from app.models.schema import Inventory, InventoryMovement, SaleItem, SalesReturnItem, DeliveryChallanItem, StockTransferItem, ServiceRecord, User, DamageClaim, DefectiveInventory, FCDispatchItem, FCReturnItem
+from app.models.schema import Inventory, InventoryMovement, SaleItem, SalesReturnItem, DeliveryChallanItem, StockTransferItem, ServiceRecordItem, User, DamageClaim, DefectiveInventory, FCDispatchItem, FCReturnItem
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ def delete_product(sku: str, payload: DeleteRequest, company_id: int = Depends(g
     has_returns = db.query(SalesReturnItem).filter(SalesReturnItem.product_id == existing.id).first()
     has_challans = db.query(DeliveryChallanItem).filter(DeliveryChallanItem.product_id == existing.id).first()
     has_transfers = db.query(StockTransferItem).filter(StockTransferItem.product_id == existing.id).first()
-    has_services = db.query(ServiceRecord).filter(ServiceRecord.product_id == existing.id).first()
+    has_services = db.query(ServiceRecordItem).filter(ServiceRecordItem.product_id == existing.id).first()
     has_damage = db.query(DamageClaim).filter(DamageClaim.product_id == existing.id).first()
     has_defective = db.query(DefectiveInventory).filter(DefectiveInventory.product_id == existing.id).first()
     has_fcdispatch = db.query(FCDispatchItem).filter(FCDispatchItem.product_id == existing.id).first()

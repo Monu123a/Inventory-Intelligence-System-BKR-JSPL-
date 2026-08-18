@@ -1,0 +1,21 @@
+name: Keep Alive Render Server
+
+on:
+  schedule:
+    # Runs every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend API
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://halte-data-transformation.onrender.com/api/)
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then
+            echo "Ping successful! Status: $STATUS"
+          else
+            echo "Warning: Received status $STATUS"
+            # We don't exit 1 to avoid spamming failure emails if it's just slow to wake up
+          fi
