@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiPlus, FiEye, FiPrinter } from 'react-icons/fi';
-import api from '../../services/api';
+import { deliveryChallanService } from '../../services/deliveryChallanService';
 import useCompanyStore from '../../stores/useCompanyStore';
 import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
@@ -25,8 +25,8 @@ export default function DeliveryChallansPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.get('/api/delivery-challans/');
-      setChallans(response.data || []);
+      const data = await deliveryChallanService.getAllChallans();
+      setChallans(data || []);
     } catch (err) {
       console.error('Failed to fetch challans:', err);
       setError('Failed to load delivery challans.');

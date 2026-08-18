@@ -1,15 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, cast, Date
+from sqlalchemy import func, or_
 from datetime import datetime, date
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from app.models.db import get_db
 from app.api.dependencies import get_current_user, get_current_company_id
 from app.models.schema import (
     User, Sale, SaleItem, Inventory, Product, Warehouse,
-    FCDispatch, FCDispatchItem, FCReturn, FCReturnItem,
-    DamageClaim, DefectiveInventory, StateHub
+    FCDispatch, FCReturn, DamageClaim, DefectiveInventory,
+    StateHub
 )
 
 router = APIRouter(prefix="/business-reports", tags=["Business Reports"])
@@ -43,26 +43,24 @@ def get_sales_report(
     else:
         period_col = func.date(Sale.sale_date).label("period")
 
-    # Base query for aggregation
-    query = db.query(
+    # 1. Filter Sales First (No Joins)
+    sale_base = db.query(
+        Sale.id,
         period_col,
-        func.count(func.distinct(Sale.id)).label("total_orders"),
-        func.sum(SaleItem.quantity).label("total_items_sold"),
-        func.sum(Sale.total_taxable_amount).label("total_taxable_amount"),
-        func.sum(Sale.total_tax).label("total_tax"),
-        func.sum(Sale.grand_total).label("total_revenue")
-    ).outerjoin(SaleItem, SaleItem.sale_id == Sale.id)\
-     .filter(Sale.company_id == company_id)
+        Sale.total_taxable_amount,
+        Sale.total_tax,
+        Sale.grand_total
+    ).filter(Sale.company_id == company_id)
 
     if date_from:
-        query = query.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
+        sale_base = sale_base.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        query = query.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
+        sale_base = sale_base.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
     if status:
-        query = query.filter(Sale.status == status)
+        sale_base = sale_base.filter(Sale.status == status)
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
+        sale_base = sale_base.filter(
             or_(
                 Sale.bill_number.ilike(search_pattern),
                 Sale.invoice_number.ilike(search_pattern),
@@ -70,11 +68,29 @@ def get_sales_report(
             )
         )
 
-    # Group by period
-    query = query.group_by(period_col).order_by(period_col.desc())
+    sale_sq = sale_base.subquery()
+
+    # 2. Base query for item aggregation
+    item_sq = db.query(
+        SaleItem.sale_id,
+        func.sum(SaleItem.quantity).label("qty")
+    ).group_by(SaleItem.sale_id).subquery()
+
+    # 3. Aggregate safely over the subquery
+    query = db.query(
+        sale_sq.c.period,
+        func.count(sale_sq.c.id).label("total_orders"),
+        func.sum(func.coalesce(item_sq.c.qty, 0)).label("total_items_sold"),
+        func.sum(sale_sq.c.total_taxable_amount).label("total_taxable_amount"),
+        func.sum(sale_sq.c.total_tax).label("total_tax"),
+        func.sum(sale_sq.c.grand_total).label("total_revenue")
+    ).outerjoin(item_sq, item_sq.c.sale_id == sale_sq.c.id)\
+     .group_by(sale_sq.c.period).order_by(sale_sq.c.period.desc())
 
     # Count total aggregated groups for pagination
     total_count = query.count()
+    
+    print(f"[REVENUE FIX] {company_id}, {total_count}")
 
     # Apply pagination
     skip = (page - 1) * limit
@@ -417,3 +433,243 @@ def get_defective_reports(
         "total_pages": (total_records + limit - 1) // limit,
         "data": data
     }
+
+import io
+import csv
+from fastapi.responses import Response
+
+# ---------------------------------------------------------------------------
+# EXPORT ENDPOINTS
+# ---------------------------------------------------------------------------
+@router.get("/sales/export")
+def export_sales(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    group_by: str = Query("day", pattern="^(day|week|month)$"),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    if group_by == "month":
+        period_col = func.strftime("%Y-%m", Sale.sale_date).label("period")
+    elif group_by == "week":
+        period_col = func.strftime("%Y-%W", Sale.sale_date).label("period")
+    else:
+        period_col = func.date(Sale.sale_date).label("period")
+
+    # 1. Filter Sales First (No Joins)
+    sale_base = db.query(
+        Sale.id,
+        period_col,
+        Sale.total_taxable_amount,
+        Sale.total_tax,
+        Sale.grand_total
+    ).filter(Sale.company_id == company_id)
+
+    if date_from:
+        sale_base = sale_base.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        sale_base = sale_base.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
+    if status:
+        sale_base = sale_base.filter(Sale.status == status)
+    if search:
+        search_pattern = f"%{search}%"
+        sale_base = sale_base.filter(
+            or_(Sale.bill_number.ilike(search_pattern), Sale.invoice_number.ilike(search_pattern), Sale.customer_name.ilike(search_pattern))
+        )
+
+    sale_sq = sale_base.subquery()
+
+    item_sq = db.query(
+        SaleItem.sale_id,
+        func.sum(SaleItem.quantity).label("qty")
+    ).group_by(SaleItem.sale_id).subquery()
+
+    query = db.query(
+        sale_sq.c.period,
+        func.count(sale_sq.c.id).label("total_orders"),
+        func.sum(func.coalesce(item_sq.c.qty, 0)).label("total_items_sold"),
+        func.sum(sale_sq.c.total_taxable_amount).label("total_taxable_amount"),
+        func.sum(sale_sq.c.total_tax).label("total_tax"),
+        func.sum(sale_sq.c.grand_total).label("total_revenue")
+    ).outerjoin(item_sq, item_sq.c.sale_id == sale_sq.c.id)
+
+    query = query.group_by(sale_sq.c.period).order_by(sale_sq.c.period.desc())
+    results = query.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Period", "Total Orders", "Total Items Sold", "Total Taxable Amount", "Total Tax", "Total Revenue"])
+    for row in results:
+        writer.writerow([row.period, row.total_orders, row.total_items_sold, round(row.total_taxable_amount or 0, 2), round(row.total_tax or 0, 2), round(row.total_revenue or 0, 2)])
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=sales_report.csv"})
+
+@router.get("/sales/detailed/export")
+def export_detailed_sales(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    search: Optional[str] = Query(None),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    query = db.query(
+        Sale.bill_number,
+        Sale.customer_name,
+        Sale.sale_date,
+        SaleItem.sku,
+        Product.name.label("product_name"),
+        SaleItem.quantity,
+        SaleItem.selling_price,
+        SaleItem.line_total
+    ).join(
+        SaleItem, Sale.id == SaleItem.sale_id
+    ).join(
+        Product, SaleItem.product_id == Product.id
+    ).filter(Sale.company_id == company_id)
+
+    if date_from:
+        query = query.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        query = query.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                Sale.bill_number.ilike(search_pattern),
+                Sale.customer_name.ilike(search_pattern),
+                SaleItem.sku.ilike(search_pattern),
+                Product.name.ilike(search_pattern)
+            )
+        )
+
+    query = query.order_by(Sale.sale_date.desc(), Sale.bill_number)
+    results = query.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Bill Number", "Customer Name", "Sale Date", "SKU", "Product Name", "Quantity", "Unit Price", "Line Total"])
+    for row in results:
+        writer.writerow([
+            row.bill_number,
+            row.customer_name or "",
+            row.sale_date.isoformat() if row.sale_date else "",
+            row.sku,
+            row.product_name,
+            row.quantity,
+            round(row.selling_price or 0, 2),
+            round(row.line_total or 0, 2)
+        ])
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=detailed_sales_report.csv"})
+
+@router.get("/inventory/export")
+def export_inventory(
+    search: Optional[str] = Query(None),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Inventory, Product, Warehouse).join(Product, Inventory.product_id == Product.id).join(Warehouse, Inventory.warehouse_id == Warehouse.id).filter(Inventory.company_id == company_id)
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(Product.name.ilike(search_pattern), Product.sku.ilike(search_pattern), Warehouse.name.ilike(search_pattern))
+        )
+    results = query.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Product SKU", "Product Name", "Warehouse", "Available Qty", "Current Qty", "Reserved Qty"])
+    for inv, prod, wh in results:
+        writer.writerow([prod.sku, prod.name, wh.name, inv.available_qty, inv.current_qty, inv.reserved_qty])
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=inventory_report.csv"})
+
+@router.get("/dispatches/export")
+def export_dispatches(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    query = db.query(FCDispatch).filter(FCDispatch.company_id == company_id)
+    if status:
+        query = query.filter(FCDispatch.dispatch_status == status)
+    if date_from:
+        query = query.filter(FCDispatch.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        query = query.filter(FCDispatch.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if search:
+        query = query.filter(FCDispatch.dispatch_number.ilike(f"%{search}%"))
+        
+    results = query.order_by(FCDispatch.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Dispatch Number", "Status", "Date"])
+    for d in results:
+        writer.writerow([d.dispatch_number, d.dispatch_status, d.created_at.isoformat() if d.created_at else ""])
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=dispatch_report.csv"})
+
+@router.get("/returns/export")
+def export_returns(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    query = db.query(FCReturn).filter(FCReturn.company_id == company_id)
+    if status:
+        query = query.filter(FCReturn.status == status)
+    if date_from:
+        query = query.filter(FCReturn.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        query = query.filter(FCReturn.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if search:
+        query = query.filter(FCReturn.return_number.ilike(f"%{search}%"))
+        
+    results = query.order_by(FCReturn.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Return Number", "Status", "Date"])
+    for r in results:
+        writer.writerow([r.return_number, r.status, r.created_at.isoformat() if r.created_at else ""])
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=returns_report.csv"})
+
+@router.get("/defective/export")
+def export_defective(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    query = db.query(DefectiveInventory).filter(DefectiveInventory.company_id == company_id)
+    if status:
+        query = query.filter(DefectiveInventory.status == status)
+    if date_from:
+        query = query.filter(DefectiveInventory.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        query = query.filter(DefectiveInventory.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(or_(DefectiveInventory.sku_snapshot.ilike(search_pattern), DefectiveInventory.product_name_snapshot.ilike(search_pattern)))
+        
+    results = query.order_by(DefectiveInventory.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["SKU", "Product Name", "Quantity", "Reason", "Status", "Inspection Date", "Created At"])
+    for d in results:
+        writer.writerow([d.sku_snapshot, d.product_name_snapshot, d.quantity, d.return_reason, d.status, d.inspection_date.isoformat() if d.inspection_date else "", d.created_at.isoformat() if d.created_at else ""])
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=defective_report.csv"})

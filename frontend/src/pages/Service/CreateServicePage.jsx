@@ -2,94 +2,196 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import useCompanyStore from '../../stores/useCompanyStore';
+import { useWarehouses } from '../../hooks/useWarehouses';
+import { useUsers } from '../../hooks/useUsers';
+import { FiSave, FiSearch, FiPlus, FiTrash2, FiUser, FiTool, FiBox, FiCheckCircle } from 'react-icons/fi';
+import styles from './CreateServicePage.module.css';
+import { useNotificationStore } from '../../stores/notificationStore';
 
 export default function CreateServicePage() {
   const navigate = useNavigate();
   const currentCompany = useCompanyStore(state => state.currentCompany);
+  const addNotification = useNotificationStore(state => state.addNotification);
+  
+  const { data: warehouses } = useWarehouses();
+  const { data: users } = useUsers();
   
   const [sales, setSales] = useState([]);
   const [selectedSaleId, setSelectedSaleId] = useState('');
   const [saleItems, setSaleItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState('');
   
-  const [serviceData, setServiceData] = useState({
+  const [formData, setFormData] = useState({
+    source_type: 'manual',
+    customer_name: '',
+    phone: '',
+    product_name: '',
+    brand: 'Pond',
+    custom_brand: '',
+    complaint: '',
     service_type: 'Repair',
-    complaint: ''
+    service_location: 'Workshop',
+    workshop_id: '',
+    assigned_to: ''
   });
+  
+  const [items, setItems] = useState([
+    { item_name: 'Initial Diagnosis / Service Charge', product_sku: '', qty: 1, rate: 0, amount: 0 }
+  ]);
   
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
+  // Set default workshop when loaded
   useEffect(() => {
-    if (currentCompany?.id) {
+    if (warehouses && warehouses.length > 0 && !formData.workshop_id) {
+      setFormData(prev => ({ ...prev, workshop_id: warehouses[0].id }));
+    }
+  }, [warehouses, formData.workshop_id]);
+
+  // Load Invoices for the "From Invoice" mode
+  useEffect(() => {
+    if (currentCompany?.id && formData.source_type === 'invoice') {
+      setLoading(true);
       api.get('/api/pos/history?limit=50')
         .then(res => setSales(res.data?.items || res.data || []))
-        .catch(err => console.error(err));
+        .catch(err => {
+          console.error(err);
+          setError('Failed to load past invoices.');
+        })
+        .finally(() => setLoading(false));
     }
-  }, [currentCompany]);
+  }, [currentCompany, formData.source_type]);
 
   useEffect(() => {
     if (selectedSaleId) {
+      setLoading(true);
       api.get(`/api/pos/sales/${selectedSaleId}`)
         .then(res => {
           const invoice = res.data?.receipt;
           if (invoice && invoice.items) {
             setSaleItems(invoice.items);
             setSelectedItemId('');
+            if (invoice.customer_name) {
+              setFormData(prev => ({
+                ...prev,
+                customer_name: invoice.customer_name,
+                phone: invoice.customer_mobile || prev.phone
+              }));
+            }
           }
         })
         .catch(err => {
           console.error(err);
+          setError('Failed to load invoice items.');
           setSaleItems([]);
           setSelectedItemId('');
-        });
+        })
+        .finally(() => setLoading(false));
     } else {
       setSaleItems([]);
       setSelectedItemId('');
     }
   }, [selectedSaleId]);
 
+  // Handle auto-fill when an item is selected from an invoice
+  useEffect(() => {
+    if (selectedItemId && formData.source_type === 'invoice') {
+      const selectedItem = saleItems.find(i => i.id === parseInt(selectedItemId));
+      if (selectedItem) {
+        setFormData(prev => ({
+          ...prev,
+          product_name: selectedItem.product_name,
+          brand: 'Internal' 
+        }));
+        
+        setItems([
+          { 
+            item_name: `Service for ${selectedItem.product_name}`, 
+            product_sku: selectedItem.sku || '', 
+            qty: 1, 
+            rate: 0, 
+            amount: 0 
+          }
+        ]);
+      }
+    }
+  }, [selectedItemId, saleItems, formData.source_type]);
+
+  const handleSourceToggle = (source) => {
+    setFormData({ ...formData, source_type: source });
+    if (source === 'manual') {
+      setSelectedSaleId('');
+      setSelectedItemId('');
+    }
+  };
+
+  const handleAddItem = () => {
+    setItems([...items, { item_name: '', product_sku: '', qty: 1, rate: 0, amount: 0 }]);
+  };
+
+  const handleRemoveItem = (index) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    if (field === 'qty' || field === 'rate') {
+      newItems[index].amount = (parseFloat(newItems[index].qty) || 0) * (parseFloat(newItems[index].rate) || 0);
+    }
+    setItems(newItems);
+  };
+
   const handleCreate = async () => {
-    if (!selectedSaleId) {
-      setError('Please select an invoice.');
-      return;
-    }
-    if (!selectedItemId) {
-      setError('Please select a product from the invoice.');
-      return;
-    }
-    if (!serviceData.complaint) {
-      setError('Please enter a complaint description.');
-      return;
-    }
+    // Strict Validation
+    if (!formData.customer_name.trim()) return setError('Customer Name is required.');
+    if (!formData.product_name.trim()) return setError('Product Name / Machine Type is required.');
+    if (!formData.complaint.trim() || formData.complaint.trim().length < 5) return setError('Complaint description must be at least 5 characters long.');
+    if (!formData.workshop_id) return setError('Please select a Workshop location.');
+    if (items.length === 0) return setError('At least one service item/diagnostic charge is required.');
     
+    for (let i=0; i<items.length; i++) {
+      if (!items[i].item_name.trim()) return setError(`Item #${i+1} is missing a name.`);
+      if (items[i].qty <= 0) return setError(`Item #${i+1} quantity must be greater than 0.`);
+    }
+
     setCreating(true);
     setError('');
     
     try {
-      const selectedSale = sales.find(s => s.id === parseInt(selectedSaleId));
-      const selectedItem = saleItems.find(i => i.id === parseInt(selectedItemId));
+      const selectedSale = formData.source_type === 'invoice' ? sales.find(s => s.id === parseInt(selectedSaleId)) : null;
 
       const payload = {
-        customer_id: selectedSale?.customer_id || null,
-        customer_name_snapshot: selectedSale?.customer_name || 'Unknown',
-        customer_mobile_snapshot: selectedSale?.customer_mobile || null,
-        customer_email_snapshot: selectedSale?.customer_email || null,
-        invoice_number: selectedSale?.bill_number || null,
-        sale_type: selectedSale?.sale_type || null,
-        marketplace: selectedSale?.marketplace || null,
-        service_type: serviceData.service_type,
-        complaint: serviceData.complaint,
-        items: [
-          {
-            product_id: selectedItem?.product_id || null,
-            sku_snapshot: selectedItem?.sku || null,
-            quantity: 1
-          }
-        ]
+        customer_name: formData.customer_name,
+        customer_mobile: formData.phone,
+        source_type: formData.source_type,
+        source_invoice_id: selectedSale?.bill_number || null,
+        product_name: formData.product_name,
+        brand: formData.brand === 'Others' ? formData.custom_brand : formData.brand,
+        complaint: formData.complaint,
+        service_type: formData.service_type,
+        service_location: formData.service_location,
+        workshop_id: parseInt(formData.workshop_id),
+        assigned_to: formData.assigned_to ? parseInt(formData.assigned_to) : null,
+        items: items.map(i => ({
+          item_name: i.item_name,
+          product_sku: i.product_sku.trim() || null,
+          qty: parseFloat(i.qty),
+          rate: parseFloat(i.rate)
+        }))
       };
-      const response = await api.post('/api/services/', payload);
-      navigate(`/service/${response.data.id}`);
+      
+      const response = await api.post('/api/bkr-services/job-cards', payload);
+      
+      addNotification({
+        type: 'success',
+        title: 'Service Created',
+        message: 'Service record and job card initialized successfully.'
+      });
+      
+      navigate(`/services/job-cards/${response.data.id}`);
     } catch (err) {
       console.error(err);
       let errorMessage = 'Failed to create Service Record';
@@ -101,93 +203,351 @@ export default function CreateServicePage() {
         }
       }
       setError(errorMessage);
+      addNotification({
+        type: 'error',
+        title: 'Creation Failed',
+        message: errorMessage
+      });
     } finally {
       setCreating(false);
     }
   };
 
-  const inputStyle = { width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' };
-  const labelStyle = { display: 'block', marginBottom: '8px', fontWeight: '500' };
-
   return (
-    <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-      <h2 style={{ marginTop: 0, marginBottom: '24px' }}>Create Service Record</h2>
-      
-      {error && <div style={{ color: 'red', marginBottom: '16px', padding: '12px', backgroundColor: '#fee2e2', borderRadius: '4px' }}>{error}</div>}
-      
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div>
-          <label style={labelStyle}>Select Invoice (Sale)</label>
-          <select 
-            value={selectedSaleId}
-            onChange={(e) => setSelectedSaleId(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">-- Select an Invoice --</option>
-            {sales.map(sale => (
-              <option key={sale.id} value={sale.id}>
-                {sale.bill_number} - {sale.customer_name} ({new Date(sale.sale_date).toLocaleDateString()})
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className={styles.pageWrapper}>
+      <div className={styles.contentContainer}>
+        {/* Premium Header */}
+        <header className={styles.pageHeader}>
+          <div className={styles.headerTitleRow}>
+            <div className={styles.headerIcon}>
+              <FiTool size={28} />
+            </div>
+            <div>
+              <h1 className={styles.mainTitle}>Register New Service</h1>
+              <p className={styles.subTitle}>Create a service record and assign a technician in one seamless step.</p>
+            </div>
+          </div>
+        </header>
 
-        {saleItems.length > 0 && (
-          <div>
-            <label style={labelStyle}>Select Product</label>
-            <select 
-              value={selectedItemId}
-              onChange={(e) => setSelectedItemId(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">-- Select a Product --</option>
-              {saleItems.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.product_name || item.name} (Qty: {item.quantity})
-                </option>
-              ))}
-            </select>
+        {error && (
+          <div className={styles.errorBanner}>
+            <div className={styles.errorIcon}>!</div>
+            <p>{error}</p>
           </div>
         )}
-        
-        <div>
-          <label style={labelStyle}>Service Type</label>
-          <select
-            value={serviceData.service_type}
-            onChange={(e) => setServiceData({...serviceData, service_type: e.target.value})}
-            style={inputStyle}
-          >
-            <option value="Repair">Repair</option>
-            <option value="Replacement">Replacement</option>
-            <option value="Installation">Installation</option>
-            <option value="General Service">General Service</option>
-          </select>
-        </div>
 
-        <div>
-          <label style={labelStyle}>Complaint / Reason</label>
-          <textarea 
-            value={serviceData.complaint}
-            onChange={(e) => setServiceData({...serviceData, complaint: e.target.value})}
-            placeholder="Describe the issue..."
-            style={{ ...inputStyle, minHeight: '80px' }}
-          />
-        </div>
+        {loading && (
+          <div style={{ padding: '10px', textAlign: 'center', color: '#666' }}>
+            Loading data...
+          </div>
+        )}
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-          <button 
-            onClick={() => navigate('/service/records')}
-            style={{ padding: '10px 20px', background: '#f3f4f6', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            Cancel
-          </button>
-          <button 
-            onClick={handleCreate}
-            disabled={creating}
-            style={{ flex: 1, padding: '10px 20px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '500', opacity: creating ? 0.7 : 1 }}
-          >
-            {creating ? 'Creating...' : 'Create Service Record'}
-          </button>
+        <div className={styles.formContainer}>
+          
+          {/* Source Toggle */}
+          <div className={styles.glassCard}>
+            <h2 className={styles.cardTitle}><FiBox /> Source Selection</h2>
+            <div className={styles.sourceToggleContainer}>
+              <button 
+                className={`${styles.sourceToggleBtn} ${formData.source_type === 'manual' ? styles.activeSource : ''}`}
+                onClick={() => handleSourceToggle('manual')}
+              >
+                <span className={styles.radioIndicator}></span>
+                Manual Entry
+              </button>
+              <button 
+                className={`${styles.sourceToggleBtn} ${formData.source_type === 'invoice' ? styles.activeSource : ''}`}
+                onClick={() => handleSourceToggle('invoice')}
+              >
+                <span className={styles.radioIndicator}></span>
+                Link to Past Invoice
+              </button>
+            </div>
+
+            {formData.source_type === 'invoice' && (
+              <div className={styles.invoiceSearchGrid}>
+                <div className={styles.inputGroup}>
+                  <label>Select Customer Invoice</label>
+                  <div className={styles.searchWrapper}>
+                    <FiSearch className={styles.searchIcon} />
+                    <select 
+                      value={selectedSaleId} 
+                      onChange={e => setSelectedSaleId(e.target.value)}
+                      className={styles.styledInput}
+                    >
+                      <option value="">-- Choose an Invoice --</option>
+                      {sales.map(s => (
+                        <option key={s.id} value={s.id}>{s.bill_number} - {s.customer_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                {selectedSaleId && (
+                  <div className={styles.inputGroup}>
+                    <label>Select Defective Product</label>
+                    <select 
+                      value={selectedItemId} 
+                      onChange={e => setSelectedItemId(e.target.value)}
+                      className={styles.styledInput}
+                    >
+                      <option value="">-- Choose a Product --</option>
+                      {saleItems.map(item => (
+                        <option key={item.id} value={item.id}>{item.product_name} (Qty: {item.quantity})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={styles.twoColGrid}>
+            {/* Customer Details */}
+            <div className={styles.glassCard}>
+              <h2 className={styles.cardTitle}><FiUser /> Customer Information</h2>
+              <div className={styles.formGrid}>
+                <div className={styles.inputGroup}>
+                  <label>Customer Name <span className={styles.required}>*</span></label>
+                  <input 
+                    type="text" 
+                    value={formData.customer_name} 
+                    onChange={e => setFormData({...formData, customer_name: e.target.value})}
+                    placeholder="Enter customer name"
+                    className={styles.styledInput}
+                  />
+                </div>
+                <div className={styles.inputGroup}>
+                  <label>Phone Number</label>
+                  <input 
+                    type="tel" 
+                    value={formData.phone} 
+                    onChange={e => setFormData({...formData, phone: e.target.value})}
+                    placeholder="Enter phone number"
+                    className={styles.styledInput}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Machine Details */}
+            <div className={styles.glassCard}>
+              <h2 className={styles.cardTitle}><FiTool /> Machine Details</h2>
+              <div className={styles.formGrid}>
+                <div className={styles.inputGroup} style={{ gridColumn: '1 / -1' }}>
+                  <label>Machine / Product Name <span className={styles.required}>*</span></label>
+                  <input 
+                    type="text" 
+                    value={formData.product_name} 
+                    onChange={e => setFormData({...formData, product_name: e.target.value})}
+                    placeholder="e.g. 2HP Submersible Pump"
+                    className={styles.styledInput}
+                  />
+                </div>
+                <div className={styles.inputGroup}>
+                  <label>Brand</label>
+                  <select 
+                    value={formData.brand} 
+                    onChange={e => setFormData({...formData, brand: e.target.value})}
+                    className={styles.styledInput}
+                  >
+                    <option value="Pond">Pond</option>
+                    <option value="SunCraft">SunCraft</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+                {formData.brand === 'Others' && (
+                  <div className={styles.inputGroup}>
+                    <label>Specify Brand <span className={styles.required}>*</span></label>
+                    <input 
+                      type="text" 
+                      value={formData.custom_brand} 
+                      onChange={e => setFormData({...formData, custom_brand: e.target.value})}
+                      placeholder="Brand Name"
+                      className={styles.styledInput}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Service Configuration & Technician Assignment */}
+          <div className={styles.glassCard}>
+            <h2 className={styles.cardTitle}><FiCheckCircle /> Workflow & Assignment</h2>
+            
+            <div className={styles.inputGroup} style={{ marginBottom: '1.5rem' }}>
+              <label>Complaint / Issue Description <span className={styles.required}>*</span></label>
+              <textarea 
+                value={formData.complaint} 
+                onChange={e => setFormData({...formData, complaint: e.target.value})}
+                placeholder="Describe the customer's reported issue in detail..."
+                className={styles.styledTextarea}
+                rows="3"
+              />
+            </div>
+
+            <div className={styles.grid3}>
+              <div className={styles.inputGroup}>
+                <label>Service Type</label>
+                <select 
+                  value={formData.service_type} 
+                  onChange={e => setFormData({...formData, service_type: e.target.value})}
+                  className={styles.styledInput}
+                >
+                  <option value="Repair">Repair</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Installation">Installation</option>
+                  <option value="Warranty Claim">Warranty Claim</option>
+                </select>
+              </div>
+
+              <div className={styles.inputGroup}>
+                <label>Service Location</label>
+                <select 
+                  value={formData.service_location} 
+                  onChange={e => setFormData({...formData, service_location: e.target.value})}
+                  className={styles.styledInput}
+                >
+                  <option value="Workshop">In-House Workshop</option>
+                  <option value="On-site">On-Site / Field</option>
+                </select>
+              </div>
+
+              <div className={styles.inputGroup}>
+                <label>Receiving Workshop <span className={styles.required}>*</span></label>
+                <select 
+                  value={formData.workshop_id} 
+                  onChange={e => setFormData({...formData, workshop_id: e.target.value})}
+                  className={styles.styledInput}
+                >
+                  <option value="">-- Select Workshop --</option>
+                  {warehouses?.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.assignmentBox}>
+              <div className={styles.inputGroup}>
+                <label>Assign Technician (Optional but Recommended)</label>
+                <p className={styles.helpText}>Select a technician to immediately assign them this job card upon creation.</p>
+                <select 
+                  value={formData.assigned_to} 
+                  onChange={e => setFormData({...formData, assigned_to: e.target.value})}
+                  className={styles.styledInput}
+                >
+                  <option value="">-- Leave Unassigned --</option>
+                  {users?.filter(u => u.role === 'TECHNICIAN' || u.role === 'admin').map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Service Items */}
+          <div className={styles.glassCard}>
+            <div className={styles.sectionHeaderFlex}>
+              <h2 className={styles.cardTitle} style={{ marginBottom: 0 }}>
+                Initial Service Items / Diagnostic Charges
+              </h2>
+              <button type="button" onClick={handleAddItem} className={styles.addButton}>
+                <FiPlus /> Add Item
+              </button>
+            </div>
+            
+            <div className={styles.tableWrapper}>
+              <table className={styles.itemsTable}>
+                <thead>
+                  <tr>
+                    <th>Item Description <span className={styles.required}>*</span></th>
+                    <th>Product SKU (For Inventory)</th>
+                    <th style={{width: '90px'}}>Qty <span className={styles.required}>*</span></th>
+                    <th style={{width: '120px'}}>Estimated Rate</th>
+                    <th style={{width: '120px'}}>Amount</th>
+                    <th style={{width: '50px'}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={index} className={styles.tableRow}>
+                      <td>
+                        <input 
+                          type="text" 
+                          value={item.item_name}
+                          onChange={(e) => handleItemChange(index, 'item_name', e.target.value)}
+                          placeholder="e.g. Diagnostic Fee"
+                          className={styles.tableInput}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          value={item.product_sku}
+                          onChange={(e) => handleItemChange(index, 'product_sku', e.target.value)}
+                          placeholder="Optional"
+                          className={styles.tableInput}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          min="1"
+                          value={item.qty}
+                          onChange={(e) => handleItemChange(index, 'qty', e.target.value)}
+                          className={styles.tableInput}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={item.rate}
+                          onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
+                          className={styles.tableInput}
+                        />
+                      </td>
+                      <td className={styles.amountCell}>
+                        ₹{item.amount.toFixed(2)}
+                      </td>
+                      <td>
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveItem(index)}
+                          className={styles.deleteBtn}
+                          disabled={items.length === 1}
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className={styles.stickyFooter}>
+            <button 
+              type="button" 
+              className={styles.btnSecondary}
+              onClick={() => navigate('/services/job-cards')}
+              disabled={creating}
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              className={styles.btnPrimary}
+              onClick={handleCreate}
+              disabled={creating}
+            >
+              {creating ? 'Registering Service...' : <><FiSave /> Register Service</>}
+            </button>
+          </div>
+          
         </div>
       </div>
     </div>

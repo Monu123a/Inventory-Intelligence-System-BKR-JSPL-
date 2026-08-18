@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from typing import Optional
 from app.models.schema import Inventory, Product
 

@@ -2,13 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, date
-from typing import Dict, Any, List
 
 from app.models.db import get_db
 from app.models.schema import (
     Company, Product, Warehouse, Inventory, InventoryMovement, AmazonSyncLog, 
-    ReportHistory, Alert, JobExecutionLog, Sale, SaleItem, SalesReturn, DeliveryChallan,
-    FCDispatch, FCReturn, ServiceRecord
+    Alert, JobExecutionLog, Sale, SaleItem, SalesReturn, DeliveryChallan, FCDispatch,
+    FCReturn, ServiceRecord
 )
 from app.models.accounting_schema import AccountingExportBatch
 from app.api.dependencies import get_current_company_id
@@ -182,8 +181,8 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
             "amazon_sync": amazon_sync_data,
             "latest_inventory_upload": latest_inventory_upload.timestamp.isoformat() if latest_inventory_upload else None,
             "scheduler_status": scheduler_status,
-            "last_snapshot_time": latest_snapshot_job.start_time.isoformat() if latest_snapshot_job else None,
-            "last_replenishment_report": latest_report_job.start_time.isoformat() if latest_report_job else None,
+            "last_snapshot_time": latest_snapshot_job.start_time.isoformat() if latest_snapshot_job and latest_snapshot_job.start_time else None,
+            "last_replenishment_report": latest_report_job.start_time.isoformat() if latest_report_job and latest_report_job.start_time else None,
         }
     }
 
@@ -238,7 +237,7 @@ def get_recent_activity(company_id: int = Depends(get_current_company_id), db: S
     for s in services:
         activity_feed.append({
             "id": f"srv_{s.id}", "timestamp": s.created_at, "type": "Service Completed",
-            "description": f"Service {s.service_number} completed for {s.customer_name}",
+            "description": f"Service {s.service_number} completed for {s.customer_name_snapshot}",
             "status": "Success", "metadata": {"service_number": s.service_number}
         })
 

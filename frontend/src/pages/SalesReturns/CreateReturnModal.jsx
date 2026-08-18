@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useQueryClient } from '@tanstack/react-query';
 import styles from './SalesReturnsPage.module.css';
 
 export default function CreateReturnModal({ onClose, onSuccess }) {
+  const queryClient = useQueryClient();
   const [sales, setSales] = useState([]);
   const [selectedSaleId, setSelectedSaleId] = useState('');
   const [saleDetails, setSaleDetails] = useState(null);
@@ -34,7 +36,7 @@ export default function CreateReturnModal({ onClose, onSuccess }) {
               initialItems[item.id] = {
                 returned_quantity: 0,
                 return_reason: 'Customer Changed Mind',
-                max_qty: item.quantity // Need a way to track already returned qty if partial returns are supported, assuming max is item.quantity for now
+                max_qty: item.quantity - (item.returned_quantity || 0)
               };
             });
             setReturnItems(initialItems);
@@ -86,6 +88,9 @@ export default function CreateReturnModal({ onClose, onSuccess }) {
         sale_id: parseInt(selectedSaleId),
         items: itemsToReturn
       });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['salesReturns'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
       onSuccess();
     } catch (err) {
       console.error(err);
@@ -153,7 +158,7 @@ export default function CreateReturnModal({ onClose, onSuccess }) {
                   <tr key={item.id}>
                     <td>
                       <div><strong>{item.product_name}</strong></div>
-                      <small style={{ color: '#666' }}>SKU: {item.product_sku}</small>
+                      <small style={{ color: '#666' }}>SKU: {item.sku}</small>
                     </td>
                     <td>{item.quantity}</td>
                     <td>

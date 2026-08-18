@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import { reportsService } from '../../../services/reports';
 import { DataTable } from '../../../components/DataTable';
 import { ReportToolbar } from '../../../components/Reporting/ReportToolbar';
 
@@ -21,8 +21,7 @@ export const DispatchReport = () => {
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
       
-      const res = await api.get('/api/business-reports/dispatches', { params });
-      return res.data;
+      return reportsService.getDispatchReport(params);
     }
   });
 
@@ -31,11 +30,10 @@ export const DispatchReport = () => {
   const totalPages = Math.ceil(total / limit);
 
   const columns = [
-    { key: 'dispatch_date', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
+    { key: 'created_at', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
     { key: 'dispatch_number', label: 'Dispatch No.' },
     { key: 'warehouse_name', label: 'Origin Warehouse' },
-    { key: 'destination', label: 'Destination' },
-    { key: 'status', label: 'Status' },
+    { key: 'dispatch_status', label: 'Status' },
     { key: 'total_items', label: 'Total Items' }
   ];
 

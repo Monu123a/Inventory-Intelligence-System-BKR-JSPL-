@@ -5,9 +5,10 @@ import { useNotificationStore } from '../../stores/notificationStore';
 import styles from './ExportCenter.module.css';
 
 const CATEGORY_CONFIG = [
-  { id: 'Sales', label: 'Sales', subtypes: [{ id: 'B2C', label: 'B2C Sales' }, { id: 'B2B', label: 'B2B Transfers' }] },
-  { id: 'Warehouse', label: 'Warehouse', subtypes: [{ id: 'Dispatches', label: 'Dispatches' }, { id: 'Returns', label: 'Returns' }] },
-  { id: 'Accounting', label: 'Accounting', subtypes: [{ id: 'Credit Notes', label: 'Credit Notes' }, { id: 'Debit Notes', label: 'Debit Notes' }] },
+  { id: 'Sales Invoice', label: 'Sales Invoice', subtypes: [{ id: 'B2C', label: 'B2C' }, { id: 'B2B', label: 'B2B' }] },
+  { id: 'Credit Note', label: 'Credit Note', subtypes: [{ id: 'Sales Return', label: 'Sales Return' }, { id: 'Purchase Return', label: 'Purchase Return' }] },
+  { id: 'Debit Note', label: 'Debit Note', subtypes: [{ id: 'Damage Claim', label: 'Damage Claim' }] },
+  { id: 'Purchase', label: 'Purchase', subtypes: [{ id: 'Standard', label: 'Standard' }, { id: 'Import', label: 'Import' }] }
 ];
 
 const ExportCenter = () => {
@@ -20,6 +21,8 @@ const ExportCenter = () => {
   const [profile, setProfile] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [generating, setGenerating] = useState(false);
+  const [forceReexport, setForceReexport] = useState(false);
+  const [forceReason, setForceReason] = useState('');
   const addNotification = useNotificationStore(state => state.addNotification);
 
   const fetchStats = async () => {
@@ -88,15 +91,22 @@ const ExportCenter = () => {
 
   const handleGenerate = async () => {
     if (selectedIds.size === 0) return;
+    if (forceReexport && !forceReason.trim()) {
+      addNotification({ type: 'error', message: 'Please provide a reason for force re-exporting.' });
+      return;
+    }
     setGenerating(true);
     try {
       const res = await api.post('/api/accounting/export/batch', {
         category: documentCategory,
         subtype: documentSubtype,
         document_ids: Array.from(selectedIds),
-        force_reexport: false
+        force_reexport: forceReexport,
+        reason: forceReason
       });
       addNotification({ type: 'success', message: `Export batch created successfully. Status: ${res.data.status}` });
+      setForceReexport(false);
+      setForceReason('');
       fetchStats();
       fetchDocuments(profile);
     } catch (err) {
@@ -194,6 +204,26 @@ const ExportCenter = () => {
           </div>
 
           <div className={styles.actionGroup}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
+              <input 
+                type="checkbox" 
+                id="forceReexport"
+                checked={forceReexport}
+                onChange={(e) => setForceReexport(e.target.checked)}
+              />
+              <label htmlFor="forceReexport" style={{ fontSize: '14px' }}>Force Re-export</label>
+            </div>
+            
+            {forceReexport && (
+              <input 
+                type="text" 
+                placeholder="Reason for re-export (Mandatory)" 
+                value={forceReason}
+                onChange={(e) => setForceReason(e.target.value)}
+                style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '4px', marginRight: '16px', fontSize: '14px' }}
+              />
+            )}
+
             <button 
               className={styles.btnPrimary} 
               disabled={selectedIds.size === 0 || generating}

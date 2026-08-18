@@ -1,17 +1,18 @@
 import useCompanyStore from '../stores/useCompanyStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as warehouseService from '../services/warehouses';
-import * as inventoryService from '../services/inventory';
+import { warehouseService } from '../services/warehouse';
+import { inventoryService } from '../services/inventory';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useMemo } from 'react';
+import api from '../services/api';
 
 const EMPTY_ARRAY = [];
 
-export const useWarehouses = ({ search = '', statusFilter = '', page = 1, limit = 15 }) => {
+export const useWarehouses = ({ search = '', statusFilter = '', page = 1, limit = 15 } = {}) => {
   const companyId = useCompanyStore((state) => state.companyId);
   const whQuery = useQuery({
     queryKey: ['warehouses', companyId],
-    queryFn: warehouseService.getWarehouses,
+    queryFn: () => warehouseService.getWarehouses(),
   });
 
   const invQuery = useQuery({
@@ -27,7 +28,7 @@ export const useWarehouses = ({ search = '', statusFilter = '', page = 1, limit 
     let joined = rawWarehouses.map(wh => {
       const whInventory = inventory.filter(inv => inv.warehouse_id === wh.id);
       
-      const totalProducts = new Set(whInventory.map(inv => inv.product_sku)).size;
+      const totalProducts = new Set(whInventory.map(inv => inv.product?.sku)).size;
       const totalInventoryQty = whInventory.reduce((sum, inv) => sum + (inv.available_qty || 0), 0);
 
       return {
@@ -81,7 +82,10 @@ export const useCreateWarehouse = () => {
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: warehouseService.createWarehouse,
+    mutationFn: async ({ data, adminPassword }) => {
+      const response = await api.post('/api/warehouses', { ...data, admin_password: adminPassword });
+      return response.data;
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['warehouses', companyId] });
       addNotification({ type: 'success', title: 'Warehouse Created', message: `${data.name} was successfully created.` });

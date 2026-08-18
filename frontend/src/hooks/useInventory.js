@@ -1,10 +1,12 @@
 import useCompanyStore from '../stores/useCompanyStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as inventoryService from '../services/inventory';
-import * as productService from '../services/products';
-import * as warehouseService from '../services/warehouses';
+import { inventoryService } from '../services/inventory';
+import { productService } from '../services/products';
+import { warehouseService } from '../services/warehouse';
 import { useNotificationStore } from '../stores/notificationStore';
+import { handleApiError } from '../utils/errorHandler';
 import { useMemo } from 'react';
+import api from '../services/api';
 
 const EMPTY_ARRAY = [];
 
@@ -23,7 +25,7 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
 
   const whQuery = useQuery({
     queryKey: ['warehouses', companyId],
-    queryFn: warehouseService.getWarehouses,
+    queryFn: () => warehouseService.getWarehouses(),
   });
 
   const rawInventory = invQuery.data ?? EMPTY_ARRAY;
@@ -40,7 +42,7 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
   const processedData = useMemo(() => {
     // Join Data
     let joined = rawInventory.map(inv => {
-      const product = products.find(p => p.sku === inv.product_sku) || {};
+      const product = products.find(p => p.sku === inv.product?.sku) || {};
       const status = inv.available_qty < 0 ? 'Negative' : (inv.available_qty < (product.min_stock_level || 0) ? 'Low' : 'Healthy');
       return {
         ...inv,
@@ -56,7 +58,7 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
     if (search) {
       const lowerSearch = search.toLowerCase();
       joined = joined.filter(item => 
-        (item.product_sku?.toLowerCase() || '').includes(lowerSearch) ||
+        (item.product?.sku?.toLowerCase() || '').includes(lowerSearch) ||
         (item.product_name?.toLowerCase() || '').includes(lowerSearch) ||
         (item.warehouse_name?.toLowerCase() || '').includes(lowerSearch)
       );
@@ -88,25 +90,40 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
 };
 
 export const useUploadInventory = () => {
-  const companyId = useCompanyStore((state) => state.companyId);
   const queryClient = useQueryClient();
+  const companyId = useCompanyStore((state) => state.companyId);
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: ({ warehouseCode, uploadType, file, preview }) => 
-      inventoryService.uploadInventory(warehouseCode, uploadType, file, preview),
+    mutationFn: async ({ warehouseCode, uploadType, file, preview, adminPassword }) => {
+      const formData = new FormData();
+      formData.append('warehouse_code', warehouseCode);
+      formData.append('upload_type', uploadType);
+      formData.append('file', file);
+      if (preview) formData.append('preview', 'true');
+      if (adminPassword) formData.append('admin_password', adminPassword);
+
+      const response = await api.post('/api/inventory/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    },
     onSuccess: (data, variables) => {
       if (!variables.preview) {
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        queryClient.invalidateQueries({ queryKey: ['warehouse'] });
         queryClient.invalidateQueries({ queryKey: ['inventoryHistory', companyId] });
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'metrics', companyId] });
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'activity', companyId] });
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'alerts', companyId] });
+        queryClient.invalidateQueries({ queryKey: ['reports'] });
         addNotification({ type: 'success', title: 'Upload Complete', message: data.message || 'Inventory uploaded successfully.' });
       }
     },
     onError: (err) => {
-      addNotification({ type: 'error', title: 'Upload Failed', message: err.response?.data?.message || err.message || 'An error occurred during upload.' });
+      handleApiError(err, 'An error occurred during upload.');
     }
   });
 };
@@ -117,17 +134,22 @@ export const useManualAdjustment = () => {
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: inventoryService.adjustInventory,
+    mutationFn: async ({ data, adminPassword }) => {
+      const response = await api.post('/api/inventory/adjust', { ...data, admin_password: adminPassword });
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['warehouse'] });
       queryClient.invalidateQueries({ queryKey: ['inventoryHistory', companyId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'metrics', companyId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'activity', companyId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'alerts', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
       addNotification({ type: 'success', title: 'Adjustment Saved', message: 'Manual adjustment was processed successfully.' });
     },
     onError: (err) => {
-      addNotification({ type: 'error', title: 'Adjustment Failed', message: err.response?.data?.detail || err.message || 'An error occurred.' });
+      handleApiError(err, 'Failed to save manual adjustment.');
     }
   });
 };

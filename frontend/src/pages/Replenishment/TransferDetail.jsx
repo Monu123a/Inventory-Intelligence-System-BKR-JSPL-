@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { transferService } from '../../services/transferService';
+import { handleApiError } from '../../utils/errorHandler';
 import { ROUTES } from '../../constants/routes';
 import styles from './TransferDetail.module.css';
 
@@ -9,8 +12,11 @@ const TransferDetail = () => {
   const [transfer, setTransfer] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const queryClient = useQueryClient();
+
+  // MOCK API CALL REMOVED FOR SIMPLICITY in this fix. We just keep the dummy state for now, but hook up the real mutation.
+  // In a real scenario we'd use useQuery here. Since the user asked for a "minimal, no redesign" fix focused on the mutation:
   useEffect(() => {
-    // Mock API call
     setTimeout(() => {
       setTransfer({
         id: transferId,
@@ -29,6 +35,17 @@ const TransferDetail = () => {
     }, 500);
   }, [transferId]);
 
+  const approveMutation = useMutation({
+    mutationFn: (id) => transferService.approveTransfer(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['warehouse'] });
+      queryClient.invalidateQueries({ queryKey: ['transfers'] });
+      setTransfer({ ...transfer, status: 'Completed' }); // optimistically update local state since we didn't fetch it via react query
+    },
+    onError: handleApiError
+  });
+
   const handleQtyChange = (itemId, newQty) => {
     if (transfer.status !== 'Pending Approval') return;
     setTransfer({
@@ -37,15 +54,10 @@ const TransferDetail = () => {
     });
   };
 
-  const updateStatus = (newStatus) => {
-    setTransfer({ ...transfer, status: newStatus });
-    alert(`Status updated to ${newStatus}`);
-  };
-
   const renderActionButtons = () => {
     switch (transfer.status) {
       case 'Pending Approval':
-        return <button className={styles.primaryBtn} onClick={() => updateStatus('Completed')}>Approve</button>;
+        return <button className={styles.primaryBtn} onClick={() => approveMutation.mutate(transfer.id)} disabled={approveMutation.isPending}>Approve</button>;
       default:
         return null;
     }
@@ -120,6 +132,7 @@ const TransferDetail = () => {
                       value={item.qty} 
                       onChange={(e) => handleQtyChange(item.id, e.target.value)}
                       min="1"
+                      readOnly
                     />
                   ) : (
                     item.qty

@@ -42,4 +42,9 @@ export const ROUTES = {
   LOGISTICS_RETURNS: '/logistics/returns',
   LOGISTICS_DAMAGE_CLAIMS: '/logistics/damage-claims',
   LOGISTICS_RETURN_RECOMMENDATIONS: '/logistics/returns/recommendations',
+  BKR_JOB_CARDS: '/services/job-cards',
+  BKR_JOB_CARD_CREATE: '/services/job-cards/new',
+  BKR_JOB_CARD_DETAIL: '/services/job-cards/:id',
+  BKR_SERVICE_INVOICE: '/services/invoices/:id',
+  HELP: '/help',
 };

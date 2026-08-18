@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Dict, Any
 from app.api.dependencies import get_current_user, get_db, get_current_company_id
-from app.models.schema import User, StockTransfer
+from app.models.schema import User, StockTransfer, StockTransferItem
 from app.services.stock_transfer_service import StockTransferService
 from app.services.transfer_number_service import TransferNumberService
+from app.services.metrics_service import log_metric
+import logging
 from sqlalchemy import func
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/transfers", tags=["Stock Transfers"])
 
@@ -20,6 +23,7 @@ class TransferItemRequest(BaseModel):
 class CreateTransferRequest(BaseModel):
     from_company_id: int
     to_company_id: int
+    idempotency_key: Optional[str] = None
     items: List[TransferItemRequest]
 
 @router.post("/create")
@@ -27,12 +31,20 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
     if req.from_company_id != company_id and req.to_company_id != company_id:
         raise HTTPException(status_code=403, detail="Cannot create transfer for unrelated companies")
         
-    from app.models.schema import StockTransferItem
+    if req.idempotency_key:
+        existing = db.query(StockTransfer).filter(
+            StockTransfer.from_company_id == req.from_company_id,
+            StockTransfer.idempotency_key == req.idempotency_key
+        ).first()
+        if existing:
+            return {"status": "success", "transfer_id": existing.id, "message": "Idempotent response"}
+
     transfer_num = TransferNumberService.generate_next(db, company_id=req.from_company_id)
     transfer = StockTransfer(
         transfer_number=transfer_num,
         from_company_id=req.from_company_id,
         to_company_id=req.to_company_id,
+        idempotency_key=req.idempotency_key,
         status="Pending",
         created_by=current_user.id
     )
@@ -57,8 +69,19 @@ def approve_transfer(transfer_id: int, db: Session = Depends(get_db), current_us
             raise HTTPException(status_code=403, detail="Not authorized to approve this transfer")
             
         transfer = StockTransferService.approve_transfer(db, transfer_id, current_user.id)
+        db.commit()
+        
+        logger.info(f"Action: Transfer Approve | User: {current_user.id} | Company: {company_id} | Status: Success | TransferID: {transfer.id}")
+        log_metric("transfer_approved", 1, {"company_id": company_id})
+        
         return {"status": "success", "transfer_id": transfer.id}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 from pydantic import BaseModel
@@ -66,17 +89,32 @@ from app.models.schema import Inventory
 
 class CompleteTransferRequest(BaseModel):
     invoice_id: int
+    idempotency_key: Optional[str] = None
 
 @router.put("/{transfer_id}/complete")
 def complete_transfer(transfer_id: int, req: CompleteTransferRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), company_id: int = Depends(get_current_company_id)):
     try:
-        transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).first()
+        # Lock the row for concurrency
+        transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).with_for_update().first()
         if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
             raise HTTPException(status_code=403, detail="Not authorized to complete this transfer")
             
-        transfer = StockTransferService.complete_transfer(db, transfer_id, req.invoice_id, current_user.id)
+        if req.idempotency_key and transfer.idempotency_key != req.idempotency_key:
+            raise HTTPException(status_code=400, detail="Idempotency key mismatch: Completion must use the same identity as creation.")
+            
+        if transfer.status == "Completed":
+            return {"status": "success", "transfer_id": transfer.id, "message": "Already completed"}
+            
+        transfer = StockTransferService.complete_transfer_locked(db, transfer, req.invoice_id, current_user.id)
+        db.commit()
         return {"status": "success", "transfer_id": transfer.id}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{transfer_id}")
@@ -99,6 +137,8 @@ def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: 
             "id": item.id,
             "product_id": item.product_id,
             "sku": item.product.sku if item.product else "",
+            "product_sku": item.product.sku if item.product else "",
+            "product_name": item.product.name if item.product else "",
             "product": item.product.name if item.product else "",
             "requested_qty": item.requested_qty,
             "unit_price": item.product.item_rate if item.product else 0,
@@ -115,7 +155,8 @@ def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: 
     }
 
 from typing import Optional
-from sqlalchemy import or_
+from app.models.schema import CompanySettings, Company
+from app.models.schema import StockTransferItem
 
 @router.get("/")
 def list_transfers(
@@ -126,7 +167,6 @@ def list_transfers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.schema import CompanySettings, Company
     query = db.query(StockTransfer).filter(
         (StockTransfer.from_company_id == company_id) | 
         (StockTransfer.to_company_id == company_id)
@@ -170,7 +210,7 @@ def list_transfers(
             "total_qty": total_qty,
             "total_amount": total_amount,
             "items_count": len(t.items),
-            "items": [{"product_id": i.product_id, "sku": i.product.sku} for i in t.items]
+            "items": [{"product_id": i.product_id, "sku": i.product.sku if i.product else "", "product_sku": i.product.sku if i.product else "", "product_name": i.product.name if i.product else ""} for i in t.items]
         })
         
     return result

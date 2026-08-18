@@ -16,7 +16,6 @@ class AmazonProvider(ABC):
         Executes the API lifecycle to retrieve the requested data.
         Returns a dictionary with document details (e.g. url, compression_algorithm) or None on failure.
         """
-        pass
 
 class ReportsAPIProvider(AmazonProvider):
     def __init__(self, authenticator: AmazonAuthenticator):

@@ -5,7 +5,7 @@ import {
   FiDownload, 
   FiArrowLeft
 } from 'react-icons/fi';
-import api from '../../services/api';
+import { deliveryChallanService } from '../../services/deliveryChallanService';
 import DeliveryChallanRenderer from '../../components/delivery-challans/DeliveryChallanRenderer';
 import { downloadInvoicePdf } from '../../services/invoicePdfService';
 import styles from '../POS/InvoicePreviewPage.module.css'; // Reusing invoice preview styles
@@ -29,8 +29,8 @@ export default function DeliveryChallanPreviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get(`/api/delivery-challans/${id}`);
-      setChallan(response.data);
+      const data = await deliveryChallanService.getChallanById(id);
+      setChallan(data);
     } catch (err) {
       console.error('Failed to fetch challan:', err);
       const backendError = err.response?.data?.detail || err.message;
@@ -44,7 +44,7 @@ export default function DeliveryChallanPreviewPage() {
     window.print();
     // Update print count in background
     try {
-      await api.post(`/api/delivery-challans/${id}/print`);
+      await deliveryChallanService.printChallan(id);
       fetchChallan(); // refresh print count silently
     } catch (e) {
       console.error('Failed to record print action', e);

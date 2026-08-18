@@ -1,8 +1,8 @@
 import useCompanyStore from '../stores/useCompanyStore';
 import { useQuery } from '@tanstack/react-query';
-import * as inventoryService from '../services/inventory';
-import * as productService from '../services/products';
-import * as warehouseService from '../services/warehouses';
+import { inventoryService } from '../services/inventory';
+import { productService } from '../services/products';
+import { warehouseService } from '../services/warehouse';
 import { useMemo } from 'react';
 
 const EMPTY_ARRAY = [];
@@ -11,7 +11,7 @@ export const useInventoryHistory = ({ search = '', dateRange = { start: '', end:
   const companyId = useCompanyStore((state) => state.companyId);
   const historyQuery = useQuery({
     queryKey: ['inventoryHistory', companyId],
-    queryFn: inventoryService.getGlobalInventoryHistory,
+    queryFn: () => inventoryService.getGlobalInventoryHistory(),
   });
 
   const prodQuery = useQuery({
@@ -22,7 +22,7 @@ export const useInventoryHistory = ({ search = '', dateRange = { start: '', end:
 
   const whQuery = useQuery({
     queryKey: ['warehouses', companyId],
-    queryFn: warehouseService.getWarehouses,
+    queryFn: () => warehouseService.getWarehouses(),
   });
 
   const rawHistory = historyQuery.data ?? EMPTY_ARRAY;

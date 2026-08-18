@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
+import PageContainer from '../../components/layout/PageContainer';
+import { Card } from '../../components/Card/Card';
+import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import styles from './DefectiveInventory.module.css';
 
 const DefectiveInventory = () => {
@@ -19,13 +22,7 @@ const DefectiveInventory = () => {
     });
 
     return (
-        <div className={styles.container}>
-            <div className={styles.header}>
-                <div>
-                    <h2>Defective Inventory</h2>
-                    <p className={styles.subtitle}>Manage unsellable products from returns and inspections.</p>
-                </div>
-            </div>
+        <PageContainer title="Defective Inventory" subtitle="Manage unsellable products from returns and inspections.">
 
             <div className={styles.filters}>
                 <input 
@@ -50,47 +47,67 @@ const DefectiveInventory = () => {
                 </select>
             </div>
 
-            <div className={styles.tableContainer}>
-                {isLoading ? (
-                    <div className={styles.loading}>Loading defective inventory...</div>
-                ) : defectives.length === 0 ? (
-                    <div className={styles.empty}>No defective items found.</div>
-                ) : (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>SKU</th>
-                                <th>Product</th>
-                                <th>Return ID</th>
-                                <th>Quantity</th>
-                                <th>Return Reason</th>
-                                <th>Remarks</th>
-                                <th>Current Status</th>
-                                <th>Inspection Date</th>
-                            </tr>
-                        </thead>
+            <Card noPadding>
+                <div className={styles.tableContainer}>
+                    <DataTable>
+                        <TableHeader columns={[
+                            { key: 'sku', label: 'SKU' },
+                            { key: 'product', label: 'Product' },
+                            { key: 'returnId', label: 'Return ID' },
+                            { key: 'qty', label: 'Quantity' },
+                            { key: 'reason', label: 'Return Reason' },
+                            { key: 'remarks', label: 'Remarks' },
+                            { key: 'status', label: 'Current Status' },
+                            { key: 'date', label: 'Inspection Date' }
+                        ]} />
                         <tbody>
-                            {defectives.map(item => (
-                                <tr key={item.id}>
-                                    <td>{item.sku_snapshot}</td>
-                                    <td>{item.product_name_snapshot}</td>
-                                    <td>{item.amazon_return_id}</td>
-                                    <td>{item.quantity}</td>
-                                    <td>{item.return_reason}</td>
-                                    <td>{item.inspection_notes || '-'}</td>
-                                    <td>
-                                        <span className={`${styles.badge} ${styles[item.status]}`}>
-                                            {item.status.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td>{item.inspection_date ? new Date(item.inspection_date).toLocaleDateString() : '-'}</td>
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan="8" style={{ textAlign: 'center', padding: '2rem' }}>Loading defective inventory...</td>
                                 </tr>
-                            ))}
+                            ) : defectives.length === 0 ? (
+                                <tr>
+                                    <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+                                        <div style={{ fontSize: '1.125rem', fontWeight: '500', marginBottom: '0.25rem' }}>No defective items</div>
+                                        <div style={{ fontSize: '0.875rem' }}>No defective inventory matches your criteria.</div>
+                                    </td>
+                                </tr>
+                            ) : (
+                                defectives.map(item => (
+                                    <TableRow 
+                                        key={item.id}
+                                        row={{
+                                            sku: item.sku_snapshot,
+                                            product: item.product_name_snapshot,
+                                            returnId: item.amazon_return_id,
+                                            qty: item.quantity,
+                                            reason: item.return_reason,
+                                            remarks: item.inspection_notes || '-',
+                                            status: (
+                                                <span className={`${styles.badge} ${styles[item.status]}`}>
+                                                    {item.status.replace('_', ' ')}
+                                                </span>
+                                            ),
+                                            date: item.inspection_date ? new Date(item.inspection_date).toLocaleDateString() : '-'
+                                        }}
+                                        columns={[
+                                            { key: 'sku', label: 'SKU' },
+                                            { key: 'product', label: 'Product' },
+                                            { key: 'returnId', label: 'Return ID' },
+                                            { key: 'qty', label: 'Quantity' },
+                                            { key: 'reason', label: 'Return Reason' },
+                                            { key: 'remarks', label: 'Remarks' },
+                                            { key: 'status', label: 'Current Status' },
+                                            { key: 'date', label: 'Inspection Date' }
+                                        ]}
+                                    />
+                                ))
+                            )}
                         </tbody>
-                    </table>
-                )}
-            </div>
-        </div>
+                    </DataTable>
+                </div>
+            </Card>
+        </PageContainer>
     );
 };
 

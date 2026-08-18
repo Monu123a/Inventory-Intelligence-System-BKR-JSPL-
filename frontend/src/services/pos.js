@@ -1,0 +1,44 @@
+import api from './api';
+import { normalizeResponse } from '../utils/normalizeResponse';
+
+export const posService = {
+  searchProducts: async (query) => {
+    if (!query || query.length < 2) return [];
+    const res = await api.get(`/api/pos/products/search?q=${encodeURIComponent(query)}`);
+    return normalizeResponse(res.data);
+  },
+
+  checkout: async (payload) => {
+    const res = await api.post('/api/pos/sale', payload);
+    return normalizeResponse(res.data);
+  },
+
+  getSalesHistory: async (params) => {
+    const res = await api.get('/api/pos/history', { params });
+    return normalizeResponse(res.data);
+  },
+
+  getSaleById: async (saleId) => {
+    const res = await api.get(`/api/pos/sales/${saleId}`);
+    return normalizeResponse(res.data);
+  },
+
+  retryTallySync: async (saleId) => {
+    const res = await api.post(`/api/pos/sales/${saleId}/retry-tally`);
+    return normalizeResponse(res.data);
+  },
+
+  getTallyPayload: async (saleId) => {
+    const res = await api.get(`/api/pos/sales/${saleId}/tally-payload`);
+    return normalizeResponse(res.data);
+  },
+
+  emailInvoice: async ({ saleId, formData }) => {
+    const res = await api.post(`/api/documents/invoice/${saleId}/email`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return normalizeResponse(res.data);
+  }
+};

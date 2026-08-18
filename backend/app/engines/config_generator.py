@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Dict, Any, List
+from typing import List
 from app.repositories.config_repository import ConfigRepository
 
 class ConfigurationGenerator:

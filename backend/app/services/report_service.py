@@ -32,7 +32,7 @@ class ReportService:
             download_link=download_link
         )
         db.add(report)
-        db.commit()
+        db.flush()
         db.refresh(report)
         return report
 
@@ -77,13 +77,13 @@ class ReportService:
         query = db.query(
             Product.sku,
             Product.name,
-            func.sum(Inventory.current_qty).label("total_current_qty"),
+            func.coalesce(func.sum(Inventory.current_qty), 0).label("total_current_qty"),
             Product.min_stock_level,
             Product.item_rate
-        ).join(Inventory, Product.id == Inventory.product_id)\
-         .filter(Product.company_id == company_id, Inventory.company_id == company_id, Product.min_stock_level > 0)\
+        ).outerjoin(Inventory, (Product.id == Inventory.product_id) & (Inventory.company_id == company_id))\
+         .filter(Product.company_id == company_id, Product.min_stock_level > 0)\
          .group_by(Product.sku, Product.name, Product.min_stock_level, Product.item_rate)\
-         .having(func.sum(Inventory.current_qty) < Product.min_stock_level)
+         .having(func.coalesce(func.sum(Inventory.current_qty), 0) < Product.min_stock_level)
          
         df = pd.read_sql(query.statement, db.bind)
         if df.empty:

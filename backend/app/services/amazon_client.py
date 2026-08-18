@@ -1,8 +1,7 @@
 import abc
 import os
-import random
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class AmazonClient(abc.ABC):
     @abc.abstractmethod
@@ -13,7 +12,6 @@ class AmazonClient(abc.ABC):
         - order_id: str
         - items: List[Dict] with 'sku' and 'quantity'
         """
-        pass
 
 class MockAmazonClient(AmazonClient):
     def fetch_orders(self, since: datetime = None) -> List[Dict[str, Any]]:

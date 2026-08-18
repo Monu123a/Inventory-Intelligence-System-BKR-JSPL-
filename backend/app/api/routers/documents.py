@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.db import get_db
 from app.api.dependencies import get_current_company_id
 from app.services.email_service import EmailService
+from app.models.schema import Sale
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -16,7 +17,6 @@ async def email_invoice(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    from app.models.schema import Sale
     sale = db.query(Sale).filter(Sale.id == id, Sale.company_id == company_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Invoice not found")

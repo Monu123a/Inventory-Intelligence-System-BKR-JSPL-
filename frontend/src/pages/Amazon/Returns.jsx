@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../../services/api';
+import { amazonReturnsService } from '../../services/amazonReturnsService';
 import { useNotificationStore } from '../../stores/notificationStore';
 import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
@@ -22,24 +22,24 @@ const AmazonReturns = () => {
             const params = {};
             if (statusFilter) params.status = statusFilter;
             if (search) params.search = search;
-            const res = await api.get('/api/amazon-returns/', { params });
-            return res.data;
+            const data = await amazonReturnsService.getReturns(params);
+            return data;
         }
     });
 
     const { data: syncStatus } = useQuery({
         queryKey: ['amazonReturnsSyncStatus'],
         queryFn: async () => {
-            const res = await api.get('/api/amazon-returns/status');
-            return res.data;
+            const data = await amazonReturnsService.getSyncStatus();
+            return data;
         },
         refetchInterval: 10000 // poll every 10s
     });
 
     const manualSyncMutation = useMutation({
         mutationFn: async () => {
-            const res = await api.post('/api/amazon-returns/sync');
-            return res.data;
+            const data = await amazonReturnsService.triggerSync();
+            return data;
         },
         onSuccess: () => {
             addNotification('Manual sync completed successfully', 'success');
@@ -57,8 +57,8 @@ const AmazonReturns = () => {
 
     const inspectMutation = useMutation({
         mutationFn: async ({ returnId, data }) => {
-            const res = await api.post(`/api/amazon-returns/${returnId}/inspect`, data);
-            return res.data;
+            const responseData = await amazonReturnsService.inspectReturn(returnId, data);
+            return responseData;
         },
         onSuccess: (data) => {
             addNotification(`Successfully inspected and ${data.inspection_status}`, 'success');
@@ -66,6 +66,8 @@ const AmazonReturns = () => {
             setInspectionNotes('');
             setInspectionDecision('RESTOCK');
             queryClient.invalidateQueries(['amazonReturns']);
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            queryClient.invalidateQueries({ queryKey: ['defectiveInventory'] });
         },
         onError: (err) => {
             addNotification(err.response?.data?.detail || 'Failed to inspect return', 'error');

@@ -1,18 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 
 from app.models.db import get_db
-from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem
-from app.api.dependencies import get_current_company_id
+from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem, User
+from app.api.dependencies import get_current_company_id, get_current_user
 from app.services.inventory_event_engine import InventoryEventEngine
 from app.services.invoice_number_service import InvoiceNumberService
 from app.services.tally_integration_service import TallyIntegrationService
 from app.services.audit_log_service import AuditLogService
+from app.services.metrics_service import log_metric
+from app.core.limiter import limiter
+from fastapi import Request
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pos", tags=["POS"])
 
@@ -27,7 +34,7 @@ def get_bkr_company_id(company_id: int = Depends(get_current_company_id), db: Se
 def _resolve_default_bkr_warehouse(db: Session, company_id: int) -> Warehouse:
     warehouses = db.query(Warehouse).filter(
         Warehouse.company_id == company_id,
-        Warehouse.status == "Active"
+        Warehouse.status.in_(["Active", "ACTIVE"])
     ).order_by(Warehouse.id.asc()).all()
 
     if not warehouses:
@@ -56,6 +63,8 @@ def _generate_bill_number() -> str:
 
 # --- Pydantic Models ---
 from pydantic import BaseModel, Field
+from app.models.schema import StockTransfer
+from app.services.tally_payload_builder import TallyPayloadBuilder
 class PosCartItem(BaseModel):
     product_id: int
     sku: str
@@ -73,6 +82,7 @@ class PosCartItem(BaseModel):
     line_total: float
 
 class PosCheckoutRequest(BaseModel):
+    idempotency_key: Optional[str] = None
     customer_name: Optional[str] = None
     customer_mobile: Optional[str] = None
     customer_gstin: Optional[str] = None
@@ -155,12 +165,32 @@ def search_products(q: str = "", company_id: int = Depends(get_bkr_company_id), 
     ]
 
 @router.post("/sale")
-def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db), commit: bool = True):
-    if not request.items:
+def complete_sale(
+    request: Request,
+    payload: PosCheckoutRequest, 
+    company_id: int = Depends(get_bkr_company_id), 
+    db: Session = Depends(get_db), 
+    user: User = Depends(get_current_user),
+    commit: bool = True
+):
+    if not payload.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
-    if request.origin_warehouse_id:
-        default_warehouse = db.query(Warehouse).filter(Warehouse.id == request.origin_warehouse_id).first()
+    if payload.idempotency_key:
+        existing_sale = db.query(Sale).filter(Sale.idempotency_key == payload.idempotency_key, Sale.company_id == company_id).first()
+        if existing_sale:
+            return {
+                "message": "Sale processed successfully (Idempotent response)",
+                "receipt": {
+                    "id": existing_sale.id,
+                    "bill_number": existing_sale.bill_number,
+                    "grand_total": existing_sale.grand_total,
+                    "status": existing_sale.status
+                }
+            }
+
+    if payload.origin_warehouse_id:
+        default_warehouse = db.query(Warehouse).filter(Warehouse.id == payload.origin_warehouse_id).first()
         if not default_warehouse:
             raise HTTPException(status_code=400, detail="Origin warehouse not found")
     else:
@@ -168,9 +198,9 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
 
     try:
         # 1. Validate Stock (Aggregated to prevent overselling on duplicate items)
-        if not request.skip_inventory_update:
+        if not payload.skip_inventory_update:
             required_quantities = {}
-            for item in request.items:
+            for item in payload.items:
                 required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
 
             for product_id, total_qty in required_quantities.items():
@@ -203,27 +233,11 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
         sale = Sale(
             bill_number=bill_number,
             company_id=company_id,
+            idempotency_key=payload.idempotency_key,
             invoice_number=invoice_number,
-            invoice_type=(request.invoice_type or "B2C").strip().upper(),
-            customer_name=request.customer_name,
-            customer_mobile=request.customer_mobile,
-            customer_gstin=request.customer_gstin,
-            customer_address=request.customer_address,
-            customer_state=request.customer_state,
-            customer_state_code=request.customer_state_code,
-            place_of_supply=request.place_of_supply,
-            customer_email=request.customer_email,
-            customer_phone=request.customer_phone,
-
-            payment_terms=request.payment_terms,
-            delivery_note=request.delivery_note,
-            delivery_note_date=request.delivery_note_date,
-            dispatch_document_number=request.dispatch_document_number,
-            dispatch_through=request.dispatch_through,
-            destination=request.destination,
-            vehicle_number=request.vehicle_number,
-            lr_rr_number=request.lr_rr_number,
-            terms_of_delivery=request.terms_of_delivery,
+            vehicle_number=payload.vehicle_number,
+            lr_rr_number=payload.lr_rr_number,
+            terms_of_delivery=payload.terms_of_delivery,
 
             company_name_snapshot=(settings.legal_name if settings and settings.legal_name else (company.name if company else None)),
             company_gstin_snapshot=(settings.gstin if settings else None),
@@ -236,19 +250,34 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
             company_bank_details_snapshot=(settings.bank_details if settings else None),
 
             tally_sync_status="NOT_APPLICABLE",  # updated below for B2B+enabled
-            total_taxable_amount=request.total_taxable_amount,
-            total_tax=request.total_tax,
-            grand_total=request.grand_total,
-            payment_method=request.payment_method,
-            payment_reference=request.payment_reference,
-            payment_date=request.payment_date,
+            total_taxable_amount=payload.total_taxable_amount,
+            total_tax=payload.total_tax,
+            grand_total=payload.grand_total,
+            payment_method=payload.payment_method,
+            payment_reference=payload.payment_reference,
+            payment_date=payload.payment_date,
             status="Completed"
         )
         db.add(sale)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            existing_sale = db.query(Sale).filter(Sale.idempotency_key == payload.idempotency_key, Sale.company_id == company_id).first()
+            if existing_sale:
+                return {
+                    "message": "Sale processed successfully (Idempotent response)",
+                    "receipt": {
+                        "id": existing_sale.id,
+                        "bill_number": existing_sale.bill_number,
+                        "grand_total": existing_sale.grand_total,
+                        "status": existing_sale.status
+                    }
+                }
+            raise
 
         # 4. Create Sale Items and Deduct Inventory
-        for item in request.items:
+        for item in payload.items:
             product = db.query(Product).filter(Product.id == item.product_id, Product.company_id == company_id).first()
             sale_item = SaleItem(
                 sale_id=sale.id,
@@ -272,7 +301,7 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
             # 5. Inventory Deduction via Event Engine
             # Use the verified DB product SKU, not the client-supplied SKU
             # Deduct from Inventory using Event Engine (if not skipped)
-            if not request.skip_inventory_update:
+            if not payload.skip_inventory_update:
                 verified_sku = product.sku if product else item.sku
                 InventoryEventEngine.process_event(
                     db=db,
@@ -333,6 +362,8 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
                     else:
                         db.flush()
             except Exception as tally_err:
+                import logging
+                logging.getLogger(__name__).error(str(tally_err), exc_info=True)
                 tally_logger.error(f"Tally sync failed for sale {sale.id}: {tally_err}")
                 sale.tally_sync_status = "FAILED"
                 if commit:
@@ -342,6 +373,20 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
                     db.flush()
                 tally_result = {"status": "FAILED", "error_message": str(tally_err)}
 
+        # Add audit logs
+        AuditLogService.log(
+            db, 
+            company_id=company_id, 
+            entity_type="POS Checkout", 
+            entity_id=sale.id, 
+            event_type="Sale",
+            message=f"POS Checkout by User {user.id}",
+            metadata={"total_amount": sale.grand_total, "invoice_number": sale.invoice_number}
+        )
+
+        logger.info(f"Action: Sale | User: {user.id} | Company: {company_id} | Status: Success | SaleID: {sale.id} | Value: {sale.grand_total}")
+        log_metric("sale_completed", 1, {"company_id": company_id})
+
         receipt = _build_invoice_dto(sale)
         return {"message": "Sale completed successfully", "receipt": receipt, "tally_sync": tally_result}
         
@@ -350,9 +395,11 @@ def complete_sale(request: PosCheckoutRequest, company_id: int = Depends(get_bkr
             db.rollback()
         raise
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         if commit:
             db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred while processing the sale.")
 
 @router.get("/history")
 def get_sales_history(
@@ -614,7 +661,6 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
 
 @router.get("/sales/{sale_id}")
 def get_sale_invoice(sale_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    from app.models.schema import StockTransfer
     sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
@@ -624,6 +670,19 @@ def get_sale_invoice(sale_id: int, company_id: int = Depends(get_current_company
         if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
             raise HTTPException(status_code=404, detail="Sale not found")
             
+    return {"receipt": _build_invoice_dto(sale, db)}
+
+
+@router.get("/invoice/{invoice_number}")
+def get_invoice_by_number(invoice_number: str, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    sale = db.query(Sale).filter(
+        Sale.invoice_number == invoice_number,
+        Sale.company_id == company_id
+    ).first()
+    
+    if not sale:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
     return {"receipt": _build_invoice_dto(sale, db)}
 
 
@@ -654,7 +713,6 @@ def get_tally_payload(sale_id: int, company_id: int = Depends(get_bkr_company_id
         raise HTTPException(status_code=404, detail="Sale not found")
         
     try:
-        from app.services.tally_payload_builder import TallyPayloadBuilder
         import json
         json_payload = TallyPayloadBuilder.build_json(sale)
         xml_payload = TallyPayloadBuilder.build_xml(sale)
@@ -664,4 +722,6 @@ def get_tally_payload(sale_id: int, company_id: int = Depends(get_bkr_company_id
             "xml": xml_payload
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred while generating the export.")

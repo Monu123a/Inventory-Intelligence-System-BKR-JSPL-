@@ -1,34 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import styles from './Warehouse.module.css';
-import api from '../../services/api';
+import { inventoryService } from '../../services/inventory';
+import { handleApiError } from '../../utils/errorHandler';
 
 const WarehouseDashboard = () => {
-  const [metrics, setMetrics] = useState({ totalProducts: 0, inventoryValue: 0, lowStock: 0 });
-  const [loading, setLoading] = useState(false);
+  const { data = [], isLoading: loading, error: dashboardError } = useQuery({
+    queryKey: ['inventory', {}], // Empty filter object for global dashboard
+    queryFn: () => inventoryService.getInventory(),
+  });
 
-  useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get('/api/warehouse-inventory');
-        if (response.data) {
-          const data = response.data;
-          setMetrics({
-            totalProducts: data.length || 0,
-            inventoryValue: data.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 0), 0),
-            lowStock: data.filter(item => item.quantity < 10).length || 0
-          });
-        }
-      } catch (err) {
-        console.error('Failed to load inventory for dashboard metrics', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInventory();
-  }, []);
+  if (dashboardError) {
+    handleApiError(dashboardError, 'Failed to load inventory for dashboard metrics');
+  }
+
+  const metrics = {
+    totalProducts: data.length || 0,
+    inventoryValue: data.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 0), 0),
+    lowStock: data.filter(item => {
+      const minLevel = item.min_stock_level || 10;
+      return (item.quantity || 0) > 0 && (item.quantity || 0) < minLevel;
+    }).length || 0
+  };
 
   return (
     <PageContainer title="Warehouse Dashboard">

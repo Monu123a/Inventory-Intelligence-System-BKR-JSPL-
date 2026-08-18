@@ -12,4 +12,3 @@ class BasePlugin(ABC):
     @abstractmethod
     def execute(self, context: ExecutionContext) -> None:
         """Execute the plugin logic on the shared ExecutionContext."""
-        pass

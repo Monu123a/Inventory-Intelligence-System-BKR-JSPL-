@@ -35,16 +35,16 @@ def generate_45_day_return_recommendations():
             last_movement = db.query(InventoryMovement).filter(
                 InventoryMovement.warehouse_id == inv.warehouse_id,
                 InventoryMovement.product_id == inv.product_id
-            ).order_by(InventoryMovement.created_at.desc()).first()
+            ).order_by(InventoryMovement.timestamp.desc()).first()
             
-            if last_movement and last_movement.created_at < stale_threshold:
+            if last_movement and last_movement.timestamp < stale_threshold:
                 # It's been >45 days since the last movement
                 recommendations.append({
                     "warehouse_id": inv.warehouse_id,
                     "product_id": inv.product_id,
                     "quantity": inv.available_qty,
-                    "last_movement_date": last_movement.created_at.isoformat(),
-                    "days_stale": (datetime.utcnow() - last_movement.created_at).days
+                    "last_movement_date": last_movement.timestamp.isoformat(),
+                    "days_stale": (datetime.utcnow() - last_movement.timestamp).days
                 })
                 
         # In a real implementation, these recommendations would be saved to a database table

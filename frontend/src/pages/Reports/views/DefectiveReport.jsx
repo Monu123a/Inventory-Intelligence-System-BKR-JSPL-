@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import { reportsService } from '../../../services/reports';
 import { DataTable } from '../../../components/DataTable';
 import { ReportToolbar } from '../../../components/Reporting/ReportToolbar';
 
@@ -21,8 +21,7 @@ export const DefectiveReport = () => {
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
       
-      const res = await api.get('/api/business-reports/defective', { params });
-      return res.data;
+      return reportsService.getDefectiveReport(params);
     }
   });
 
@@ -31,12 +30,11 @@ export const DefectiveReport = () => {
   const totalPages = Math.ceil(total / limit);
 
   const columns = [
-    { key: 'logged_date', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
+    { key: 'created_at', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
     { key: 'sku', label: 'SKU' },
     { key: 'product_name', label: 'Product Name' },
     { key: 'quantity', label: 'Quantity' },
-    { key: 'defect_reason', label: 'Defect Reason' },
-    { key: 'source', label: 'Source' },
+    { key: 'return_reason', label: 'Defect Reason' },
     { key: 'status', label: 'Status' }
   ];
 

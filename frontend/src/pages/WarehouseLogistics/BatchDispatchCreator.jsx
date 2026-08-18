@@ -1,25 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../services/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   CheckCircle, ChevronRight, ArrowRight, Package, 
   MapPin, Truck, FileText, Check, AlertTriangle, Building2
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import styles from './BatchDispatchCreator.module.css';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
 import DeliveryChallanRenderer from '../../components/delivery-challans/DeliveryChallanRenderer';
 import useCompanyStore from '../../stores/useCompanyStore';
 
 const BatchDispatchCreator = () => {
+  const queryClient = useQueryClient();
   const { currentCompany } = useCompanyStore();
   const isBkr = currentCompany?.name?.toLowerCase().includes('bkr') || currentCompany?.code === 'BKR';
   
   const location = useLocation();
+  const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const defaultSource = isBkr ? 'BKR' : 'CENTRAL';
 
+  const idempotencyKeyRef = useRef(window.crypto.randomUUID());
+
   const [step, setStep] = useState(1);
-  const [sourceWarehouse, setSourceWarehouse] = useState(defaultSource);
+  const [submitting, setSubmitting] = useState(false);
+  const [sourceWarehouseId, setSourceWarehouseId] = useState('');
+  const [dispatchType, setDispatchType] = useState('STANDARD');
   const [selectedHub, setSelectedHub] = useState('');
   const [selectedFC, setSelectedFC] = useState('');
   
@@ -60,14 +68,32 @@ const BatchDispatchCreator = () => {
     fetchData();
   }, []);
 
-  // Fetch Inventory when entering Step 4
+
+
   useEffect(() => {
     if (step === 4) {
       const fetchInventory = async () => {
         setLoadingInventory(true);
         try {
-          const res = await api.get(`/api/fc-dispatches/inventory?source_type=${sourceWarehouse}`);
-          // Preserve existing transfer quantities if they exist
+          // Determine correct source warehouse ID based on selection or fallback
+          let resolvedSourceId = sourceWarehouseId;
+          if (!resolvedSourceId) {
+             const bkrWh = warehouses.find(w => w.name?.toLowerCase().includes('bkr') || w.code === 'BKR');
+             const centralWh = warehouses.find(w => w.code === 'VSHB' || w.warehouse_type === 'CENTRAL');
+             resolvedSourceId = isBkr ? bkrWh?.id : centralWh?.id;
+          }
+          if (!resolvedSourceId) return;
+
+          let headers = {};
+          if (isBkr) {
+            const compRes = await api.get('/api/companies');
+            const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
+            if (jsplCompany) {
+              headers = { 'X-Company-Id': jsplCompany.id };
+            }
+          }
+
+          const res = await api.get(`/api/fc-dispatches/inventory?source_warehouse_id=${resolvedSourceId}`, { headers });
           const loadedInv = res.data.map(item => {
             const existing = products.find(p => p.id === item.id);
             return { ...item, transferQty: existing ? existing.transferQty : '' };
@@ -81,10 +107,11 @@ const BatchDispatchCreator = () => {
       };
       fetchInventory();
     }
-  }, [step, sourceWarehouse]);
+  }, [step, sourceWarehouseId, warehouses, isBkr]);
 
   const handleQtyChange = (id, val) => {
-    const numVal = val === '' ? '' : parseInt(val, 10);
+    let numVal = val === '' ? '' : parseInt(val, 10);
+    if (numVal !== '') numVal = Math.max(0, numVal);
     setInventory(prev => prev.map(item => {
       if (item.id === id) {
         return { ...item, transferQty: numVal > item.currentStock ? item.currentStock : numVal };
@@ -112,7 +139,7 @@ const BatchDispatchCreator = () => {
     const mockDate = new Date().toISOString();
     
     const seller = {
-      name: sourceWarehouse === 'CENTRAL' ? 'Central Warehouse (VSHB)' : 'BKR Main Warehouse',
+      name: isBkr ? 'BKR Main Warehouse' : 'Central Warehouse (VSHB)',
       gstin: '07AABCU9603R1ZM',
       address: 'Industrial Area, Phase 1',
       state: 'Haryana',
@@ -152,6 +179,7 @@ const BatchDispatchCreator = () => {
       totalTax += tax_amount;
 
       return {
+        // Fields for DeliveryChallanRenderer
         product_name_snapshot: p.name,
         sku_snapshot: p.sku,
         hsn_snapshot: '8467',
@@ -160,7 +188,16 @@ const BatchDispatchCreator = () => {
         unit_price: unit_price,
         tax_rate: tax_rate,
         tax_amount: tax_amount,
-        total_price: total
+        total_price: total,
+        
+        // Fields for InvoiceRenderer
+        product_name: p.name,
+        sku: p.sku,
+        hsn_sac: '8467',
+        unit: 'PCS',
+        gst_rate: tax_rate,
+        rate: unit_price,
+        amount: taxable
       };
     });
 
@@ -195,20 +232,50 @@ const BatchDispatchCreator = () => {
   };
 
   const handleSubmit = async () => {
+    setSubmitting(true);
     try {
+      // Resolve source warehouse
+      let resolvedSourceId = sourceWarehouseId;
+      if (!resolvedSourceId) {
+         const bkrWh = warehouses.find(w => w.name?.toLowerCase().includes('bkr') || w.code === 'BKR');
+         const centralWh = warehouses.find(w => w.code === 'VSHB' || w.warehouse_type === 'CENTRAL');
+         resolvedSourceId = isBkr ? bkrWh?.id : centralWh?.id;
+      }
+      
+      let headers = {};
+      if (isBkr) {
+        const compRes = await api.get('/api/companies');
+        const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
+        if (jsplCompany) {
+          headers = { 'X-Company-Id': jsplCompany.id };
+        }
+      }
+
       await api.post('/api/fc-dispatches', {
+        idempotency_key: idempotencyKeyRef.current,
         warehouse_ids: [selectedFC],
         hub_id: selectedHub ? parseInt(selectedHub, 10) : null,
-        source_type: sourceWarehouse === 'CENTRAL' ? 'CENTRAL_WAREHOUSE' : 'BKR',
+        dispatch_type: dispatchType,
+        source_warehouse_id: resolvedSourceId,
         items: products.map(p => ({ product_id: p.id, quantity: p.transferQty }))
-      });
-      alert('Dispatch created successfully');
+      }, { headers });
+      
+      // Reset idempotency key for the next operation
+      idempotencyKeyRef.current = window.crypto.randomUUID();
+      
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatches'] });
+      toast.success('Dispatch created successfully');
       setStep(1);
+      setProducts([]);
+      setInventory([]);
       setSelectedHub('');
       setSelectedFC('');
     } catch (err) {
       console.error(err);
-      alert('Error creating dispatch');
+      toast.error(err.response?.data?.detail || 'Error creating dispatch');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -260,20 +327,28 @@ const BatchDispatchCreator = () => {
                 {/* BKR Card - Only show for BKR Company */}
                 {isBkr && (
                   <div 
-                    className={`${styles.sourceCard} ${sourceWarehouse === 'BKR' ? styles.sourceCardBkrActive : ''}`}
-                    onClick={() => setSourceWarehouse('BKR')}
+                    className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardBkrActive : ''}`}
+                    onClick={() => {
+                        if (dispatchType === 'EMERGENCY') {
+                            alert("EMERGENCY dispatches must originate from VSHB");
+                            return;
+                        }
+                        const bkrWh = warehouses.find(w => w.name?.toLowerCase().includes('bkr') || w.code === 'BKR');
+                        if (bkrWh) setSourceWarehouseId(bkrWh.id);
+                    }}
+                    style={{ opacity: dispatchType === 'EMERGENCY' ? 0.5 : 1, cursor: dispatchType === 'EMERGENCY' ? 'not-allowed' : 'pointer' }}
                   >
                     <div className={styles.sourceHeader}>
                       <div className={styles.sourceTitleGroup}>
-                        <div className={`${styles.sourceIconBox} ${sourceWarehouse === 'BKR' ? styles.sourceIconBoxBkrActive : ''}`}>
+                        <div className={`${styles.sourceIconBox} ${!sourceWarehouseId ? styles.sourceIconBoxBkrActive : ''}`}>
                           <Building2 />
                         </div>
                         <div>
-                          <h3 className={`${styles.sourceTitle} ${sourceWarehouse === 'BKR' ? styles.sourceTitleBkrActive : ''}`}>BKR Main Warehouse</h3>
+                          <h3 className={`${styles.sourceTitle} ${!sourceWarehouseId ? styles.sourceTitleBkrActive : ''}`}>BKR Main Warehouse</h3>
                           <p className={styles.sourceSubtitle}>External Replenishment</p>
                         </div>
                       </div>
-                      {sourceWarehouse === 'BKR' && (
+                      {!sourceWarehouseId && (
                         <div className={`${styles.sourceCheck} ${styles.sourceCheckBkr}`}>
                           <Check size={16} strokeWidth={3} />
                         </div>
@@ -289,20 +364,23 @@ const BatchDispatchCreator = () => {
                 {/* Central Card - Only show for JSPL Company */}
                 {!isBkr && (
                   <div 
-                    className={`${styles.sourceCard} ${sourceWarehouse === 'CENTRAL' ? styles.sourceCardCentralActive : ''}`}
-                    onClick={() => setSourceWarehouse('CENTRAL')}
+                    className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardCentralActive : ''}`}
+                    onClick={() => {
+                        const centralWh = warehouses.find(w => w.code === 'VSHB' || w.warehouse_type === 'CENTRAL');
+                        if (centralWh) setSourceWarehouseId(centralWh.id);
+                    }}
                   >
                     <div className={styles.sourceHeader}>
                       <div className={styles.sourceTitleGroup}>
-                        <div className={`${styles.sourceIconBox} ${sourceWarehouse === 'CENTRAL' ? styles.sourceIconBoxCentralActive : ''}`}>
+                        <div className={`${styles.sourceIconBox} ${!sourceWarehouseId ? styles.sourceIconBoxCentralActive : ''}`}>
                           <Truck />
                         </div>
                         <div>
-                          <h3 className={`${styles.sourceTitle} ${sourceWarehouse === 'CENTRAL' ? styles.sourceTitleCentralActive : ''}`}>Central Warehouse</h3>
+                          <h3 className={`${styles.sourceTitle} ${!sourceWarehouseId ? styles.sourceTitleCentralActive : ''}`}>Central Warehouse</h3>
                           <p className={styles.sourceSubtitle}>Internal Distribution</p>
                         </div>
                       </div>
-                      {sourceWarehouse === 'CENTRAL' && (
+                      {!sourceWarehouseId && (
                         <div className={`${styles.sourceCheck} ${styles.sourceCheckCentral}`}>
                           <Check size={16} strokeWidth={3} />
                         </div>
@@ -314,6 +392,18 @@ const BatchDispatchCreator = () => {
                     </div>
                   </div>
                 )}
+              </div>
+              
+              <div style={{marginTop: '20px', marginBottom: '20px'}}>
+                  <h3 className={styles.stepTitle} style={{fontSize: '16px', marginBottom: '10px'}}>Dispatch Type</h3>
+                  <select 
+                    value={dispatchType}
+                    onChange={(e) => setDispatchType(e.target.value)}
+                    style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100%', maxWidth: '300px' }}
+                  >
+                    <option value="STANDARD">STANDARD</option>
+                    <option value="EMERGENCY">EMERGENCY (VSHB Only)</option>
+                  </select>
               </div>
 
               <div className={styles.actionRow}>
@@ -417,7 +507,7 @@ const BatchDispatchCreator = () => {
               </div>
 
               {loadingInventory ? (
-                <p>Loading inventory from {sourceWarehouse} warehouse...</p>
+                <p>Loading inventory...</p>
               ) : (
                 <div className={styles.tableContainer}>
                   <table className={styles.table}>
@@ -449,7 +539,7 @@ const BatchDispatchCreator = () => {
                       ))}
                       {inventory.length === 0 && (
                         <tr>
-                          <td colSpan="4" style={{textAlign: 'center', padding: '24px'}}>No inventory available at {sourceWarehouse} warehouse.</td>
+                          <td colSpan="4" style={{textAlign: 'center', padding: '24px'}}>No inventory available at selected source warehouse.</td>
                         </tr>
                       )}
                     </tbody>
@@ -472,7 +562,7 @@ const BatchDispatchCreator = () => {
                 <CheckCircle color="#10b981" size={24} style={{marginTop: '2px'}} />
                 <div>
                   <h3 style={{fontWeight: 'bold', color: '#065f46', margin: '0 0 4px 0'}}>All Stock Validated</h3>
-                  <p style={{color: '#047857', margin: 0}}>Sufficient inventory is available at {sourceWarehouse} for this dispatch request.</p>
+                  <p style={{color: '#047857', margin: 0}}>Sufficient inventory is available for this dispatch request.</p>
                 </div>
               </div>
               <div style={{marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px'}}>
@@ -532,7 +622,7 @@ const BatchDispatchCreator = () => {
               </div>
               <h2 style={{fontSize: '30px', fontWeight: 'bold', color: '#1f2937', marginBottom: '16px'}}>Confirm Batch Dispatch</h2>
               <p style={{fontSize: '18px', color: '#4b5563', lineHeight: 1.6, marginBottom: '32px'}}>
-                You are about to dispatch <strong style={{color: '#111827'}}>{products.reduce((acc, p) => acc + p.transferQty, 0)}</strong> items from <strong style={{color: '#111827'}}>{sourceWarehouse === 'CENTRAL' ? 'Central Warehouse' : 'BKR Main Warehouse'}</strong> to FC <strong style={{color: '#111827'}}>{warehouses.find(w => w.id === selectedFC)?.name || `#${selectedFC}`}</strong>.
+                You are about to dispatch <strong style={{color: '#111827'}}>{products.reduce((acc, p) => acc + p.transferQty, 0)}</strong> items as <strong style={{color: '#111827'}}>{dispatchType}</strong> to FC <strong style={{color: '#111827'}}>{warehouses.find(w => w.id === selectedFC)?.name || `#${selectedFC}`}</strong>.
               </p>
               <div style={{backgroundColor: '#fefce8', color: '#854d0e', padding: '16px', borderRadius: '8px', border: '1px solid #fef08a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '32px', fontSize: '14px'}}>
                 <CheckCircle size={16} /> All documents will be generated and logged automatically.
@@ -541,6 +631,7 @@ const BatchDispatchCreator = () => {
                 <button 
                   style={{backgroundColor: '#2563eb', color: 'white', padding: '16px 32px', borderRadius: '12px', fontWeight: 'bold', fontSize: '18px', border: 'none', cursor: 'pointer', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
                   onClick={handleSubmit}
+                  disabled={submitting}
                 >
                   <Package /> Generate Final Dispatch Documents
                 </button>

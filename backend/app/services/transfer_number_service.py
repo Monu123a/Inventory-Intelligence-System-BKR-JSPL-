@@ -1,7 +1,7 @@
-import re
 from datetime import date
 from sqlalchemy.orm import Session
-from app.models.schema import StockTransfer, Company
+from app.models.schema import Company, DocumentTypeEnum
+from app.services.document_number_service import DocumentNumberService
 
 def _get_fiscal_year_string(d: date) -> str:
     start_year = d.year if d.month >= 4 else d.year - 1
@@ -16,26 +16,12 @@ class TransferNumberService:
         
         company = db.query(Company).filter(Company.id == company_id).first()
         company_code = company.code if company else "CMP"
+        prefix = f"TRF/{company_code}"
 
-        prefix = f"TRF/{company_code}/{fy}/"
-        
-        # Get all transfers with this prefix to find the max sequence
-        matching_transfers = (
-            db.query(StockTransfer)
-            .filter(StockTransfer.from_company_id == company_id)
-            .filter(StockTransfer.transfer_number.startswith(prefix))
-            .with_for_update()
-            .all()
+        return DocumentNumberService.generate_number(
+            db=db,
+            company_id=company_id,
+            document_type=DocumentTypeEnum.TRANSFER,
+            fiscal_year=fy,
+            prefix_override=prefix
         )
-        
-        seq = 1
-        for t in matching_transfers:
-            # Extract the sequence number from the last segment, handling any suffixes
-            last_segment = t.transfer_number.split('/')[-1]
-            # Extract only the leading digits (handles "0001", "0001-BO", etc.)
-            match = re.match(r'^(\d+)', last_segment)
-            if match:
-                num = int(match.group(1))
-                seq = max(seq, num + 1)
-                
-        return f"{prefix}{seq:04d}"

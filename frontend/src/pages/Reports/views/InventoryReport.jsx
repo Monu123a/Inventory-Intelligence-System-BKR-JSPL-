@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import { reportsService } from '../../../services/reports';
 import { DataTable } from '../../../components/DataTable';
 import { ReportToolbar } from '../../../components/Reporting/ReportToolbar';
 import { FiFilter } from 'react-icons/fi';
@@ -31,8 +31,7 @@ export const InventoryReport = () => {
       if (fcCode) params.fc_code = fcCode;
       if (gstin) params.gstin = gstin;
       
-      const res = await api.get('/api/business-reports/inventory', { params });
-      return res.data;
+      return reportsService.getInventoryReport(params);
     }
   });
 
@@ -44,10 +43,9 @@ export const InventoryReport = () => {
     { key: 'sku', label: 'SKU' },
     { key: 'product_name', label: 'Product' },
     { key: 'warehouse_name', label: 'Warehouse' },
-    { key: 'on_hand', label: 'On Hand' },
-    { key: 'reserved', label: 'Reserved' },
-    { key: 'available', label: 'Available' },
-    { key: 'status', label: 'Status' }
+    { key: 'current_qty', label: 'On Hand' },
+    { key: 'reserved_qty', label: 'Reserved' },
+    { key: 'available_qty', label: 'Available' }
   ];
 
   return (

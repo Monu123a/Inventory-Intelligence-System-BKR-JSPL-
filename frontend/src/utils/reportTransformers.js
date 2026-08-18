@@ -7,8 +7,8 @@ export const buildJoinedDataset = (inventory, products, warehouses) => {
 
   // Group inventory by SKU
   const invBySku = inventory.reduce((acc, inv) => {
-    if (!acc[inv.product_sku]) acc[inv.product_sku] = [];
-    acc[inv.product_sku].push(inv);
+    if (!acc[inv.product?.sku]) acc[inv.product?.sku] = [];
+    acc[inv.product?.sku].push(inv);
     return acc;
   }, {});
 
@@ -106,7 +106,7 @@ export const buildWarehouseSummary = (joinedData, warehouses) => {
     
     return {
       warehouse_name: wh.name,
-      total_products: new Set(whInv.map(i => i.product_sku)).size,
+      total_products: new Set(whInv.map(i => i.product?.sku)).size,
       total_inventory: totalInv,
       low_stock_count: lowStock,
       negative_stock_count: negStock

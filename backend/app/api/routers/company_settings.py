@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.db import get_db
 from app.models.schema import CompanySettings
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_admin
 
 
 router = APIRouter(prefix="/settings", tags=["Company Settings"])
@@ -75,7 +75,12 @@ def get_settings(company_id: int = Depends(get_current_company_id), db: Session 
 
 
 @router.put("/", response_model=CompanySettingsResponse)
-def update_settings(payload: CompanySettingsUpdate, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def update_company_settings(
+    payload: CompanySettingsUpdate,
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db),
+    admin_user = Depends(require_admin)
+):
     settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
     if not settings:
         settings = CompanySettings(company_id=company_id)
@@ -88,4 +93,3 @@ def update_settings(payload: CompanySettingsUpdate, company_id: int = Depends(ge
     db.commit()
     db.refresh(settings)
     return get_settings(company_id=company_id, db=db)
-

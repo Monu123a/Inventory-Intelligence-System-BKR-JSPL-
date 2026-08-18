@@ -41,7 +41,7 @@ const Inventory = () => {
   };
 
   const columns = [
-    { key: 'product_sku', label: 'SKU' },
+    { key: 'product?.sku', label: 'SKU', render: (val, row) => row.product?.sku || val },
     { key: 'product_name', label: 'Product Name' },
     { key: 'warehouse_name', label: 'Warehouse' },
     { 
@@ -81,7 +81,7 @@ const Inventory = () => {
           <button 
             className={styles.iconBtn} 
             title="View History"
-            onClick={() => navigate(`${ROUTES.INVENTORY_HISTORY}?sku=${row.product_sku}`)}
+            onClick={() => navigate(`${ROUTES.INVENTORY_HISTORY}?sku=${row.product?.sku}`)}
           >
             <FiClock />
           </button>
@@ -132,7 +132,7 @@ const Inventory = () => {
               <tr><td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>No inventory records found.</td></tr>
             ) : (
               inventoryData?.map((row, i) => (
-                <TableRow key={`${row.product_sku}-${row.warehouse_id}-${i}`} row={row} columns={columns} />
+                <TableRow key={`${row.product?.sku}-${row.warehouse_id}-${i}`} row={row} columns={columns} />
               ))
             )}
           </tbody>

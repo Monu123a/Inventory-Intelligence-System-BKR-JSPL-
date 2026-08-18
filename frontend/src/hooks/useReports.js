@@ -1,8 +1,9 @@
 import useCompanyStore from '../stores/useCompanyStore';
 import { useQuery } from '@tanstack/react-query';
-import * as inventoryService from '../services/inventory';
-import * as productService from '../services/products';
-import * as warehouseService from '../services/warehouses';
+import { inventoryService } from '../services/inventory';
+import { productService } from '../services/products';
+import { warehouseService } from '../services/warehouse';
+import { reportsService } from '../services/reports';
 import api from '../services/api';
 import { useMemo } from 'react';
 import { 
@@ -21,9 +22,9 @@ export const useReports = ({ reportType = 'LOW_STOCK', search = '', warehouseId 
   const companyId = useCompanyStore((state) => state.companyId);
   const invQuery = useQuery({ queryKey: ['inventory', 'all', companyId], queryFn: () => inventoryService.getInventory(null) });
   const prodQuery = useQuery({ queryKey: ['products', companyId], queryFn: () => productService.getProducts(), enabled: !!companyId });
-  const whQuery = useQuery({ queryKey: ['warehouses', companyId], queryFn: warehouseService.getWarehouses });
-  const returnsQuery = useQuery({ queryKey: ['reports', 'returns', companyId], queryFn: async () => (await api.get('/api/reports/returns/amazon-returns')).data, enabled: reportType === 'AMAZON_RETURNS' });
-  const defectiveQuery = useQuery({ queryKey: ['reports', 'defective', companyId], queryFn: async () => (await api.get('/api/reports/returns/defective-inventory')).data, enabled: reportType === 'DEFECTIVE_INVENTORY' });
+  const whQuery = useQuery({ queryKey: ['warehouses', companyId], queryFn: () => warehouseService.getWarehouses() });
+  const returnsQuery = useQuery({ queryKey: ['reports', 'returns', companyId], queryFn: () => reportsService.getAmazonReturns(), enabled: reportType === 'AMAZON_RETURNS' });
+  const defectiveQuery = useQuery({ queryKey: ['reports', 'defective', companyId], queryFn: () => reportsService.getDefectiveInventory(), enabled: reportType === 'DEFECTIVE_INVENTORY' });
 
   const rawInventory = invQuery.data ?? EMPTY_ARRAY;
   const products = prodQuery.data ?? EMPTY_ARRAY;

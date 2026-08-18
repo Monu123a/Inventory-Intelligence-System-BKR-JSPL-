@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+import logging
 
 import requests
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.models.schema import Sale, Company, CompanySettings
 from app.services.tally_payload_builder import TallyPayloadBuilder
 from app.services.audit_log_service import AuditLogService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -131,6 +134,7 @@ class TallyIntegrationService:
 
         except Exception as exc:
             error_msg = f"Tally sync exception: {str(exc)}"
+            logger.error(error_msg, exc_info=True)
             sale.tally_sync_status = "FAILED"
             sale.tally_sync_at = datetime.utcnow()
             sale.tally_error_message = error_msg

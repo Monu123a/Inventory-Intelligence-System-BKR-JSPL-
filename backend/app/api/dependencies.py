@@ -73,7 +73,8 @@ def get_current_company_id(
         raise HTTPException(status_code=400, detail="X-Company-Id must be an integer")
 
     # Validate that company exists
-    company = db.query(Company).filter(Company.id == company_id, Company.status == "Active").first()
+    from sqlalchemy import func
+    company = db.query(Company).filter(Company.id == company_id, func.lower(Company.status) == "active").first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found or inactive")
 
@@ -85,3 +86,48 @@ def get_current_company_id(
         raise HTTPException(status_code=403, detail="You do not have permission to access this company")
 
     return company_id
+
+def require_admin(
+    current_user: User = Depends(get_current_user),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    is_admin = False
+    
+    # Check if user is global Admin or Super Admin
+    if current_user.role.upper() in ["ADMIN", "SUPER_ADMIN"]:
+        is_admin = True
+    else:
+        # Check if user is Admin for this specific company
+        company_access = db.query(CompanyUser).filter(
+            CompanyUser.user_id == current_user.id,
+            CompanyUser.company_id == company_id
+        ).first()
+        
+        if company_access and company_access.role and company_access.role.upper() in ["ADMIN", "SUPER_ADMIN"]:
+            is_admin = True
+            
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized. Admin access required.")
+
+    return current_user
+
+def require_manager(
+    current_user: User = Depends(get_current_user),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    # Check if user is global Admin/Super Admin/Manager
+    if current_user.role.upper() in ["ADMIN", "SUPER_ADMIN", "MANAGER"]:
+        return current_user
+        
+    # Check if user has required role for this specific company
+    company_access = db.query(CompanyUser).filter(
+        CompanyUser.user_id == current_user.id,
+        CompanyUser.company_id == company_id
+    ).first()
+    
+    if company_access and company_access.role and company_access.role.upper() in ["ADMIN", "SUPER_ADMIN", "MANAGER"]:
+        return current_user
+        
+    raise HTTPException(status_code=403, detail="Not authorized. Manager or Admin access required.")

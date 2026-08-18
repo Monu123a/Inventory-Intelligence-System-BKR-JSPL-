@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { posService } from '../../services/pos';
+import { handleApiError } from '../../utils/errorHandler';
 import styles from './POSPage.module.css';
 import { FiX, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 
@@ -72,7 +74,10 @@ const POSPage = () => {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [error, setError] = useState('');
-  const [checkingOut, setCheckingOut] = useState(false);
+
+  const idempotencyKeyRef = useRef(window.crypto.randomUUID());
+
+  const queryClient = useQueryClient();
 
   // New: Invoice Type
   const [invoiceType, setInvoiceType] = useState('B2C');
@@ -95,7 +100,26 @@ const POSPage = () => {
   // GSTIN validation state
   const [gstinError, setGstinError] = useState('');
 
-  const searchTimeout = useRef(null);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const { data: searchData } = useQuery({
+    queryKey: ['posSearch', debouncedSearchTerm],
+    queryFn: () => posService.searchProducts(debouncedSearchTerm),
+    enabled: debouncedSearchTerm.length >= 2,
+  });
+
+  useEffect(() => {
+    if (debouncedSearchTerm.length >= 2 && searchData) {
+      setSearchResults(searchData);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchData, debouncedSearchTerm]);
 
   // Determine if inter-state (IGST) or intra-state (CGST+SGST)
   // Compare company state code with place of supply state code
@@ -106,29 +130,6 @@ const POSPage = () => {
       const found = INDIAN_STATES.find(s => s.name === customerInfo.place_of_supply);
       return found ? found.code !== companyStateCode : false;
     })();
-
-  // ---------------------------------------------------------------------------
-  // Search (preserved from existing code)
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    if (searchTerm.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-    searchTimeout.current = setTimeout(async () => {
-      try {
-        const response = await api.get(`/api/pos/products/search?q=${encodeURIComponent(searchTerm)}`);
-        setSearchResults(response.data);
-      } catch (err) {
-        console.error("Search failed", err);
-      }
-    }, 300);
-
-    return () => clearTimeout(searchTimeout.current);
-  }, [searchTerm]);
 
   // ---------------------------------------------------------------------------
   // GSTIN auto-fill state code when GSTIN changes
@@ -268,9 +269,41 @@ const POSPage = () => {
   const hasUnconfirmedGst = cart.some(item => item.gst_needs_confirmation);
 
   // ---------------------------------------------------------------------------
-  // Checkout (extended payload)
+  // Checkout Mutation
   // ---------------------------------------------------------------------------
-  const handleCheckout = async () => {
+  const checkoutMutation = useMutation({
+    mutationFn: posService.checkout,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      
+      const receipt = data.receipt;
+      const saleId = receipt?.id;
+
+      // Reset form
+      setCart([]);
+      setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
+      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '' });
+      setPaymentReference('');
+      setSearchTerm('');
+      
+      // Regenerate idempotency key for the next operation
+      idempotencyKeyRef.current = window.crypto.randomUUID();
+
+      if (!receipt?.id) return;
+
+      // Navigate to invoice preview (route-based)
+      if (saleId) {
+        navigate(`/sales/${saleId}/invoice`, { state: { receipt } });
+      }
+    },
+    onError: (err) => {
+      handleApiError(err, "Checkout failed");
+    }
+  });
+
+  const handleCheckout = () => {
     if (cart.length === 0) return;
     if (hasUnconfirmedGst) {
       setError("Please confirm the 0% GST rate for highlighted items.");
@@ -292,77 +325,61 @@ const POSPage = () => {
         setError("Customer name is required for B2B invoices.");
         return;
       }
+      if (!customerInfo.state || !customerInfo.place_of_supply) {
+        setError("State and Place of Supply are required for B2B invoices.");
+        return;
+      }
     }
 
     setError('');
-    setCheckingOut(true);
 
-    try {
-      const payload = {
-        invoice_type: invoiceType,
-        customer_name: customerInfo.name || null,
-        customer_mobile: customerInfo.mobile || null,
-        customer_gstin: customerInfo.gstin || null,
-        customer_address: customerInfo.address || null,
-        customer_state: customerInfo.state || null,
-        customer_state_code: customerInfo.state_code || null,
-        place_of_supply: customerInfo.place_of_supply || null,
-        customer_email: customerInfo.email || null,
-        customer_phone: customerInfo.phone || null,
+    const payload = {
+      idempotency_key: idempotencyKeyRef.current,
+      invoice_type: invoiceType,
+      customer_name: customerInfo.name || null,
+      customer_mobile: customerInfo.mobile || null,
+      customer_gstin: customerInfo.gstin || null,
+      customer_address: customerInfo.address || null,
+      customer_state: customerInfo.state || null,
+      customer_state_code: customerInfo.state_code || null,
+      place_of_supply: customerInfo.place_of_supply || null,
+      customer_email: customerInfo.email || null,
+      customer_phone: customerInfo.phone || null,
 
-        payment_terms: invoiceInfo.payment_terms || null,
-        delivery_note: invoiceInfo.delivery_note || null,
-        delivery_note_date: invoiceInfo.delivery_note_date || null,
-        dispatch_document_number: invoiceInfo.dispatch_document_number || null,
-        dispatch_through: invoiceInfo.dispatch_through || null,
-        destination: invoiceInfo.destination || null,
-        vehicle_number: invoiceInfo.vehicle_number || null,
-        lr_rr_number: invoiceInfo.lr_rr_number || null,
-        terms_of_delivery: invoiceInfo.terms_of_delivery || null,
+      payment_terms: invoiceInfo.payment_terms || null,
+      delivery_note: invoiceInfo.delivery_note || null,
+      delivery_note_date: invoiceInfo.delivery_note_date || null,
+      dispatch_document_number: invoiceInfo.dispatch_document_number || null,
+      dispatch_through: invoiceInfo.dispatch_through || null,
+      destination: invoiceInfo.destination || null,
+      vehicle_number: invoiceInfo.vehicle_number || null,
+      lr_rr_number: invoiceInfo.lr_rr_number || null,
+      terms_of_delivery: invoiceInfo.terms_of_delivery || null,
 
-        payment_method: paymentMethod,
-        payment_reference: paymentReference || null,
-        total_taxable_amount: totals.taxable,
-        total_tax: totals.tax,
-        grand_total: totals.grand,
-        items: cart.map(item => ({
-          product_id: item.product_id,
-          sku: item.sku,
-          product_name: item.product_name || item.name,
-          hsn_sac: item.hsn_sac || null,
-          unit: item.unit || null,
-          quantity: item.quantity,
-          selling_price: item.selling_price,
-          discount: item.discount,
-          gst_rate: item.gst_rate,
-          taxable_amount: item.taxable_amount,
-          cgst: item.cgst,
-          sgst: item.sgst,
-          igst: item.igst,
-          line_total: item.line_total,
-        })),
-      };
+      payment_method: paymentMethod,
+      payment_reference: paymentReference || null,
+      total_taxable_amount: totals.taxable,
+      total_tax: totals.tax,
+      grand_total: totals.grand,
+      items: cart.map(item => ({
+        product_id: item.product_id,
+        sku: item.sku,
+        product_name: item.product_name || item.name,
+        hsn_sac: item.hsn_sac || null,
+        unit: item.unit || null,
+        quantity: item.quantity,
+        selling_price: item.selling_price,
+        discount: item.discount,
+        gst_rate: item.gst_rate,
+        taxable_amount: item.taxable_amount,
+        cgst: item.cgst,
+        sgst: item.sgst,
+        igst: item.igst,
+        line_total: item.line_total,
+      })),
+    };
 
-      const res = await api.post('/api/pos/sale', payload);
-      const receipt = res.data.receipt;
-      const saleId = receipt?.id;
-
-      // Reset form
-      setCart([]);
-      setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
-      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '' });
-      setPaymentReference('');
-      setSearchTerm('');
-
-      // Navigate to invoice preview (route-based)
-      if (saleId) {
-        navigate(`/sales/${saleId}/invoice`, { state: { receipt } });
-      }
-    } catch (err) {
-      setError(err.response?.data?.detail || "Checkout failed");
-    } finally {
-      setCheckingOut(false);
-    }
+    checkoutMutation.mutate(payload);
   };
 
   // Helper to update nested state
@@ -685,10 +702,10 @@ const POSPage = () => {
 
           <button
             className={styles.checkoutBtn}
-            disabled={cart.length === 0 || hasUnconfirmedGst || checkingOut}
+            disabled={cart.length === 0 || hasUnconfirmedGst || checkoutMutation.isPending}
             onClick={handleCheckout}
           >
-            {checkingOut ? 'Processing…' : hasUnconfirmedGst ? "Confirm GST Rates" : `Complete Sale — ₹${totals.grand.toFixed(2)}`}
+            {checkoutMutation.isPending ? 'Processing…' : hasUnconfirmedGst ? "Confirm GST Rates" : `Complete Sale — ₹${totals.grand.toFixed(2)}`}
           </button>
         </div>
       </div>

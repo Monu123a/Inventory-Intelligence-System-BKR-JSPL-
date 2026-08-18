@@ -1,37 +1,34 @@
-import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
-import api from '../../services/api';
+import { warehouseService } from '../../services/warehouse';
+import { inventoryService } from '../../services/inventory';
+import { handleApiError } from '../../utils/errorHandler';
 
 const WarehouseDetailPage = () => {
   const { id } = useParams();
-  const [warehouse, setWarehouse] = useState(null);
-  const [inventory, setInventory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    const fetchDetails = async () => {
-      try {
-        setLoading(true);
-        // Assuming there is an endpoint to get single warehouse details
-        const whResponse = await api.get(`/api/warehouses/${id}`);
-        setWarehouse(whResponse.data);
+  const { data: warehouse, isLoading: loadingWarehouse, error: warehouseError } = useQuery({
+    queryKey: ['warehouse', id],
+    queryFn: () => warehouseService.getWarehouseById(id)
+  });
 
-        // Fetch inventory to calculate summary
-        const invResponse = await api.get('/api/warehouse-inventory');
-        setInventory(invResponse.data || []);
-        setError('');
-      } catch (err) {
-        console.error(err);
-        setError('Failed to load warehouse details');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDetails();
-  }, [id]);
+  if (warehouseError) {
+    handleApiError(warehouseError, 'Failed to load warehouse details');
+  }
+
+  const { data: inventory = [], isLoading: loadingInventory, error: inventoryError } = useQuery({
+    queryKey: ['inventory', { warehouse_id: id }],
+    queryFn: () => inventoryService.getInventory({ warehouse_id: id })
+  });
+
+  if (inventoryError) {
+    handleApiError(inventoryError, 'Failed to load inventory for warehouse');
+  }
+
+  const loading = loadingWarehouse || loadingInventory;
+  const error = warehouseError ? 'Failed to load warehouse details' : (inventoryError ? 'Failed to load inventory' : '');
 
   if (loading) {
     return <PageContainer title={`Warehouse Details - ${id}`}><p>Loading...</p></PageContainer>;

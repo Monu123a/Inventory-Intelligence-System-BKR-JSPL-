@@ -82,7 +82,7 @@ class ReplenishmentService:
         if recommendations_created == 0:
             run.reason = "No replenishment required."
             
-        db.commit()
+        db.flush()
         return run
 
     @staticmethod

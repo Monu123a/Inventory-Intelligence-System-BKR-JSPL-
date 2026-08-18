@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import List
 from app.models.context import ExecutionContext, LogLevel
 from app.plugins.plugin_registry import PluginRegistry
 

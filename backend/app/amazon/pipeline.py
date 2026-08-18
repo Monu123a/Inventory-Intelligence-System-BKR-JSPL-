@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.db import SessionLocal
-from app.models.schema import Product, Warehouse, InventoryMovement, AmazonSyncLog, Inventory
+from app.models.schema import Product, Warehouse, InventoryMovement, AmazonSyncLog
 from app.services.inventory_event_engine import InventoryEventEngine
 from app.amazon.mock_orders import get_mock_shipped_orders
 

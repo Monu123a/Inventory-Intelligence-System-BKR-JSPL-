@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional, Any
-from pydantic import BaseModel, ConfigDict
+from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
 from app.models.db import get_db
 from app.api.dependencies import get_current_company_id, get_current_user
 from app.services.delivery_challan_service import DeliveryChallanService
@@ -15,7 +15,7 @@ class DeliveryChallanItemCreate(BaseModel):
     product_name_snapshot: Optional[str] = None
     hsn_snapshot: Optional[str] = None
     unit_snapshot: Optional[str] = None
-    quantity: int
+    quantity: int = Field(..., gt=0)
     unit_price: float = 0.0
     tax_rate: float = 0.0
     tax_amount: float = 0.0

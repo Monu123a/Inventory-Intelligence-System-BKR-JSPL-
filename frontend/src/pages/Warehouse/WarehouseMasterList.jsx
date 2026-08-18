@@ -3,7 +3,8 @@ import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import { SearchBar } from '../../components/forms/SearchBar';
-import api from '../../services/api';
+import { stateHubService } from '../../services/stateHubService';
+import { warehouseService } from '../../services/warehouse';
 import styles from './Warehouse.module.css';
 
 const WarehouseMasterList = () => {
@@ -17,20 +18,20 @@ const WarehouseMasterList = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [whRes, hubsRes] = await Promise.all([
-          api.get('/api/warehouses'),
-          api.get('/api/state-hubs')
+        const [whData, hubData] = await Promise.all([
+          warehouseService.getWarehouses(),
+          stateHubService.getAll()
         ]);
         
         // Map hubs for quick lookup
         const hubMap = {};
-        if (hubsRes.data) {
-          hubsRes.data.forEach(h => {
+        if (hubData) {
+          hubData.forEach(h => {
             hubMap[h.id] = h;
           });
         }
         setHubs(hubMap);
-        setWarehouses(whRes.data || []);
+        setWarehouses(whData || []);
       } catch (err) {
         setError('Failed to load warehouses');
       } finally {

@@ -18,11 +18,9 @@ class AccountingConnector(ABC):
         Takes a list of InvoiceDTOs (to support batching natively) and returns
         the generated payload (e.g., XML string) and status.
         """
-        pass
 
     @abstractmethod
     def generate_master_export(self, master_type: str, entities: List[dict]) -> AccountingExportResult:
         """
         Generates master sync payload for Customers, Products, etc.
         """
-        pass

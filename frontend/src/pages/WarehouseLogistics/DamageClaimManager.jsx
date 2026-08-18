@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
+import React from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { damageService } from '../../services/damageService';
+import { handleApiError } from '../../utils/errorHandler';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
@@ -7,31 +9,25 @@ import Button from '../../components/forms/Button';
 import styles from '../Warehouse/Warehouse.module.css';
 
 const DamageClaimManager = () => {
-  const [claims, setClaims] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchClaims();
-  }, []);
+  const { data: claims = [], isLoading: loading } = useQuery({
+    queryKey: ['damageClaims'],
+    queryFn: () => damageService.getClaims()
+  });
 
-  const fetchClaims = () => {
-    setLoading(true);
-    api.get('/api/damage-claims')
-      .then(res => setClaims(Array.isArray(res.data) ? res.data : []))
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
-  };
+  const updateClaimMutation = useMutation({
+    mutationFn: ({ id, status }) => damageService.updateClaimStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['damageClaims'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+    onError: handleApiError
+  });
 
-  const handleUpdateStatus = async (id, status) => {
+  const handleUpdateStatus = (id, status) => {
     if (!window.confirm(`Are you sure you want to ${status.toLowerCase()} this claim?`)) return;
-    
-    try {
-      await api.patch(`/api/damage-claims/${id}/status`, { status });
-      fetchClaims();
-    } catch (err) {
-      console.error(err);
-      alert('Error updating claim status');
-    }
+    updateClaimMutation.mutate({ id, status });
   };
 
   const columns = [
@@ -68,29 +64,29 @@ const DamageClaimManager = () => {
                       id: claim.id,
                       itemDetails: (
                         <div>
-                          <div style={{ fontWeight: '500', color: '#111827' }}>{claim.item}</div>
+                          <div style={{ fontWeight: '500', color: '#111827' }}>{claim.product_sku}</div>
                           {claim.description && <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>{claim.description}</div>}
                         </div>
                       ),
-                      date: claim.date ? new Date(claim.date).toLocaleDateString() : '-',
+                      date: claim.created_at ? new Date(claim.created_at).toLocaleDateString() : '-',
                       status: (
                         <span style={{
                           padding: '4px 8px',
                           borderRadius: '12px',
                           fontSize: '0.75rem',
                           fontWeight: '600',
-                          backgroundColor: claim.status === 'APPROVED' ? '#dcfce7' : claim.status === 'REJECTED' ? '#fee2e2' : '#fef9c3',
-                          color: claim.status === 'APPROVED' ? '#166534' : claim.status === 'REJECTED' ? '#991b1b' : '#854d0e'
+                          backgroundColor: claim.claim_status === 'Approved' ? '#dcfce7' : claim.claim_status === 'Rejected' ? '#fee2e2' : '#fef9c3',
+                          color: claim.claim_status === 'Approved' ? '#166534' : claim.claim_status === 'Rejected' ? '#991b1b' : '#854d0e'
                         }}>
-                          {claim.status || 'PENDING'}
+                          {claim.claim_status || 'Pending'}
                         </span>
                       ),
-                      actions: (claim.status === 'PENDING' || !claim.status) ? (
+                      actions: (claim.claim_status === 'Pending' || !claim.claim_status) ? (
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <Button variant="secondary" size="small" onClick={() => handleUpdateStatus(claim.id, 'APPROVED')} style={{ color: '#166534', borderColor: '#bbf7d0', backgroundColor: '#f0fdf4' }}>
+                          <Button variant="secondary" size="small" onClick={() => handleUpdateStatus(claim.id, 'Approved')} style={{ color: '#166534', borderColor: '#bbf7d0', backgroundColor: '#f0fdf4' }}>
                             Approve
                           </Button>
-                          <Button variant="secondary" size="small" onClick={() => handleUpdateStatus(claim.id, 'REJECTED')} style={{ color: '#991b1b', borderColor: '#fecaca', backgroundColor: '#fef2f2' }}>
+                          <Button variant="secondary" size="small" onClick={() => handleUpdateStatus(claim.id, 'Rejected')} style={{ color: '#991b1b', borderColor: '#fecaca', backgroundColor: '#fef2f2' }}>
                             Reject
                           </Button>
                         </div>

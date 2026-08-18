@@ -9,11 +9,16 @@ const InvoiceHeader = ({ company, invoiceType, tallyData }) => {
   return (
     <div className={styles.header}>
       <div className={styles.logoContainer}>
-        {company?.logo_url ? (
-          <img src={company.logo_url} alt="Company Logo" className={styles.companyLogo} />
-        ) : (
-          <h1 className={styles.partyName}>{company?.name}</h1>
-        )}
+        <img 
+          src={company?.logo_url || "/logo.png"} 
+          alt="Company Logo" 
+          className={styles.companyLogo} 
+          onError={(e) => {
+            e.target.style.display = 'none';
+            if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
+          }} 
+        />
+        <h1 className={styles.partyName} style={{ display: (company?.logo_url || '/logo.png') ? 'none' : 'block' }}>{company?.name}</h1>
       </div>
       
       <div className={styles.titleBox}>

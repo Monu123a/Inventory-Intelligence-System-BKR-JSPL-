@@ -1,6 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.models.schema import StockTransfer, Inventory, InventoryMovement, Product
+from app.models.schema import StockTransfer, Inventory, Product
+from app.models.schema import SaleItem, StockTransferItem
+from app.services.inventory_event_engine import InventoryEventEngine
+from app.models.schema import Warehouse
+from app.services.transfer_number_service import TransferNumberService
+from app.services.audit_log_service import AuditLogService
 
 class StockTransferService:
     @staticmethod
@@ -12,18 +16,13 @@ class StockTransferService:
             raise ValueError("Transfer is not in Pending state")
         transfer.status = "Approved"
         transfer.approved_by = user_id
-        db.commit()
+        db.flush()
         return transfer
 
     @staticmethod
-    def complete_transfer(db: Session, transfer_id: int, invoice_id: int, user_id: int):
-        from app.models.schema import Sale, SaleItem, StockTransferItem
-        from app.services.transfer_number_service import TransferNumberService
-        from datetime import datetime
-
-        transfer = db.query(StockTransfer).filter(StockTransfer.id == transfer_id).first()
-        if not transfer or transfer.status != "Pending":
-            raise ValueError("Transfer cannot be completed. It might already be processed or not in Pending state.")
+    def complete_transfer_locked(db: Session, transfer: StockTransfer, invoice_id: int, user_id: int):
+        if transfer.status not in ("Pending", "Approved"):
+            raise ValueError("Transfer cannot be completed. It might already be processed.")
             
         # Get actual quantities fulfilled from the invoice
         fulfilled_qty_map = {}
@@ -53,7 +52,6 @@ class StockTransferService:
 
             # ===== ADD to DESTINATION (JSPL) =====
             # check dest_warehouse first
-            from app.models.schema import Warehouse
             dest_warehouse = db.query(Warehouse).filter(
                 Warehouse.company_id == transfer.to_company_id
             ).first()
@@ -66,15 +64,25 @@ class StockTransferService:
                 Inventory.product_id == item.product_id
             ).with_for_update().all()
             
-            remaining_deduct = qty
+            requested_qty = qty
+            total_available = sum((inv.current_qty - (inv.reserved_qty or 0)) for inv in source_invs)
+            
+            print(f"[TRANSFER CHECK] Requested: {requested_qty}, Available: {total_available}")
+            
+            if total_available < requested_qty:
+                raise ValueError(
+                    f"Insufficient stock for {product.sku}: {total_available} available, {requested_qty} requested"
+                )
+                
+            remaining_deduct = requested_qty
             actual_deducted = 0
             
-            from app.services.inventory_event_engine import InventoryEventEngine
 
             for src_inv in source_invs:
                 if remaining_deduct <= 0:
                     break
-                deduct_from_this = min(remaining_deduct, src_inv.current_qty)
+                available_in_this = src_inv.current_qty - (src_inv.reserved_qty or 0)
+                deduct_from_this = min(remaining_deduct, available_in_this)
                 if deduct_from_this <= 0:
                     continue
                     
@@ -121,6 +129,16 @@ class StockTransferService:
         transfer.status = "Completed"
         transfer.approved_by = user_id
         
+        AuditLogService.log(
+            db,
+            company_id=transfer.from_company_id,
+            entity_type="StockTransfer",
+            entity_id=transfer.id,
+            event_type="TRANSFER_COMPLETED",
+            message=f"Stock transfer {transfer.transfer_number} completed",
+            metadata={"from_company": transfer.from_company_id, "to_company": transfer.to_company_id, "invoice_id": invoice_id}
+        )
+        
         # If there are unfulfilled items, spawn a new pending transfer
         if unfulfilled_items:
             # Generate a proper unique backorder transfer number
@@ -154,5 +172,5 @@ class StockTransferService:
                 )
                 db.add(new_item)
         
-        db.commit()
+        db.flush()
         return transfer

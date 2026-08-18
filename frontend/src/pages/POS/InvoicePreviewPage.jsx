@@ -11,7 +11,9 @@ import {
   FiCopy,
   FiEye
 } from 'react-icons/fi';
-import api from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { posService } from '../../services/pos';
+import { handleApiError } from '../../utils/errorHandler';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
 import { downloadInvoicePdf } from '../../services/invoicePdfService';
 import html2pdf from 'html2pdf.js';
@@ -21,14 +23,19 @@ export default function InvoicePreviewPage() {
   const { saleId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const invoiceRef = useRef(null);
 
-  const [invoice, setInvoice] = useState(location.state?.receipt || null);
-  const [loading, setLoading] = useState(!location.state?.receipt);
-  const [error, setError] = useState(null);
+  const { data: invoice, isLoading: loading, error: fetchError } = useQuery({
+    queryKey: ['sale', saleId],
+    queryFn: () => posService.getSaleById(saleId),
+    initialData: location.state?.receipt,
+  });
+
+  const error = fetchError ? (fetchError.response?.data?.detail || fetchError.message) : null;
+
   const [retryingTally, setRetryingTally] = useState(false);
   const [showTallyModal, setShowTallyModal] = useState(false);
-  const [tallyPayloads, setTallyPayloads] = useState(null);
   const [tallyPayloadFormat, setTallyPayloadFormat] = useState('XML');
 
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -37,56 +44,33 @@ export default function InvoicePreviewPage() {
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
 
-  useEffect(() => {
-    if (!invoice && saleId) {
-      fetchInvoice();
-    }
-  }, [saleId, invoice]);
+  const { data: tallyPayloads, refetch: fetchTallyPayloads } = useQuery({
+    queryKey: ['tallyPayload', saleId],
+    queryFn: () => posService.getTallyPayload(saleId),
+    enabled: false,
+  });
 
-  const fetchInvoice = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.get(`/api/pos/sales/${saleId}`);
-      if (response.data?.receipt) {
-        setInvoice(response.data.receipt);
-      } else {
-        setError('Invoice data not found');
-      }
-    } catch (err) {
-      console.error('Failed to fetch invoice:', err);
-      const backendError = err.response?.data?.detail || err.message;
-      setError(`Failed to load invoice: ${backendError}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const retryTallyMutation = useMutation({
+    mutationFn: posService.retryTallySync,
+    onMutate: () => setRetryingTally(true),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sale', saleId] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+    },
+    onError: (err) => handleApiError(err, 'Failed to retry Tally sync'),
+    onSettled: () => setRetryingTally(false),
+  });
 
-  const handleRetryTally = async () => {
+  const handleRetryTally = () => {
     if (!saleId) return;
-    setRetryingTally(true);
-    try {
-      await api.post(`/api/pos/sales/${saleId}/retry-tally`);
-      // Re-fetch invoice to get updated status
-      await fetchInvoice();
-    } catch (err) {
-      console.error('Failed to retry Tally sync:', err);
-      alert('Failed to retry Tally sync');
-    } finally {
-      setRetryingTally(false);
-    }
+    retryTallyMutation.mutate(saleId);
   };
 
-  const handlePreviewTally = async () => {
+  const handlePreviewTally = () => {
     if (!saleId) return;
     setShowTallyModal(true);
     if (!tallyPayloads) {
-      try {
-        const response = await api.get(`/api/pos/sales/${saleId}/tally-payload`);
-        setTallyPayloads(response.data);
-      } catch (err) {
-        console.error('Failed to fetch tally payload:', err);
-      }
+      fetchTallyPayloads();
     }
   };
 
@@ -107,13 +91,25 @@ export default function InvoicePreviewPage() {
     setShowEmailModal(true);
   };
 
+  const emailMutation = useMutation({
+    mutationFn: posService.emailInvoice,
+    onMutate: () => setEmailing(true),
+    onSuccess: () => {
+      setEmailSuccess('Email sent successfully!');
+      setTimeout(() => setShowEmailModal(false), 2000);
+    },
+    onError: (err) => {
+      setEmailError(err.response?.data?.detail || err.message || 'Failed to send email');
+    },
+    onSettled: () => setEmailing(false),
+  });
+
   const handleEmailInvoice = async () => {
     if (!emailAddress) {
       setEmailError('Please enter an email address.');
       return;
     }
     
-    setEmailing(true);
     setEmailError('');
     setEmailSuccess('');
     
@@ -134,21 +130,10 @@ export default function InvoicePreviewPage() {
       formData.append('file', pdfBlob, opt.filename);
       formData.append('to_email', emailAddress);
       
-      // 3. POST to backend
-      await api.post(`/api/documents/invoice/${invoice.id}/email`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      setEmailSuccess('Email sent successfully!');
-      setTimeout(() => setShowEmailModal(false), 2000);
+      emailMutation.mutate({ saleId: invoice.id, formData });
     } catch (err) {
-      console.error('Failed to email invoice:', err);
-      const backendError = err.response?.data?.detail || err.message;
-      setEmailError(`Failed to send email: ${backendError}`);
-    } finally {
-      setEmailing(false);
+      console.error('Failed to generate PDF for email:', err);
+      setEmailError('Failed to generate PDF');
     }
   };
 

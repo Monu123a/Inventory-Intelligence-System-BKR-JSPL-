@@ -1,14 +1,17 @@
-from typing import List, Dict, Optional
+from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
-from datetime import datetime
 import logging
 from app.models.schema import (
     FCDispatch, FCDispatchItem, StateHub, Warehouse, Product, Sale, 
-    DeliveryChallan, CompanySettings, DispatchTimeline, WarehouseStatus, Inventory, AuditLog
+    CompanySettings, DispatchTimeline, WarehouseStatus, Inventory, AuditLog, WarehouseExternalMapping, User
 )
 from app.api.routers.pos import complete_sale, PosCheckoutRequest, PosCartItem
+import uuid
 from app.services.delivery_challan_service import DeliveryChallanService
+from app.services.document_number_service import DocumentNumberService
+from app.models.schema import DocumentTypeEnum
 from app.services.inventory_event_engine import InventoryEventEngine
 from pydantic import BaseModel
 
@@ -19,17 +22,30 @@ class FCDispatchRequestItem(BaseModel):
     quantity: int
 
 class FCDispatchBatchRequest(BaseModel):
-    source_type: str = "BKR" # BKR or CENTRAL_WAREHOUSE
-    source_warehouse_id: Optional[int] = None
+    idempotency_key: Optional[str] = None
+    dispatch_type: str = "STANDARD" # STANDARD or EMERGENCY
+    source_warehouse_id: int
     warehouse_ids: List[int] # Dest FCs
     hub_id: Optional[int] = None # Optional manual override from frontend
     items: List[FCDispatchRequestItem]
 
 class FCDispatchService:
     @staticmethod
-    def _generate_dispatch_number(db: Session, hub_code: str) -> str:
-        count = db.query(FCDispatch).count() + 1
-        return f"WHT/{hub_code}/26-27/{count:05d}"
+    def _generate_dispatch_number(db: Session, company_id: int, hub_code: str) -> str:
+        # We need a robust sequence that is concurrency-safe.
+        from datetime import date
+        d = date.today()
+        start_year = d.year if d.month >= 4 else d.year - 1
+        end_year = start_year + 1
+        fy = f"{str(start_year)[-2:]}-{str(end_year)[-2:]}"
+        
+        return DocumentNumberService.generate_number(
+            db=db,
+            company_id=company_id,
+            document_type=DocumentTypeEnum.DISPATCH,
+            fiscal_year=fy,
+            prefix_override=f"WHT/{hub_code}"
+        )
 
     @staticmethod
     def _log_timeline(db: Session, dispatch_id: int, step: str, status: str, user_id: int, remarks: str = None):
@@ -64,51 +80,51 @@ class FCDispatchService:
     def create_batch_dispatch(db: Session, company_id: int, request: FCDispatchBatchRequest, user_id: int):
         dispatches = []
         try:
-            # 1. Resolve Source Warehouse
-            if request.source_type == "BKR":
-                if request.source_warehouse_id:
-                    source_warehouse = db.query(Warehouse).filter(
-                        Warehouse.id == request.source_warehouse_id
-                    ).first()
-                else:
-                    # Dynamically resolve BKR warehouse (usually company 2)
-                    source_warehouse = db.query(Warehouse).filter(
-                        Warehouse.name.ilike("%BKR%")
-                    ).first()
-                    
-                if not source_warehouse:
-                    raise HTTPException(status_code=404, detail="Source Warehouse not found")
-                transaction_origin = "FC_DISPATCH"
-            elif request.source_type == "CENTRAL_WAREHOUSE":
-                source_warehouse = db.query(Warehouse).filter(
-                    Warehouse.company_id == company_id,
-                    Warehouse.warehouse_type == "FULFILLMENT_CENTER" # Temp workaround till enum update
-                ).first()
-                # Overwrite if we have CENTRAL properly typed (SQLite enum weirdness)
-                central = db.query(Warehouse).filter(
-                    Warehouse.company_id == company_id,
-                    Warehouse.warehouse_type == "CENTRAL"
-                ).first()
-                if central:
-                    source_warehouse = central
-                elif not source_warehouse:
-                    # ultimate fallback for test environments without correct type
-                    source_warehouse = db.query(Warehouse).filter(
-                        Warehouse.company_id == company_id
-                    ).first()
+            # 0. Idempotency Check
+            existing_dispatches = []
+            if request.idempotency_key:
+                expected_keys = [f"{request.idempotency_key}_{wh_id}" for wh_id in request.warehouse_ids]
+                existing_dispatches = db.query(FCDispatch).filter(
+                    FCDispatch.idempotency_key.in_(expected_keys),
+                    FCDispatch.company_id == company_id
+                ).all()
+                
+                # Filter out already processed warehouse_ids
+                processed_warehouse_ids = [d.warehouse_id for d in existing_dispatches]
+                request.warehouse_ids = [wid for wid in request.warehouse_ids if wid not in processed_warehouse_ids]
+                
+                # If all were already processed, just return them
+                if not request.warehouse_ids:
+                    return existing_dispatches
 
-                if not source_warehouse:
-                    raise HTTPException(status_code=404, detail="No Central Warehouse found for this company")
-                transaction_origin = "INTERNAL_DISTRIBUTION"
+            # 1. Resolve Source Warehouse
+            source_warehouse = db.query(Warehouse).filter(Warehouse.id == request.source_warehouse_id).first()
+            if not source_warehouse:
+                raise HTTPException(status_code=404, detail="Source Warehouse not found")
+
+            # Source Validation Rules
+            if request.dispatch_type == "EMERGENCY":
+                if source_warehouse.code != "VSHB":
+                    raise HTTPException(status_code=400, detail="EMERGENCY dispatches must originate from VSHB")
             else:
-                raise HTTPException(status_code=400, detail=f"Invalid source_type {request.source_type}")
+                # Standard dispatch
+                if source_warehouse.code not in ["BKR", "VSHB"]:
+                    # Wait, BKR central warehouse might have code "BKR" or something. 
+                    # Let's ensure we are relaxed enough if it's not VSHB or BKR by code, but we should strictly check it.
+                    # The user said: "STANDARD BKR or VSHB".
+                    if source_warehouse.code != "VSHB" and "BKR" not in (source_warehouse.code or ""):
+                        # Fallback for name check just in case BKR doesn't have code="BKR", but we prefer code.
+                        if "BKR" not in source_warehouse.name.upper():
+                            raise HTTPException(status_code=400, detail="STANDARD dispatches must originate from BKR or VSHB")
+                            
+            transaction_origin = "INTERNAL_DISTRIBUTION"
 
             if source_warehouse.status != WarehouseStatus.ACTIVE:
                 raise HTTPException(status_code=400, detail=f"Source Warehouse must be ACTIVE (currently {source_warehouse.status})")
 
             company_settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
             export_to_accounting = True
-            if request.source_type == "CENTRAL_WAREHOUSE" and company_settings:
+            if company_settings:
                 export_to_accounting = company_settings.export_internal_distribution_to_accounting
 
             for dest_warehouse_id in request.warehouse_ids:
@@ -119,10 +135,14 @@ class FCDispatchService:
                 dest_warehouse = db.query(Warehouse).filter(Warehouse.id == dest_warehouse_id).first()
                 if not dest_warehouse:
                     raise HTTPException(status_code=404, detail=f"Destination Warehouse {dest_warehouse_id} not found")
-                
-                # Cross-company validation
-                if request.source_type == "CENTRAL_WAREHOUSE" and dest_warehouse.company_id != company_id:
-                    raise HTTPException(status_code=400, detail="Destination warehouse belongs to a different company")
+
+                # Destination Amazon Validation
+                amazon_mapping = db.query(WarehouseExternalMapping).filter(
+                    WarehouseExternalMapping.warehouse_id == dest_warehouse.id,
+                    WarehouseExternalMapping.marketplace.ilike('%Amazon%')
+                ).first()
+                if amazon_mapping:
+                    raise HTTPException(status_code=400, detail="Amazon FCs are not permitted for internal distribution")
 
                 if dest_warehouse.status != WarehouseStatus.ACTIVE:
                     raise HTTPException(status_code=400, detail=f"Destination Warehouse {dest_warehouse.name} is not ACTIVE")
@@ -207,22 +227,38 @@ class FCDispatchService:
                 )
                 
                 # Create FCDispatch Orchestrator
-                dispatch_num = FCDispatchService._generate_dispatch_number(db, hub.hub_code)
+                dispatch_num = FCDispatchService._generate_dispatch_number(db, company_id, hub.hub_code)
                 dispatch = FCDispatch(
                     company_id=company_id,
                     source_warehouse_id=source_warehouse.id,
                     warehouse_id=dest_warehouse.id,
                     dispatch_number=dispatch_num,
+                    idempotency_key=f"{request.idempotency_key}_{dest_warehouse.id}" if request.idempotency_key else None,
+                    dispatch_type=request.dispatch_type,
                     dispatch_status="Processing",
                     created_by=user_id
                 )
                 db.add(dispatch)
-                db.flush()
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    # It was inserted concurrently
+                    concurrent_dispatch = db.query(FCDispatch).filter_by(
+                        idempotency_key=f"{request.idempotency_key}_{dest_warehouse.id}", 
+                        company_id=company_id
+                    ).first()
+                    if concurrent_dispatch:
+                        existing_dispatches.append(concurrent_dispatch)
+                        continue
+                    raise
+
                 FCDispatchService._log_timeline(db, dispatch.id, "Created", "Success", user_id, f"Dispatch {dispatch_num} initiated from {source_warehouse.name}")
                 FCDispatchService._log_audit(db, company_id, user_id, "CREATE", "FCDispatch", dispatch.id, f"Dispatch {dispatch_num} Created")
 
                 # 4. Call pos.py complete_sale (with commit=False)
-                sale_dto = complete_sale(request=pos_request, company_id=company_id, db=db, commit=False)
+                user_obj = db.query(User).filter(User.id == user_id).first()
+                sale_dto = complete_sale(request=None, payload=pos_request, company_id=company_id, db=db, user=user_obj, commit=False)
                 sale_id = sale_dto["receipt"]["id"]
                 sale_obj = db.query(Sale).filter(Sale.id == sale_id).first()
                 sale_obj.transaction_origin = transaction_origin
@@ -239,12 +275,12 @@ class FCDispatchService:
                 challan_data = {
                     "sale_id": sale_id,
                     "challan_number": dispatch_num,
-                    "remarks": f"{request.source_type} Dispatch",
+                    "remarks": f"{request.dispatch_type} Dispatch from {source_warehouse.code}",
                     "shipping_snapshot": {
                         "name": dest_warehouse.name,
                         "address": dest_warehouse.address,
-                        "state": dest_warehouse.state,
-                        "state_code": dest_warehouse.state_code,
+                        "state": hub.state,
+                        "state_code": hub.state_code,
                         "gstin": hub.gstin # Usually same GSTIN for same state
                     },
                     "items": [{
@@ -324,11 +360,25 @@ class FCDispatchService:
                 
                 dispatches.append(dispatch)
                 
+            db.flush()
+            
+            for dispatch in dispatches:
+                logger.info("Dispatch created", extra={
+                    "dispatch_id": dispatch.id,
+                    "source": dispatch.source_warehouse_id,
+                    "destination": dispatch.warehouse_id,
+                    "user": user_id
+                })
+            
             db.commit()
             
             # Refresh all after commit
             for d in dispatches:
                 db.refresh(d)
+            
+            # Combine newly created dispatches with any existing ones (from partial retries)
+            if request.idempotency_key and existing_dispatches:
+                dispatches.extend(existing_dispatches)
                 
             return dispatches
             

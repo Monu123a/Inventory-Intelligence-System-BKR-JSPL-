@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getWarehouses } from '../../services/warehouses';
+import { warehouseService } from '../../services/warehouse';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
@@ -42,7 +42,7 @@ const InventoryHistory = () => {
 
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses'],
-    queryFn: getWarehouses,
+    queryFn: warehouseService.getWarehouses,
   });
 
   const { exportToCsv } = useInventoryHistoryExport();

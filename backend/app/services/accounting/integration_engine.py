@@ -1,5 +1,4 @@
 import os
-import uuid
 import hashlib
 import json
 from datetime import datetime
@@ -10,6 +9,8 @@ from app.models.schema import Sale, Company
 from app.models.accounting_schema import AccountingExportBatch, AccountingExportLog
 from app.services.accounting.dtos import InvoiceDTO, InvoiceLineDTO
 from app.services.accounting.tally_connector import TallyXMLConnector
+from app.services.document_number_service import DocumentNumberService
+from app.models.schema import DocumentTypeEnum
 
 EXPORT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "exports", "accounting")
 
@@ -70,8 +71,8 @@ class AccountingIntegrationEngine:
             errors.append(f"Taxable + Tax does not match Grand Total. Diff: {diff}")
         return errors
 
-    def export_documents(self, category: str, subtype: str, document_ids: List[int], user_id: Optional[int] = None, force_reexport: bool = False) -> AccountingExportBatch:
-        if category == "Sales":
+    def export_documents(self, category: str, subtype: str, document_ids: List[int], user_id: Optional[int] = None, user_role: Optional[str] = None, force_reexport: bool = False, force_reexport_reason: Optional[str] = None) -> AccountingExportBatch:
+        if category == "Sales Invoice":
             # Locking the rows to prevent concurrent exports of the same documents
             sales = self.db.query(Sale).filter(
                 Sale.id.in_(document_ids), 
@@ -83,7 +84,12 @@ class AccountingIntegrationEngine:
                 raise ValueError("Mismatch in selected documents. Some documents may not belong to the requested category/subtype or do not exist.")
             
             # Check for already exported if not force_reexport
-            if not force_reexport:
+            if force_reexport:
+                if user_role != "admin":
+                    raise ValueError("Only Admins can force re-export documents.")
+                if not force_reexport_reason:
+                    raise ValueError("A reason is mandatory for force re-exporting documents.")
+            else:
                 already_exported = self.db.query(AccountingExportLog).filter(
                     AccountingExportLog.sale_id.in_(document_ids),
                     AccountingExportLog.status.in_(["Generated", "Downloaded", "Imported"])
@@ -91,7 +97,26 @@ class AccountingIntegrationEngine:
                 if already_exported > 0:
                     raise ValueError("Some documents have already been exported. Use force_reexport to bypass.")
 
+            
+            # Generate sequential batch number
+            today = datetime.now()
+            start_year = today.year if today.month >= 4 else today.year - 1
+            fy = f"{str(start_year)[-2:]}-{str(start_year + 1)[-2:]}"
+            
+            company = self.db.query(Company).filter(Company.id == self.company_id).first()
+            company_code = company.code if company else "CMP"
+            prefix = f"BATCH/{company_code}"
+            
+            batch_number = DocumentNumberService.generate_number(
+                db=self.db,
+                company_id=self.company_id,
+                document_type=DocumentTypeEnum.BATCH,
+                fiscal_year=fy,
+                prefix_override=prefix
+            )
+
             batch = AccountingExportBatch(
+                batch_number=batch_number,
                 company_id=self.company_id,
                 batch_type=category,
                 batch_subtype=subtype,
@@ -99,7 +124,8 @@ class AccountingIntegrationEngine:
                 invoice_count=len(sales),
                 status="Queued",
                 template_version=getattr(self.connector, "template_version", "v1"),
-                erp_version="1.0.0"
+                erp_version="1.0.0",
+                force_reexport_reason=force_reexport_reason if force_reexport else None
             )
             self.db.add(batch)
             self.db.flush() # get batch ID
@@ -133,7 +159,7 @@ class AccountingIntegrationEngine:
             batch.status = "Generating"
             self.db.commit()
                 
-            result = self.connector.generate_invoice_export(dtos_to_export)
+            result = self.connector.generate_invoice_export(dtos_to_export, category)
             
             if result.success and result.payload:
                 # Save XML to disk
@@ -146,7 +172,8 @@ class AccountingIntegrationEngine:
                 
                 # Save Manifest
                 manifest = {
-                    "batch": f"BATCH-{datetime.now().strftime('%Y%m%d')}-{batch.id:03d}",
+                    "batch_number": batch.batch_number,
+                    "batch_id": batch.id,
                     "template": batch.template_version,
                     "erp_version": batch.erp_version,
                     "generated_at": datetime.now().isoformat(),

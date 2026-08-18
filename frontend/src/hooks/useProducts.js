@@ -1,12 +1,13 @@
 import useCompanyStore from '../stores/useCompanyStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as productService from '../services/products';
+import { productService } from '../services/products';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useMemo } from 'react';
+import api from '../services/api';
 
 const EMPTY_ARRAY = [];
 
-export const useProducts = ({ search = '', category = '', brand = '', status = '', page = 1, limit = 50 }) => {
+export const useProducts = ({ search = '', category = '', brand = '', status = '', page = 1, limit = 50 } = {}) => {
   const companyId = useCompanyStore((state) => state.companyId);
   const query = useQuery({
     queryKey: ['products', companyId],
@@ -67,7 +68,7 @@ export const useProductFilters = () => {
   const companyId = useCompanyStore((state) => state.companyId);
   return useQuery({
     queryKey: ['products', 'filters', companyId],
-    queryFn: productService.getProductFilters,
+    queryFn: () => productService.getProductFilters(),
   });
 };
 
@@ -77,7 +78,10 @@ export const useCreateProduct = () => {
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: productService.createProduct,
+    mutationFn: async ({ data, adminPassword }) => {
+      const response = await api.post('/api/products', { ...data, admin_password: adminPassword });
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products', companyId] });
       addNotification({ type: 'success', title: 'Product Created', message: 'The product was successfully added.' });
@@ -96,7 +100,10 @@ export const useUpdateProduct = () => {
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: ({ sku, data }) => productService.updateProduct(sku, data),
+    mutationFn: async ({ sku, data, adminPassword }) => {
+      const response = await api.put(`/api/products/${sku}`, { ...data, admin_password: adminPassword });
+      return response.data;
+    },
     onMutate: async ({ sku, data }) => {
       await queryClient.cancelQueries({ queryKey: ['products', companyId] });
       const previousProducts = queryClient.getQueryData(['products', companyId]);
@@ -126,7 +133,12 @@ export const useDeleteProduct = () => {
   const { addNotification } = useNotificationStore.getState();
 
   return useMutation({
-    mutationFn: productService.deleteProduct,
+    mutationFn: async ({ sku, adminPassword }) => {
+      const response = await api.delete(`/api/products/${sku}`, {
+        data: { admin_password: adminPassword }
+      });
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products', companyId] });
       addNotification({ type: 'success', title: 'Product Deleted', message: 'The product was permanently deleted.' });

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
@@ -7,9 +8,9 @@ from datetime import datetime
 from app.models.db import get_db
 from app.models.schema import AmazonReturn, AmazonReturnSyncLog, DefectiveInventory, AuditLog, Product, Warehouse
 from app.api.dependencies import get_current_company_id, get_current_user
-from app.services.amazon_returns_service import AmazonReturnsService
 from app.services.amazon_returns_scheduler import run_amazon_returns_sync_job
 from app.services.inventory_event_engine import InventoryEventEngine
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/amazon-returns", tags=["Amazon Returns"])
 
@@ -101,7 +102,9 @@ def get_sync_status(
     )
 
 @router.post("/sync")
+@limiter.limit("5/minute")
 def trigger_manual_sync(
+    request: Request,
     company_id: int = Depends(get_current_company_id)
 ):
     # This runs the sync job directly and blocks until complete.
@@ -111,6 +114,8 @@ def trigger_manual_sync(
         run_amazon_returns_sync_job(company_id=company_id)
         return {"status": "Success", "message": "Manual sync completed."}
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{return_id}/inspect", response_model=InspectResponse)

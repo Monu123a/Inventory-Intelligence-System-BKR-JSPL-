@@ -15,3 +15,22 @@ frontend/dist/
 *.db
 *.sqlite
 *.sqlite3
+
+backend/scratch/
+scratch/
+scratch_test_chaos.py
+backend/scratch_test_dispatch.py
+backend/test_simulation.py
+find_commits.py
+fix_lazy_imports.py
+fix_logging.py
+fix_router_exceptions.py
+fix_services.py
+inject_logging.py
+inject_router_commits.py
+patch_commits.py
+patcher2.py
+replace_commits.py
+warehouse data/
+add_logging.py
+

@@ -11,6 +11,11 @@ export const API_ROUTES = {
   COMPANIES: '/api/companies',
   PRODUCTS: '/api/products',
   WAREHOUSES: '/api/warehouses',
+  STATE_HUBS: '/api/state-hubs',
+  WAREHOUSE_INVENTORY: '/api/warehouse-inventory',
+  DELIVERY_CHALLANS: '/api/delivery-challans',
+  AMAZON_RETURNS: '/api/amazon-returns',
+  DAMAGE_CLAIMS: '/api/damage-claims',
   INVENTORY: {
     BASE: '/api/inventory',
     UPLOAD: '/api/inventory/upload',

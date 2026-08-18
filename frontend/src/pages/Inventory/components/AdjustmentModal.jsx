@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Modal } from '../../../components/Modal/Modal';
 import Button from '../../../components/forms/Button';
@@ -10,13 +10,19 @@ export const AdjustmentModal = ({ isOpen, onClose, onSubmit, inventoryRow, isLoa
     defaultValues: { quantity: 1, adjustment_type: 'INCREASE', reason: '', reference_id: '' }
   });
 
+  const idempotencyKeyRef = useRef('');
+
   useEffect(() => {
-    if (isOpen) reset({ quantity: 1, adjustment_type: 'INCREASE', reason: '', reference_id: '' });
+    if (isOpen) {
+      reset({ quantity: 1, adjustment_type: 'INCREASE', reason: '', reference_id: '' });
+      idempotencyKeyRef.current = window.crypto.randomUUID();
+    }
   }, [isOpen, reset]);
 
   const onFormSubmit = (data) => {
     onSubmit({
-      product_sku: inventoryRow.product_sku,
+      idempotency_key: idempotencyKeyRef.current,
+      product_sku: inventoryRow.product?.sku,
       warehouse_id: inventoryRow.warehouse_id,
       quantity: parseInt(data.quantity, 10),
       adjustment_type: data.adjustment_type,
@@ -30,7 +36,7 @@ export const AdjustmentModal = ({ isOpen, onClose, onSubmit, inventoryRow, isLoa
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Manual Inventory Adjustment" maxWidth="500px">
       <div className={styles.contextPanel}>
-        <p><strong>SKU:</strong> {inventoryRow.product_sku}</p>
+        <p><strong>SKU:</strong> {inventoryRow.product?.sku}</p>
         <p><strong>Product:</strong> {inventoryRow.product_name}</p>
         <p><strong>Warehouse:</strong> {inventoryRow.warehouse_name}</p>
         <p><strong>Current Available:</strong> {inventoryRow.available_qty}</p>

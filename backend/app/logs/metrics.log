@@ -1,0 +1,310 @@
+{"timestamp": 1786344319174, "metric": "api_failure", "value": 1, "route": "/api/reports/generate/low-stock", "method": "POST"}
+{"timestamp": 1786344319180, "metric": "api_failure", "value": 1, "route": "/api/reports/generate/low-stock", "method": "POST"}
+{"timestamp": 1786344319183, "metric": "api_failure", "value": 1, "route": "/api/reports/generate/low-stock", "method": "POST"}
+{"timestamp": 1786344319186, "metric": "api_failure", "value": 1, "route": "/api/reports/generate/low-stock", "method": "POST"}
+{"timestamp": 1786344319192, "metric": "api_failure", "value": 1, "route": "/api/reports/generate/low-stock", "method": "POST"}
+{"timestamp": 1786344319205, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786347241344, "metric": "api_failure", "value": 1, "route": "/api/pos/sale", "method": "POST"}
+{"timestamp": 1786347421400, "metric": "api_failure", "value": 1, "route": "/api/pos/sale", "method": "POST"}
+{"timestamp": 1786347502484, "metric": "api_failure", "value": 1, "route": "/api/pos/sale", "method": "POST"}
+{"timestamp": 1786347718694, "metric": "api_failure", "value": 1, "route": "/api/pos/sale", "method": "POST"}
+{"timestamp": 1786348708346, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786349095162, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786349170833, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786349477963, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786350372725, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372729, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372736, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372740, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372744, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372750, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372753, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372756, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372766, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372770, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372773, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372777, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372794, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372798, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372802, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372826, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372853, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372858, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372910, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786350372966, "metric": "damage_claim_created", "value": 1, "company_id": 1}
+{"timestamp": 1786364872977, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786364874019, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786364878694, "metric": "api_failure", "value": 1, "route": "/api/services/", "method": "GET"}
+{"timestamp": 1786425633637, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786425641324, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786425663785, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786425703611, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786425854173, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786425856649, "metric": "api_failure", "value": 1, "route": "/api/fc-returns/", "method": "GET"}
+{"timestamp": 1786425934474, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786425935517, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786425939496, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786425940527, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786425963706, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786426065677, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786426067373, "metric": "api_failure", "value": 1, "route": "/api/fc-dispatches/", "method": "GET"}
+{"timestamp": 1786426069820, "metric": "api_failure", "value": 1, "route": "/api/fc-returns/", "method": "GET"}
+{"timestamp": 1786427589790, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427590838, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427594322, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427596615, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427608375, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427657605, "metric": "api_failure", "value": 1, "route": "/api/dashboard/activity", "method": "GET"}
+{"timestamp": 1786427658654, "metric": "api_failure", "value": 1, "route": "/api/dashboard/activity", "method": "GET"}
+{"timestamp": 1786427659428, "metric": "api_failure", "value": 1, "route": "/api/dashboard/activity", "method": "GET"}
+{"timestamp": 1786427660461, "metric": "api_failure", "value": 1, "route": "/api/dashboard/activity", "method": "GET"}
+{"timestamp": 1786427935527, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427936569, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427944297, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786427945331, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786428038240, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786428039287, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786428077968, "metric": "api_failure", "value": 1, "route": "/api/bkr-services/job-cards", "method": "GET"}
+{"timestamp": 1786435340390, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786470998488, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786471012492, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786471026661, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786471047691, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786511868214, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868240, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868265, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868297, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868327, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868353, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868403, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868461, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868565, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868674, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868690, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868717, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868732, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868750, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868768, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868788, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511868904, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907817, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907836, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907853, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907877, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907906, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907937, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511907964, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908017, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908074, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908176, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908190, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908211, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908228, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908243, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908259, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786511908274, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670287, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670341, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670368, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670398, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670432, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670446, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670466, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670482, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670497, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670519, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517670546, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778753, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778778, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778802, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778837, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778863, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778892, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517778946, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779002, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779111, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779138, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779170, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779189, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779206, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779224, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517779243, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517800956, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517800988, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801011, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801041, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801069, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801098, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801151, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801206, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801223, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801245, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801262, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801279, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801297, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786517801313, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786521980389, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786521980397, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786522011670, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786522011678, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786522037385, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786522037393, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523299168, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523410949, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523430919, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523462035, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523462066, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523483865, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523483921, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523502093, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523502130, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523525696, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523525730, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523566479, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523566532, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523566586, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523566689, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523566896, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523939836, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523939887, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523939919, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523940026, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523940234, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523940287, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523940394, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523940603, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523996621, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523996653, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786523996703, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523996809, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786523997018, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524018540, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786524018573, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786524018607, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524018607, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524018719, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524018719, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524018934, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524018935, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524041014, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786524041054, "metric": "sale_completed", "value": 1, "company_id": 1}
+{"timestamp": 1786524041111, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524041111, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524041223, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524041223, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524041438, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786524041438, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786950041423, "metric": "api_failure", "value": 1, "route": "/api/inventory/adjust", "method": "POST"}
+{"timestamp": 1786950068314, "metric": "api_failure", "value": 1, "route": "/api/inventory/adjust", "method": "POST"}
+{"timestamp": 1786951606825, "metric": "damage_claim_updated", "value": 1, "company_id": 1}
+{"timestamp": 1786954622295, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954640033, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954676248, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954676315, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954676341, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954727607, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954727665, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954727691, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954747538, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954747612, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954747639, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954766102, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954766174, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954766201, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954789445, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954789512, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954789537, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954823694, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954823745, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954823773, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954823792, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786954823898, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786954824103, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786954851600, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954851667, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786954851693, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786954851712, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786954851816, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786954852025, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955173586, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955173656, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955173683, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955173702, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955173811, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955174019, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955211610, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955211681, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955211708, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955211732, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955211733, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955211843, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955211844, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955212055, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955212056, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955260150, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955260190, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955260217, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955260242, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955260343, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955260551, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955292696, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955292760, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955292786, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955292805, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955292911, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955293119, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955293214, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955345108, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955345167, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955345195, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955345213, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955345317, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955345524, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955378504, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955378578, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955378615, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955378635, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955378741, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955378947, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955414438, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955414490, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955414516, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955414534, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955414640, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955414848, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955439912, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955439984, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955440010, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955440031, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955440140, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955440347, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955494871, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955494944, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955494972, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955494992, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955495098, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955495304, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955522259, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955522311, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955522338, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955522358, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955522460, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955522667, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955522766, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955522798, "metric": "api_failure", "value": 1, "route": "/api/fc-returns/", "method": "POST"}
+{"timestamp": 1786955546069, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955546121, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955546161, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955546215, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955546321, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955546524, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955546727, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955546763, "metric": "api_failure", "value": 1, "route": "/api/fc-returns/", "method": "POST"}
+{"timestamp": 1786955574683, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955574767, "metric": "sales_return_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786955574793, "metric": "transfer_approved", "value": 1, "company_id": 2}
+{"timestamp": 1786955574812, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955574918, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955575123, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1786955575234, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1786959639888, "metric": "sale_completed", "value": 1, "company_id": 2}

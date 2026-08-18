@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, Text, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.db import Base
@@ -13,7 +13,7 @@ class AccountingConfiguration(Base):
     discount_ledger = Column(String, nullable=True)
     freight_ledger = Column(String, nullable=True)
     default_godown = Column(String, nullable=True)
-    default_voucher_type = Column(String, default="Sales")
+    voucher_mappings = Column(JSON, default=dict) # e.g. {"SALE": "Sales", "CREDIT_NOTE": "Credit Note"}
     voucher_series = Column(String, nullable=True)
     min_tally_version = Column(String, nullable=True)
     xml_version = Column(String, default="1")
@@ -44,6 +44,7 @@ class AccountingExportBatch(Base):
     __tablename__ = "acc_export_batches"
 
     id = Column(Integer, primary_key=True, index=True)
+    batch_number = Column(String, nullable=True, unique=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     batch_type = Column(String, nullable=False) # e.g. Sales, Warehouse
     batch_subtype = Column(String, nullable=True) # e.g. B2C, B2B, Returns
@@ -52,7 +53,10 @@ class AccountingExportBatch(Base):
     status = Column(String, default="Queued") # Queued, Generating, Generated, Downloaded, Awaiting Import, Imported
     file_path = Column(String, nullable=True) # Path to stored XML file on disk
     invoice_count = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
     errors = Column(Text, nullable=True)
+    force_reexport_reason = Column(String, nullable=True)
     
     checksum_sha256 = Column(String, nullable=True)
     template_version = Column(String, nullable=True)

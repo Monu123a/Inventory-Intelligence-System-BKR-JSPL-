@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -8,6 +8,7 @@ from app.api.dependencies import get_current_user, get_current_company_id
 from app.models.schema import User
 from app.services.service_record_service import ServiceRecordService
 from app.services.audit_log_service import AuditLogService
+from app.models.schema import ServiceRecord
 
 router = APIRouter(prefix="/services", tags=["Service Management"])
 
@@ -22,11 +23,19 @@ class ServiceRecordCreate(BaseModel):
     customer_name_snapshot: str
     customer_mobile_snapshot: Optional[str] = None
     customer_email_snapshot: Optional[str] = None
+    customer_address_snapshot: Optional[str] = None
+    source_type: str = "manual"
+    source_invoice_id: Optional[str] = None
     invoice_number: Optional[str] = None
     sale_type: Optional[str] = None
     marketplace: Optional[str] = None
     service_date: Optional[datetime] = None
     service_type: str
+    machine_type: Optional[str] = None
+    brand: Optional[str] = None
+    power_type: Optional[str] = None
+    warranty: bool = False
+    service_location: Optional[str] = None
     complaint: Optional[str] = None
     technician_notes: Optional[str] = None
     items: List[ServiceRecordItemCreate] = []
@@ -42,6 +51,17 @@ class ServiceRecordItemResponse(BaseModel):
     replacement_quantity: int
     model_config = ConfigDict(from_attributes=True)
 
+class LinkedInvoice(BaseModel):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+class LinkedJobCard(BaseModel):
+    id: int
+    job_card_number: str
+    status: str
+    invoices: List[LinkedInvoice] = []
+    model_config = ConfigDict(from_attributes=True)
+
 class ServiceRecordResponse(BaseModel):
     id: int
     service_number: str
@@ -49,11 +69,19 @@ class ServiceRecordResponse(BaseModel):
     customer_name_snapshot: str
     customer_mobile_snapshot: Optional[str]
     customer_email_snapshot: Optional[str]
+    customer_address_snapshot: Optional[str]
+    source_type: str
+    source_invoice_id: Optional[str]
     invoice_number: Optional[str]
     sale_type: Optional[str]
     marketplace: Optional[str]
     service_date: datetime
     service_type: str
+    machine_type: Optional[str]
+    brand: Optional[str]
+    power_type: Optional[str]
+    warranty: bool
+    service_location: Optional[str]
     status: str
     complaint: Optional[str]
     technician_notes: Optional[str]
@@ -62,6 +90,7 @@ class ServiceRecordResponse(BaseModel):
     tax_amount: float
     grand_total: float
     items: List[ServiceRecordItemResponse]
+    job_cards: List[LinkedJobCard] = []
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -87,6 +116,8 @@ def create_service(
         )
         return record
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -96,7 +127,6 @@ def get_services(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    from app.models.schema import ServiceRecord
     q = db.query(ServiceRecord).filter(ServiceRecord.company_id == company_id)
     if status:
         if status == "active":
@@ -113,7 +143,6 @@ def get_service(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    from app.models.schema import ServiceRecord
     record = db.query(ServiceRecord).filter(ServiceRecord.id == id, ServiceRecord.company_id == company_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Not found")
@@ -122,8 +151,8 @@ def get_service(
 @router.post("/{id}/status", response_model=ServiceRecordResponse)
 def update_service_status(
     id: int,
-    status: str,
-    technician_notes: Optional[str] = None,
+    status: str = Body(..., embed=True),
+    technician_notes: Optional[str] = Body(None, embed=True),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
@@ -145,6 +174,8 @@ def update_service_status(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -161,6 +192,8 @@ def record_replacement(
         db.commit()
         return {"status": "success", "replacement_product_id": item.replacement_product_id}
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -179,5 +212,7 @@ def update_bill(
         db.refresh(record)
         return record
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

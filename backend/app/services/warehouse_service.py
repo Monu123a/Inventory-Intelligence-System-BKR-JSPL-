@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.schema import Warehouse, WarehouseUser
+from app.models.schema import FCDispatch, FCReturn
+from app.models.schema import WarehouseExternalMapping
 
 class WarehouseService:
     @staticmethod
@@ -16,7 +18,6 @@ class WarehouseService:
         warehouse = Warehouse(company_id=company_id, **data)
         db.add(warehouse)
         
-        from app.models.schema import WarehouseExternalMapping
         for m in mappings:
             mapping = WarehouseExternalMapping(
                 warehouse=warehouse,
@@ -25,7 +26,7 @@ class WarehouseService:
             )
             db.add(mapping)
             
-        db.commit()
+        db.flush()
         db.refresh(warehouse)
         return warehouse
 
@@ -41,7 +42,6 @@ class WarehouseService:
             setattr(warehouse, key, value)
             
         if mappings is not None:
-            from app.models.schema import WarehouseExternalMapping
             db.query(WarehouseExternalMapping).filter(WarehouseExternalMapping.warehouse_id == warehouse.id).delete()
             for m in mappings:
                 mapping = WarehouseExternalMapping(
@@ -51,13 +51,12 @@ class WarehouseService:
                 )
                 db.add(mapping)
                 
-        db.commit()
+        db.flush()
         db.refresh(warehouse)
         return warehouse
 
     @staticmethod
     def delete(db: Session, warehouse_id: int, company_id: int):
-        from app.models.schema import FCDispatch, FCReturn
         
         warehouse = WarehouseService.get_by_id(db, warehouse_id, company_id)
         if not warehouse:
@@ -77,7 +76,7 @@ class WarehouseService:
             raise ValueError("Cannot delete warehouse with linked FC Returns")
 
         db.delete(warehouse)
-        db.commit()
+        db.flush()
         return True
 
     @staticmethod
@@ -95,7 +94,7 @@ class WarehouseService:
         else:
             existing = WarehouseUser(warehouse_id=warehouse_id, user_id=user_id, permission=permission)
             db.add(existing)
-        db.commit()
+        db.flush()
         db.refresh(existing)
         return existing
 
@@ -107,6 +106,6 @@ class WarehouseService:
         ).first()
         if existing:
             db.delete(existing)
-            db.commit()
+            db.flush()
             return True
         return False

@@ -5,7 +5,8 @@ import Button from '../../components/forms/Button';
 import Input from '../../components/forms/Input';
 import { Modal } from '../../components/Modal/Modal';
 import { FiChevronDown, FiChevronRight, FiMapPin, FiPackage, FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
-import api from '../../services/api';
+import { stateHubService } from '../../services/stateHubService';
+import { warehouseService } from '../../services/warehouse';
 import styles from './Warehouse.module.css';
 
 const StateHubsPage = () => {
@@ -27,11 +28,11 @@ const StateHubsPage = () => {
     try {
       setLoading(true);
       const [hubsRes, whRes] = await Promise.all([
-        api.get('/api/state-hubs'),
-        api.get('/api/warehouses')
+        stateHubService.getAll(),
+        warehouseService.getWarehouses()
       ]);
-      setHubs(hubsRes.data || []);
-      setWarehouses(whRes.data || []);
+      setHubs(hubsRes || []);
+      setWarehouses(whRes || []);
       setError('');
     } catch (err) {
       console.error(err);
@@ -81,9 +82,9 @@ const StateHubsPage = () => {
     e.preventDefault();
     try {
       if (editingHub) {
-        await api.put(`/api/state-hubs/${editingHub.id}`, hubFormData);
+        await stateHubService.update(editingHub.id, hubFormData);
       } else {
-        await api.post('/api/state-hubs', hubFormData);
+        await stateHubService.create(hubFormData);
       }
       handleCloseHubModal();
       fetchData();
@@ -95,7 +96,7 @@ const StateHubsPage = () => {
   const handleDeleteHub = async (id) => {
     if (window.confirm('Are you sure you want to delete this hub?')) {
       try {
-        await api.delete(`/api/state-hubs/${id}`);
+        await stateHubService.delete(id);
         fetchData();
       } catch (err) {
         alert('Failed to delete hub');
@@ -132,7 +133,7 @@ const StateHubsPage = () => {
         }
         const existingWh = warehouses.find(w => w.id === parseInt(selectedUnassignedWhId, 10));
         const payload = { ...existingWh, hub_id: parseInt(warehouseFormData.hub_id, 10) };
-        await api.put(`/api/warehouses/${existingWh.id}`, payload);
+        await warehouseService.update(existingWh.id, payload);
         handleCloseWarehouseModal();
         fetchData();
         if (payload.hub_id) {
@@ -147,9 +148,9 @@ const StateHubsPage = () => {
       };
       
       if (editingWarehouse) {
-        await api.put(`/api/warehouses/${editingWarehouse.id}`, payload);
+        await warehouseService.update(editingWarehouse.id, payload);
       } else {
-        await api.post('/api/warehouses', payload);
+        await warehouseService.create(payload);
       }
       handleCloseWarehouseModal();
       fetchData();
@@ -164,7 +165,7 @@ const StateHubsPage = () => {
   const handleDeleteWarehouse = async (id) => {
     if (window.confirm('Are you sure you want to delete this warehouse?')) {
       try {
-        await api.delete(`/api/warehouses/${id}`);
+        await warehouseService.delete(id);
         fetchData();
       } catch (err) {
         alert('Failed to delete warehouse');

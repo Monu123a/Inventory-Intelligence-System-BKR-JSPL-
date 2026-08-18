@@ -46,6 +46,10 @@ const ServiceDetailPage = lazy(() => import('./pages/Service/ServiceDetailPage')
 
 const DeliveryChallanPreviewPage = lazy(() => import('./pages/DeliveryChallans/DeliveryChallanPreviewPage'));
 
+// BKR Service Module
+const JobCardList = lazy(() => import('./pages/Service/JobCardList'));
+const ServiceInvoicePreview = lazy(() => import('./pages/Service/ServiceInvoicePreview'));
+
 // Warehouse Phase 8 Routes
 const WarehouseDashboard = lazy(() => import('./pages/Warehouse/WarehouseDashboard'));
 const StateHubsPage = lazy(() => import('./pages/Warehouse/StateHubsPage'));
@@ -60,6 +64,8 @@ const BatchDispatchCreator = lazy(() => import('./pages/WarehouseLogistics/Batch
 const FCReturnsView = lazy(() => import('./pages/WarehouseLogistics/FCReturnsView'));
 const DamageClaimManager = lazy(() => import('./pages/WarehouseLogistics/DamageClaimManager'));
 const ReturnRecommendations = lazy(() => import('./pages/WarehouseLogistics/ReturnRecommendations'));
+
+const UserManualPage = lazy(() => import('./pages/Help/UserManualPage'));
 
 const App = () => {
   return (
@@ -83,6 +89,7 @@ const App = () => {
                 <Route path={ROUTES.REPORTS} element={<Reports />} />
                 <Route path={ROUTES.DOWNLOAD_CENTRE} element={<DownloadCentre />} />
                 <Route path={ROUTES.SETTINGS} element={<Settings />} />
+                <Route path={ROUTES.HELP} element={<UserManualPage />} />
                 <Route path={ROUTES.POS} element={<POSPage />} />
                 <Route path={ROUTES.POS_HISTORY} element={<SalesHistoryPage />} />
                 <Route path={ROUTES.POS_INVOICE} element={<InvoicePreviewPage />} />
@@ -112,6 +119,12 @@ const App = () => {
                 <Route path={ROUTES.SERVICE_DETAIL} element={<ServiceDetailPage />} />
 
                 <Route path={ROUTES.DELIVERY_CHALLAN_PREVIEW} element={<DeliveryChallanPreviewPage />} />
+
+                {/* BKR Service Module Routes */}
+                <Route path={ROUTES.BKR_JOB_CARDS} element={<JobCardList />} />
+                <Route path={ROUTES.BKR_JOB_CARD_CREATE} element={<CreateServicePage />} />
+                <Route path={ROUTES.BKR_JOB_CARD_DETAIL} element={<ServiceInvoicePreview />} />
+                <Route path={ROUTES.BKR_SERVICE_INVOICE} element={<ServiceInvoicePreview />} />
 
                 {/* Warehouse Phase 8 Routes */}
                 <Route path={ROUTES.WAREHOUSE_DASHBOARD} element={<WarehouseDashboard />} />

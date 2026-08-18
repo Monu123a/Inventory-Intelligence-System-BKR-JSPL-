@@ -32,7 +32,7 @@ const DispatchDashboard = () => {
 
   const filteredDispatches = dispatches.filter(d => {
     if (originFilter === 'ALL') return true;
-    const isCentral = d.source_type === 'CENTRAL_WAREHOUSE';
+    const isCentral = d.source_warehouse && d.source_warehouse.toLowerCase().includes('central');
     if (originFilter === 'CENTRAL') return isCentral;
     if (originFilter === 'BKR') return !isCentral;
     return true;
@@ -73,7 +73,7 @@ const DispatchDashboard = () => {
                     key={dispatch.id} 
                     row={{
                       dispatch_number: dispatch.dispatch_number || dispatch.id,
-                      origin: dispatch.source_type === 'CENTRAL_WAREHOUSE' ? 'Central Warehouse' : 'BKR Main',
+                      origin: (dispatch.source_warehouse && dispatch.source_warehouse.toLowerCase().includes('central')) ? 'Central Warehouse' : (dispatch.source_warehouse || 'BKR Main'),
                       dispatch_status: (
                         <span style={{
                           padding: '4px 8px',

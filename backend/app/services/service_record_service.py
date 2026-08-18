@@ -1,13 +1,13 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime
-from app.models.schema import ServiceRecord, ServiceRecordItem, ServiceSequence, Sale, Product
+from app.models.schema import ServiceRecord, ServiceRecordItem, Sale, Product
+from app.models.schema import Company
 
 class ServiceRecordService:
     @staticmethod
     def _generate_service_number(db: Session, company_id: int) -> str:
-        # Generate number like SRV/BKR/26-27/00001
-        # Hardcoding fiscal year for now or use a basic logic
+        from app.services.document_number_service import DocumentNumberService
+        from app.models.schema import DocumentTypeEnum
         now = datetime.utcnow()
         year = now.year
         month = now.month
@@ -18,27 +18,11 @@ class ServiceRecordService:
         else:
             fy_str = f"{str(year-1)[-2:]}-{str(year)[-2:]}"
             
-        company_code = "COMP" # Fallback
-        from app.models.schema import Company
         company = db.query(Company).filter(Company.id == company_id).first()
-        if company:
-            company_code = company.code
-            
-        seq = db.query(ServiceSequence).filter(
-            ServiceSequence.company_id == company_id,
-            ServiceSequence.fiscal_year == fy_str
-        ).with_for_update().first()
-        
-        if not seq:
-            seq = ServiceSequence(company_id=company_id, fiscal_year=fy_str, last_number=0)
-            db.add(seq)
-            db.flush()
-            
-        seq.last_number += 1
-        db.flush()
-        
-        number_padded = str(seq.last_number).zfill(5)
-        return f"SRV/{company_code}/{fy_str}/{number_padded}"
+        company_prefix = company.code if company and company.code else f"COMP{company_id}"
+        return DocumentNumberService.generate_number(
+            db, company_id, DocumentTypeEnum.SERVICE, fy_str, prefix_override=f"{company_prefix}/SRV"
+        )
 
     @staticmethod
     def create_record(db: Session, company_id: int, data: dict, user_id: int = None) -> ServiceRecord:
@@ -65,11 +49,19 @@ class ServiceRecordService:
             customer_name_snapshot=customer_name_snapshot,
             customer_mobile_snapshot=customer_mobile_snapshot,
             customer_email_snapshot=customer_email_snapshot,
+            customer_address_snapshot=data.get("customer_address_snapshot"),
+            source_type=data.get("source_type", "manual"),
+            source_invoice_id=data.get("source_invoice_id"),
             invoice_number=data.get("invoice_number"),
             sale_type=data.get("sale_type"),
             marketplace=data.get("marketplace"),
             service_date=data.get("service_date", datetime.utcnow()),
             service_type=data.get("service_type"),
+            machine_type=data.get("machine_type"),
+            brand=data.get("brand"),
+            power_type=data.get("power_type"),
+            warranty=data.get("warranty", False),
+            service_location=data.get("service_location"),
             complaint=data.get("complaint"),
             technician_notes=data.get("technician_notes"),
             status="Pending",
@@ -119,6 +111,18 @@ class ServiceRecordService:
         record.status = status
         if technician_notes is not None:
             record.technician_notes = technician_notes
+            
+        # Cascade status to linked Job Cards
+        job_card_status_map = {
+            "Pending": "OPEN",
+            "In Progress": "IN_PROGRESS",
+            "Completed": "COMPLETED",
+            "Cancelled": "CANCELLED"
+        }
+        mapped_status = job_card_status_map.get(status)
+        if mapped_status:
+            for jc in record.job_cards:
+                jc.status = mapped_status
             
         db.flush()
         return record

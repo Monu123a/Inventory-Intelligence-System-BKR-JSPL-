@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import './UploadPanel.css';
 
-const API = import.meta.env.VITE_API_URL || 'https://halte-data-transformation.onrender.com';
+import api from '../services/api';
 
 export default function UploadPanel({ uploadedFiles, setUploadedFiles }) {
   const inputRef = useRef(null);
@@ -15,8 +15,12 @@ export default function UploadPanel({ uploadedFiles, setUploadedFiles }) {
       }
     }
     try {
-      const res = await fetch(`${API}/api/upload`, { method: 'POST', body: formData });
-      const data = await res.json();
+      const res = await api.post('/api/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      const data = res.data;
       if (data.files) {
         setUploadedFiles(prev => [...prev, ...data.files]);
       }

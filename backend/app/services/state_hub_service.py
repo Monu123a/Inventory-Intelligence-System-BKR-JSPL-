@@ -14,7 +14,7 @@ class StateHubService:
     def create(db: Session, company_id: int, data: dict):
         hub = StateHub(company_id=company_id, **data)
         db.add(hub)
-        db.commit()
+        db.flush()
         db.refresh(hub)
         return hub
 
@@ -25,7 +25,7 @@ class StateHubService:
             raise ValueError("State Hub not found")
         for key, value in data.items():
             setattr(hub, key, value)
-        db.commit()
+        db.flush()
         db.refresh(hub)
         return hub
 
@@ -37,5 +37,5 @@ class StateHubService:
         if hub.warehouses:
             raise ValueError("Cannot delete State Hub with assigned warehouses")
         db.delete(hub)
-        db.commit()
+        db.flush()
         return True

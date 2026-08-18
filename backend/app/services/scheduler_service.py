@@ -37,7 +37,6 @@ def _acquire_scheduler_lock() -> bool:
             # We must keep the file open to hold the lock
             # Actually, if we exit `with`, the file closes and the lock is released!
             # The previous code kept the file open intentionally to hold the lock.
-            pass
     except BlockingIOError:
         return False
 
@@ -81,8 +80,9 @@ def execute_job_with_logging(job_name: str, func, company_id: int = None):
         func(db, company_id)
         status = "Success"
     except Exception as e:
-        logger.exception(f"Job {job_name} failed: {e}")
+        logger.error(f"Job {job_name} failed: {e}", exc_info=True)
         error_msg = str(e)
+        raise
     finally:
         end_time_ts = time.time()
         

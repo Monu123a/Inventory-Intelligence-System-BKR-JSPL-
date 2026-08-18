@@ -1,25 +1,40 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict
-import shutil
-import os
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime, timezone
 
 from app.models.db import get_db
-from app.models.schema import Inventory, InventoryMovement, Product
+from app.models.schema import Inventory, InventoryMovement, Product, User
 from app.services.inventory_event_engine import InventoryEventEngine
 from app.services.inventory_validation import InventoryValidationService
 from app.services.inventory_adapter import InventoryAdapter
-from app.api.dependencies import get_current_company_id
+from app.services.audit_log_service import AuditLogService
+from app.api.dependencies import get_current_company_id, require_admin
+from app.api.routers.auth import verify_admin_action_password
+import os
+import shutil
+import tempfile
+import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
+
+class ProductInfo(BaseModel):
+    sku: str
+    name: str
+    category: Optional[str] = None
+    brand: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class InventoryResponse(BaseModel):
     product_id: int
     company_id: int
-    product_sku: str
     warehouse_id: int
+    product: Optional[ProductInfo] = None
     current_qty: int
     reserved_qty: Optional[int] = 0
     available_qty: Optional[int] = 0
@@ -53,9 +68,14 @@ class GlobalMovementResponse(MovementResponse):
     display_metadata: List[dict]
 
 @router.get("/history", response_model=List[GlobalMovementResponse])
-def get_global_inventory_history(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def get_global_inventory_history(
+    skip: int = 0,
+    limit: int = 500,
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
     """Inventory Timeline (History) for all products"""
-    movements = db.query(InventoryMovement).options(joinedload(InventoryMovement.product)).filter(InventoryMovement.company_id == company_id).order_by(InventoryMovement.timestamp.desc()).all()
+    movements = db.query(InventoryMovement).options(joinedload(InventoryMovement.product)).filter(InventoryMovement.company_id == company_id).order_by(InventoryMovement.timestamp.desc()).offset(skip).limit(min(limit, 2000)).all()
     
     result = []
     for mov in movements:
@@ -120,21 +140,22 @@ def get_inventory_history(sku: str, company_id: int = Depends(get_current_compan
         })
     return result
 
-@router.post("/upload")
+@router.post("/upload", dependencies=[Depends(require_admin)])
 async def upload_inventory(
     warehouse_code: str = Form(...),
     upload_type: str = Form(...), # "ADD" or "REPLACE"
     preview: bool = Form(False),
+    admin_password: str = Form(None),
     file: UploadFile = File(...),
     company_id: int = Depends(get_current_company_id),
+    current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+    if not preview:
+        verify_admin_action_password(admin_password, current_user)
+        
     if upload_type not in ["ADD", "REPLACE"]:
         raise HTTPException(status_code=400, detail="upload_type must be ADD or REPLACE")
-    import tempfile
-    import os
-    import shutil
-    from datetime import datetime, timezone
     
     # Use a secure temp directory that works across platforms
     temp_dir = tempfile.gettempdir()
@@ -164,11 +185,16 @@ async def upload_inventory(
         if not is_valid:
             return {"status": "error", "message": "Validation failed", "errors": errors}
             
-        reference_id = f"UPLOAD-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        file_hash = hashlib.md5()
+        with open(temp_file, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                file_hash.update(chunk)
+        
+        reference_id = f"UPLOAD-{file_hash.hexdigest()}"
         
         # Process via Event Engine
         try:
-            for record in valid_records:
+            for idx, record in enumerate(valid_records):
                 InventoryEventEngine.process_event(
                     db=db,
                     company_id=company_id,
@@ -178,12 +204,25 @@ async def upload_inventory(
                     event_type=upload_type,
                     source="Upload",
                     reference_id=reference_id,
-                    metadata_payload={"filename": file.filename}
+                    metadata_payload={"filename": file.filename, "line_id": str(idx)}
                 )
 
             db.commit()
+            
+            if not preview:
+                logger.info({
+                    "action": "UPLOAD_INVENTORY",
+                    "user_id": current_user.id,
+                    "company_id": company_id,
+                    "warehouse_code": warehouse_code,
+                    "upload_type": upload_type,
+                    "records_processed": len(valid_records),
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+                
             return {"status": "success", "message": f"Processed {len(valid_records)} records successfully", "reference_id": reference_id}
-        except Exception:
+        except Exception as e:
+            logger.error(str(e), exc_info=True)
             db.rollback()
             raise
         
@@ -192,15 +231,19 @@ async def upload_inventory(
             os.remove(temp_file)
 
 class ManualAdjustment(BaseModel):
+    idempotency_key: Optional[str] = None
     product_sku: str
     warehouse_id: int
     quantity: int
     adjustment_type: str # "INCREASE" or "DECREASE"
     reason: str
     reference_id: Optional[str] = None
+    admin_password: Optional[str] = Field(default=None, exclude=True)
 
-@router.post("/adjust")
-def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+@router.post("/adjust", dependencies=[Depends(require_admin)])
+def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    verify_admin_action_password(adjustment.admin_password, current_user)
+    
     if adjustment.adjustment_type not in ["INCREASE", "DECREASE"]:
         raise HTTPException(status_code=400, detail="adjustment_type must be INCREASE or DECREASE")
     
@@ -208,7 +251,11 @@ def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get
     
     ref = adjustment.reference_id or f"MANUAL-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     
+    metadata = {"reason": adjustment.reason}
     try:
+        if adjustment.idempotency_key:
+            metadata["operation_id"] = adjustment.idempotency_key
+
         InventoryEventEngine.process_event(
             db=db,
             company_id=company_id,
@@ -218,10 +265,57 @@ def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get
             event_type="ADD" if qty > 0 else "DEDUCT", # Delta adjustment
             source="Manual",
             reference_id=ref,
-            metadata_payload={"reason": adjustment.reason}
+            metadata_payload=metadata
         )
+            
+        AuditLogService.log(
+            db,
+            company_id=company_id,
+            entity_type="Inventory",
+            entity_id=0,
+            event_type="MANUAL_ADJUSTMENT",
+            message=f"Manual inventory adjustment for {adjustment.product_sku} in warehouse {adjustment.warehouse_id}",
+            metadata={"adjustment_type": adjustment.adjustment_type, "quantity": adjustment.quantity, "reason": adjustment.reason}
+        )
+        
         db.commit()
+        
+        logger.info({
+            "action": "ADJUST_INVENTORY",
+            "user_id": current_user.id,
+            "company_id": company_id,
+            "warehouse_id": adjustment.warehouse_id,
+            "sku": adjustment.product_sku,
+            "quantity": qty,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
         return {"status": "success", "message": "Manual adjustment successful", "reference_id": ref}
-    except Exception as e:
+    except IntegrityError:
+        db.rollback()
+        if adjustment.idempotency_key:
+            existing = db.query(InventoryMovement).filter_by(
+                operation_id=adjustment.idempotency_key,
+                company_id=company_id
+            ).first()
+            if existing:
+                return {"status": "success", "message": "Manual adjustment successful (Idempotent response)", "reference_id": ref}
+        raise
+    except ValueError as e:
+        logger.error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException as e:
+        db.rollback()
+        if e.status_code == 503 and adjustment.idempotency_key:
+            existing = db.query(InventoryMovement).filter_by(
+                operation_id=adjustment.idempotency_key,
+                company_id=company_id
+            ).first()
+            if existing:
+                return {"status": "success", "message": "Manual adjustment successful (Idempotent response)", "reference_id": ref}
+        raise
+    except Exception as e:
+        logger.error(str(e), exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail="An internal error occurred during inventory adjustment.")

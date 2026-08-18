@@ -1,8 +1,6 @@
 import logging
 import time
 from datetime import datetime
-from sqlalchemy.orm import Session
-from typing import Optional
 
 from app.models.db import SessionLocal
 from app.models.schema import Company, CompanySettings, AmazonReturnSyncLog
@@ -40,8 +38,9 @@ def run_amazon_returns_sync_job(company_id: int):
         records_created, records_updated = AmazonReturnsService.sync_returns(db, company_id=company_id)
         status = "Success"
     except Exception as e:
-        logger.exception(f"Amazon Returns Sync failed for company {company_id}: {e}")
+        logger.error(f"Amazon Returns Sync failed for company {company_id}: {e}", exc_info=True)
         error_msg = str(e)
+        raise
     finally:
         end_time_ts = time.time()
         
@@ -56,8 +55,8 @@ def run_amazon_returns_sync_job(company_id: int):
         try:
             db.commit()
         except Exception as e:
-            logger.error(f"Failed to update AmazonReturnSyncLog for company {company_id}: {e}")
-            
+            logger.error(f"Failed to update AmazonReturnSyncLog for company {company_id}: {e}", exc_info=True)
+            raise
         db.close()
 
 def _orchestrate_amazon_returns_sync():

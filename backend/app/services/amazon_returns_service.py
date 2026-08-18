@@ -21,6 +21,7 @@ class AmazonReturnsService:
         
         records_created = 0
         records_updated = 0
+        failed_records = []
         
         for return_data in returns_data:
             amazon_return_id = return_data.get("amazon_return_id")
@@ -40,44 +41,54 @@ class AmazonReturnsService:
             received_dt = parser.isoparse(received_str) if received_str else None
             
             try:
-                if existing_return:
-                    # Update status and timestamps if changed
-                    updated = False
-                    if return_data.get("return_status") != existing_return.return_status:
-                        existing_return.return_status = return_data.get("return_status")
-                        updated = True
-                    if received_dt and existing_return.received_at != received_dt:
-                        existing_return.received_at = received_dt
-                        updated = True
-                        
-                    if updated:
-                        existing_return.last_synced_at = datetime.utcnow()
-                        db.commit()
-                        records_updated += 1
-                else:
-                    # Create new return
-                    new_return = AmazonReturn(
-                        company_id=company_id,
-                        amazon_return_id=amazon_return_id,
-                        amazon_order_id=return_data.get("amazon_order_id"),
-                        order_item_id=order_item_id,
-                        sku=return_data.get("sku"),
-                        asin=return_data.get("asin"),
-                        product_name=return_data.get("product_name"),
-                        quantity=return_data.get("quantity"),
-                        return_reason=return_data.get("return_reason"),
-                        return_status=return_data.get("return_status"),
-                        requested_at=requested_dt,
-                        received_at=received_dt,
-                        last_synced_at=datetime.utcnow()
-                    )
-                    db.add(new_return)
-                    db.commit()
-                    records_created += 1
-                    
+                with db.begin_nested():
+                    if existing_return:
+                        # Update status and timestamps if changed
+                        updated = False
+                        if return_data.get("return_status") != existing_return.return_status:
+                            existing_return.return_status = return_data.get("return_status")
+                            updated = True
+                        if received_dt and existing_return.received_at != received_dt:
+                            existing_return.received_at = received_dt
+                            updated = True
+                            
+                        if updated:
+                            existing_return.last_synced_at = datetime.utcnow()
+                            db.flush()
+                            records_updated += 1
+                    else:
+                        # Create new return
+                        new_return = AmazonReturn(
+                            company_id=company_id,
+                            amazon_return_id=amazon_return_id,
+                            amazon_order_id=return_data.get("amazon_order_id"),
+                            order_item_id=order_item_id,
+                            sku=return_data.get("sku"),
+                            asin=return_data.get("asin"),
+                            product_name=return_data.get("product_name"),
+                            quantity=return_data.get("quantity"),
+                            return_reason=return_data.get("return_reason"),
+                            return_status=return_data.get("return_status"),
+                            requested_at=requested_dt,
+                            received_at=received_dt,
+                            last_synced_at=datetime.utcnow()
+                        )
+                        db.add(new_return)
+                        db.flush()
+                        records_created += 1
             except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to process return {amazon_return_id} for company {company_id}: {e}")
-                # We continue to the next record so one bad record doesn't stop the whole sync
-                
+                # db.rollback() happens automatically because of begin_nested() context manager
+                logger.error(
+                    f"Amazon return failed for record_id={amazon_return_id}",
+                    exc_info=True
+                )
+                failed_records.append({
+                    "record_id": amazon_return_id,
+                    "error": str(e)
+                })
+                continue
+
+        if failed_records:
+            raise Exception(f"PartialBatchFailureException: {failed_records}")
+            
         return records_created, records_updated

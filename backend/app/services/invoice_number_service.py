@@ -1,20 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from sqlalchemy.orm import Session
 
-from app.models.schema import InvoiceSequence
-
-
-@dataclass(frozen=True)
-class InvoiceNumberParts:
-    company_code: str
-    fiscal_year: str  # "26-27"
-    sequence_no: int
-
-    def format(self) -> str:
-        return f"{self.company_code}/{self.fiscal_year}/{self.sequence_no:03d}"
+from app.services.document_number_service import DocumentNumberService
+from app.models.schema import DocumentTypeEnum
 
 
 def _get_fiscal_year_string(d: date) -> str:
@@ -33,30 +23,10 @@ class InvoiceNumberService:
         on_date = on_date or date.today()
         fy = _get_fiscal_year_string(on_date)
 
-        seq = (
-            db.query(InvoiceSequence)
-            .filter(InvoiceSequence.company_id == company_id, InvoiceSequence.fiscal_year == fy)
-            .with_for_update()
-            .first()
+        return DocumentNumberService.generate_number(
+            db=db,
+            company_id=company_id,
+            document_type=DocumentTypeEnum.SALE,
+            fiscal_year=fy,
+            prefix_override=company_code
         )
-        if not seq:
-            from sqlalchemy.exc import IntegrityError
-            try:
-                with db.begin_nested():
-                    seq = InvoiceSequence(company_id=company_id, fiscal_year=fy, last_number=0)
-                    db.add(seq)
-                    db.flush()
-            except IntegrityError:
-                seq = (
-                    db.query(InvoiceSequence)
-                    .filter(InvoiceSequence.company_id == company_id, InvoiceSequence.fiscal_year == fy)
-                    .with_for_update()
-                    .first()
-                )
-
-        seq.last_number = (seq.last_number or 0) + 1
-        db.flush()
-
-        parts = InvoiceNumberParts(company_code=company_code, fiscal_year=fy, sequence_no=seq.last_number)
-        return parts.format()
-

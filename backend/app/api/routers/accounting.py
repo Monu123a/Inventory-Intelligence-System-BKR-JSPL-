@@ -1,12 +1,11 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timedelta
 import os
 import zipfile
-import io
 
 from app.api.dependencies import get_db, get_current_user, get_current_company_id
 from app.models.schema import Sale, User
@@ -14,14 +13,15 @@ from app.models.accounting_schema import AccountingExportBatch, AccountingExport
 from app.services.accounting.integration_engine import AccountingIntegrationEngine
 from pydantic import BaseModel
 from datetime import datetime
+import io
 
 router = APIRouter(prefix="/accounting", tags=["Accounting Integration"])
 
 DOCUMENT_REGISTRY = {
-    "Sales": ["B2C", "B2B"],
-    "Warehouse": ["Dispatches", "Returns"],
-    "Accounting": ["Credit Notes", "Debit Notes"],
-    "Purchases": []
+    "Sales Invoice": ["B2C", "B2B"],
+    "Credit Note": ["Sales Return", "Purchase Return"],
+    "Debit Note": ["Damage Claim"],
+    "Purchase": ["Standard", "Import"]
 }
 
 class ExportBatchRequest(BaseModel):
@@ -29,6 +29,7 @@ class ExportBatchRequest(BaseModel):
     subtype: str
     document_ids: List[int]
     force_reexport: bool = False
+    reason: Optional[str] = None
 
 class MappingCreate(BaseModel):
     mapping_type: str
@@ -39,6 +40,7 @@ class ConfigurationUpdate(BaseModel):
     default_sales_ledger: str
     default_godown: str
     round_off_ledger: str
+    voucher_mappings: Optional[dict] = None
 
 # --- Endpoints ---
 
@@ -58,9 +60,10 @@ def get_ready_documents(category: str = "Sales", subtype: str = "B2C", profile: 
     if category not in DOCUMENT_REGISTRY or subtype not in DOCUMENT_REGISTRY.get(category, []):
         raise HTTPException(status_code=400, detail="Invalid document category or subtype")
         
-    if category == "Sales":
+    if category == "Sales Invoice":
         query = db.query(Sale).filter(Sale.company_id == company_id, Sale.invoice_type == subtype)
     else:
+        # Placeholder for other document types until their modules are integrated with accounting
         return []
     
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -118,10 +121,19 @@ def export_batch(request: ExportBatchRequest, company_id: int = Depends(get_curr
             subtype=request.subtype,
             document_ids=request.document_ids, 
             user_id=user.id,
-            force_reexport=request.force_reexport
+            user_role=user.role,
+            force_reexport=request.force_reexport,
+            force_reexport_reason=request.reason
         )
+        db.commit()
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
     
     return {
         "batch_id": batch.id,
@@ -156,7 +168,6 @@ def download_batch_xml(batch_id: int, format: str = "xml", company_id: int = Dep
         
     if format == "zip":
         # Create a ZIP containing the XML and the Manifest JSON
-        import io
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
             # Add XML
@@ -186,7 +197,7 @@ def get_statistics(category: str = "Sales", subtype: str = "B2C", company_id: in
         
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    if category == "Sales":
+    if category == "Sales Invoice":
         total_docs = db.query(Sale).filter(Sale.company_id == company_id, Sale.invoice_type == subtype).count()
         
         exported_docs = db.query(AccountingExportLog).join(AccountingExportBatch).filter(
@@ -262,5 +273,7 @@ def update_configuration(req: ConfigurationUpdate, company_id: int = Depends(get
     config.default_sales_ledger = req.default_sales_ledger
     config.default_godown = req.default_godown
     config.round_off_ledger = req.round_off_ledger
+    if req.voucher_mappings is not None:
+        config.voucher_mappings = req.voucher_mappings
     db.commit()
     return config

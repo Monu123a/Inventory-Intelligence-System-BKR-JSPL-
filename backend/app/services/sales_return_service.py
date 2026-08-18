@@ -1,8 +1,10 @@
+import logging
 import uuid
 from sqlalchemy.orm import Session
-from app.models.schema import SalesReturn, SalesReturnItem, Sale, SaleItem
+from app.models.schema import SalesReturn, SalesReturnItem, SaleItem
 from app.services.inventory_event_engine import InventoryEventEngine
-from app.services.tally_integration_service import TallyIntegrationService
+from app.services.audit_log_service import AuditLogService
+from app.models.schema import Warehouse, InventoryMovement
 
 class SalesReturnService:
 
@@ -14,6 +16,7 @@ class SalesReturnService:
 
         sales_return = SalesReturn(
             company_id=company_id,
+            idempotency_key=return_data.get("idempotency_key"),
             sale_id=return_data.get("sale_id"),
             return_number=return_number,
             return_type=return_data.get("return_type", "OFFLINE"),
@@ -80,7 +83,6 @@ class SalesReturnService:
         sales_return.total_tax = total_tax
         sales_return.grand_total = total_taxable + total_tax
         
-        from app.services.audit_log_service import AuditLogService
         AuditLogService.log(
             db,
             company_id=company_id,
@@ -91,7 +93,7 @@ class SalesReturnService:
         )
         
         db.flush()
-        db.commit()
+        logging.getLogger(__name__).info("Return processed", extra={"return_id": sales_return.id, "return_number": sales_return.return_number})
         return sales_return
 
     @staticmethod
@@ -102,20 +104,24 @@ class SalesReturnService:
         if sales_return.status != "Draft":
             raise ValueError("Only Draft returns can be completed")
 
-        from app.models.schema import Warehouse, InventoryMovement
         
         # 1. Try to find the originating warehouse from the original Sale's inventory movements
         warehouse_id = None
         if sales_return.sale_id:
             movement = db.query(InventoryMovement).filter(
                 InventoryMovement.reference_id == sales_return.sale.bill_number,
-                InventoryMovement.event_type == "SALE"
+                InventoryMovement.source.in_(["POS_SALE", "OFFLINE_POS", "B2B_SALE"])
             ).first()
             if movement:
                 warehouse_id = movement.warehouse_id
+                print(f"[SALES RETURN] Found original warehouse: {warehouse_id} via movement source: {movement.source}")
+            else:
+                raise ValueError("Original sale warehouse could not be determined. Cannot process return.")
                 
-        # 2. Fallback to the company's default active warehouse
+        # 2. Fallback to the company's default active warehouse ONLY for offline returns
         if not warehouse_id:
+            if sales_return.return_type != "OFFLINE":
+                raise ValueError("Only OFFLINE returns can fallback to a default warehouse.")
             warehouses = db.query(Warehouse).filter(
                 Warehouse.company_id == company_id,
                 Warehouse.status == "Active"
@@ -148,7 +154,6 @@ class SalesReturnService:
                     metadata_payload={"return_id": sales_return.id}
                 )
 
-        from app.services.audit_log_service import AuditLogService
 
         # Optional Tally Integration for returns if supported natively
         # TallyIntegrationService.queue_sale_export(db, sales_return.id)
@@ -164,7 +169,7 @@ class SalesReturnService:
         )
         
         db.flush()
-        db.commit()
+        logging.getLogger(__name__).info("Return processed", extra={"return_id": sales_return.id, "return_number": sales_return.return_number})
         return sales_return
 
     @staticmethod
@@ -177,7 +182,6 @@ class SalesReturnService:
         
         sales_return.status = "Cancelled"
         
-        from app.services.audit_log_service import AuditLogService
         AuditLogService.log(
             db,
             company_id=company_id,
@@ -188,5 +192,5 @@ class SalesReturnService:
         )
         
         db.flush()
-        db.commit()
+        logging.getLogger(__name__).info("Return processed", extra={"return_id": sales_return.id, "return_number": sales_return.return_number})
         return sales_return

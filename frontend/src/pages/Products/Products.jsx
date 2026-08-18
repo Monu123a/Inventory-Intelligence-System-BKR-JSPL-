@@ -8,7 +8,9 @@ import { SearchBar } from '../../components/forms/SearchBar';
 import { ProductFormModal } from './components/ProductFormModal';
 import { ConfirmationDialog } from '../../components/Modal/ConfirmationDialog';
 import { useProducts, useCreateProduct, useUpdateProduct, useBulkUpdateProducts, useProductFilters, useDeleteProduct } from '../../hooks/useProducts';
+import { useAuthStore } from '../../stores/authStore';
 import { FiPlus, FiEdit2, FiRefreshCw, FiCheckSquare, FiXSquare, FiTrash2 } from 'react-icons/fi';
+import AdminPasswordModal from '../../components/common/AdminPasswordModal';
 import styles from './Products.module.css';
 
 const Products = () => {
@@ -21,8 +23,13 @@ const Products = () => {
   const [selectedSkus, setSelectedSkus] = useState(new Set());
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [pendingFormData, setPendingFormData] = useState(null);
   
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: null, sku: null });
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  
+  const { user: currentUser } = useAuthStore();
+  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
 
   const { data: products, totalPages, isPending, refetch } = useProducts({
     search, category: categoryFilter, brand: brandFilter, status: statusFilter, page, limit: 15
@@ -58,13 +65,23 @@ const Products = () => {
   };
 
   const handleFormSubmit = (data) => {
+    setPendingFormData(data);
+    setIsFormModalOpen(false);
+    setPasswordModalOpen(true);
+  };
+
+  const handlePasswordSubmit = (adminPassword) => {
+    if (!pendingFormData) return;
+    
     if (editingProduct) {
-      updateMutation.mutate({ sku: editingProduct.sku, data }, {
-        onSuccess: () => setIsFormModalOpen(false)
+      updateMutation.mutate({ sku: editingProduct.sku, data: pendingFormData, adminPassword }, {
+        onSuccess: () => { setPasswordModalOpen(false); setPendingFormData(null); },
+        onError: () => { setPasswordModalOpen(false); }
       });
     } else {
-      createMutation.mutate(data, {
-        onSuccess: () => setIsFormModalOpen(false)
+      createMutation.mutate({ data: pendingFormData, adminPassword }, {
+        onSuccess: () => { setPasswordModalOpen(false); setPendingFormData(null); },
+        onError: () => { setPasswordModalOpen(false); }
       });
     }
   };
@@ -92,10 +109,14 @@ const Products = () => {
         });
       }
     } else if (confirmDialog.type === 'hard_delete') {
-      deleteMutation.mutate(confirmDialog.sku, {
-        onSuccess: () => setConfirmDialog({ isOpen: false })
-      });
+      setPasswordModalOpen(true); // Deletions also require password in this flow
     }
+  };
+
+  const executeDeleteWithPassword = (adminPassword) => {
+    deleteMutation.mutate({ sku: confirmDialog.sku, adminPassword }, {
+      onSuccess: () => { setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
+    });
   };
 
   const columns = [
@@ -153,9 +174,11 @@ const Products = () => {
           <Button variant="secondary" onClick={() => refetch()} isLoading={isPending}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
-          <Button variant="primary" onClick={() => { setEditingProduct(null); setIsFormModalOpen(true); }}>
-            <FiPlus style={{ marginRight: '8px' }} /> Add Product
-          </Button>
+          {isAdmin && (
+            <Button variant="primary" onClick={() => { setEditingProduct(null); setIsFormModalOpen(true); }}>
+              <FiPlus style={{ marginRight: '8px' }} /> Add Product
+            </Button>
+          )}
         </>
       }
     >
@@ -251,6 +274,19 @@ const Products = () => {
         confirmText={confirmDialog.type === 'hard_delete' ? 'Delete Permanently' : 'Confirm'}
         isLoading={bulkMutation.isPending || updateMutation.isPending || deleteMutation.isPending}
         isDanger={confirmDialog.type === 'bulk_deactivate' || confirmDialog.type === 'hard_delete'}
+      />
+
+      <AdminPasswordModal 
+        isOpen={passwordModalOpen}
+        onClose={() => { setPasswordModalOpen(false); setPendingFormData(null); }}
+        onSubmit={(pwd) => {
+          if (confirmDialog.type === 'hard_delete') {
+            executeDeleteWithPassword(pwd);
+          } else {
+            handlePasswordSubmit(pwd);
+          }
+        }}
+        actionName={confirmDialog.type === 'hard_delete' ? "delete product" : (editingProduct ? "update product" : "add product")}
       />
     </PageContainer>
   );

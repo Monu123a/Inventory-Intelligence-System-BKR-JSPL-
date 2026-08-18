@@ -1,8 +1,7 @@
 import abc
 import os
-import random
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class AmazonReturnsClient(abc.ABC):
     @abc.abstractmethod
@@ -22,7 +21,6 @@ class AmazonReturnsClient(abc.ABC):
         - requested_at: datetime string
         - received_at: datetime string (optional)
         """
-        pass
 
 class MockAmazonReturnsClient(AmazonReturnsClient):
     def fetch_returns(self, since: datetime = None) -> List[Dict[str, Any]]:

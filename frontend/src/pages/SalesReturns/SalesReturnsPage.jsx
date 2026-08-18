@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { FiPlus, FiEye, FiCheck, FiX } from 'react-icons/fi';
-import api from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { salesReturnsService } from '../../services/salesReturns';
+import { handleApiError } from '../../utils/errorHandler';
 import useCompanyStore from '../../stores/useCompanyStore';
 import CreateReturnModal from './CreateReturnModal';
 import ViewReturnModal from './ViewReturnModal';
@@ -9,44 +11,48 @@ import styles from './SalesReturnsPage.module.css';
 export default function SalesReturnsPage() {
   const currentCompany = useCompanyStore(state => state.currentCompany);
   
-  const [returns, setReturns] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewReturn, setViewReturn] = useState(null);
 
-  useEffect(() => {
-    if (currentCompany?.id) {
-      fetchReturns();
-    }
-  }, [currentCompany]);
+  const { data: returns = [], isLoading: loading, error: returnsError } = useQuery({
+    queryKey: ['salesReturns'],
+    queryFn: () => salesReturnsService.getReturns(),
+    enabled: !!currentCompany?.id
+  });
 
-  const fetchReturns = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await api.get('/api/sales-returns/');
-      setReturns(response.data || []);
-    } catch (err) {
-      console.error('Failed to fetch sales returns:', err);
-      setError('Failed to load sales returns.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (returnsError) {
+    handleApiError(returnsError, 'Failed to load sales returns.');
+  }
 
-  const handleStatusUpdate = async (id, status) => {
-    try {
-      if (status === 'Completed') {
-         await api.post(`/api/sales-returns/${id}/complete`);
-      } else if (status === 'Cancelled') {
-         await api.post(`/api/sales-returns/${id}/cancel`);
-      }
-      fetchReturns();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.detail || 'Failed to update status');
+  const completeMutation = useMutation({
+    mutationFn: (id) => salesReturnsService.completeReturn(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['salesReturns'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+    onError: (err) => handleApiError(err, 'Failed to complete return')
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id) => salesReturnsService.cancelReturn(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['salesReturns'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+    onError: (err) => handleApiError(err, 'Failed to cancel return')
+  });
+
+  const handleStatusUpdate = (id, status) => {
+    if (status === 'Completed') {
+      completeMutation.mutate(id);
+    } else if (status === 'Cancelled') {
+      cancelMutation.mutate(id);
     }
   };
 
@@ -62,7 +68,7 @@ export default function SalesReturnsPage() {
         </button>
       </div>
 
-      {error && <div className={styles.errorText} style={{color: 'red', marginBottom: '16px'}}>{error}</div>}
+      {returnsError && <div className={styles.errorText} style={{color: 'red', marginBottom: '16px'}}>Failed to load sales returns.</div>}
 
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
@@ -135,7 +141,8 @@ export default function SalesReturnsPage() {
           onClose={() => setShowCreateModal(false)} 
           onSuccess={() => {
             setShowCreateModal(false);
-            fetchReturns();
+            queryClient.invalidateQueries({ queryKey: ['salesReturns'] });
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
           }}
         />
       )}

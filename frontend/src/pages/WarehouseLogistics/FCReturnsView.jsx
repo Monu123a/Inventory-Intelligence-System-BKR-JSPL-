@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../services/api';
+import { useQueryClient } from '@tanstack/react-query';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import { Modal } from '../../components/Modal/Modal';
 import Button from '../../components/forms/Button';
 import Input from '../../components/forms/Input';
+import toast from 'react-hot-toast';
+import useCompanyStore from '../../stores/useCompanyStore';
 import styles from '../Warehouse/Warehouse.module.css';
 
 const FCReturnsView = () => {
+  const queryClient = useQueryClient();
   const [returns, setReturns] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [newReturn, setNewReturn] = useState({ dispatchId: '', reason: '' });
+  const idempotencyKeyRef = useRef(window.crypto.randomUUID());
+  const [newReturn, setNewReturn] = useState({ dispatchId: '', dispatchItemId: '', quantity: 1, reason: '' });
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchReturns();
@@ -28,15 +34,50 @@ const FCReturnsView = () => {
 
   const handleCreateReturn = async (e) => {
     e.preventDefault();
+    
+    if (!newReturn.dispatchId || !newReturn.dispatchItemId || parseInt(newReturn.quantity) <= 0) {
+      toast.error('Invalid return payload: Missing dispatch details or quantity');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await api.post('/api/fc-returns', newReturn);
+      const payload = {
+        idempotency_key: idempotencyKeyRef.current,
+        dispatch_id: parseInt(newReturn.dispatchId),
+        items: [
+          {
+            dispatch_item_id: parseInt(newReturn.dispatchItemId),
+            quantity: parseInt(newReturn.quantity),
+            return_reason: newReturn.reason
+          }
+        ]
+      };
+
+      let headers = {};
+      const { currentCompany } = useCompanyStore.getState();
+      const isBkr = currentCompany?.name?.toLowerCase().includes('bkr') || currentCompany?.code === 'BKR';
+      if (isBkr) {
+        const compRes = await api.get('/api/companies');
+        const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
+        if (jsplCompany) {
+          headers = { 'X-Company-Id': jsplCompany.id };
+        }
+      }
+
+      await api.post('/api/fc-returns', payload, { headers });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['fc-returns'] });
       setShowModal(false);
-      setNewReturn({ dispatchId: '', reason: '' });
+      setNewReturn({ dispatchId: '', dispatchItemId: '', quantity: 1, reason: '' });
+      idempotencyKeyRef.current = window.crypto.randomUUID();
       fetchReturns();
-      alert('Return request created successfully');
+      toast.success('Return request created successfully');
     } catch (err) {
       console.error(err);
-      alert('Error creating return request');
+      toast.error(err.response?.data?.detail || 'Error creating return request');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -101,9 +142,24 @@ const FCReturnsView = () => {
         <form onSubmit={handleCreateReturn} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <Input 
             label="Dispatch ID" 
-            placeholder="e.g. DISP-1234"
+            placeholder="e.g. 1234"
             value={newReturn.dispatchId} 
             onChange={(e) => setNewReturn({...newReturn, dispatchId: e.target.value})} 
+            required 
+          />
+          <Input 
+            label="Dispatch Item ID" 
+            placeholder="e.g. 1"
+            value={newReturn.dispatchItemId} 
+            onChange={(e) => setNewReturn({...newReturn, dispatchItemId: e.target.value})} 
+            required 
+          />
+          <Input 
+            label="Quantity" 
+            type="number"
+            min="1"
+            value={newReturn.quantity} 
+            onChange={(e) => setNewReturn({...newReturn, quantity: e.target.value})} 
             required 
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -118,7 +174,7 @@ const FCReturnsView = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
             <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
-            <Button type="submit" variant="primary">Submit Return</Button>
+            <Button type="submit" variant="primary" disabled={submitting}>Submit Return</Button>
           </div>
         </form>
       </Modal>

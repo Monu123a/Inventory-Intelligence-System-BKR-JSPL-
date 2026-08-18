@@ -5,7 +5,7 @@ import { Card } from '../../components/Card/Card';
 import Button from '../../components/forms/Button';
 import Input from '../../components/forms/Input';
 import { Modal } from '../../components/Modal/Modal';
-import api from '../../services/api';
+import { warehouseService } from '../../services/warehouse';
 
 const WarehouseUsers = () => {
   const { id } = useParams();
@@ -20,8 +20,8 @@ const WarehouseUsers = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/api/warehouses/${id}/users`);
-      setUsers(response.data || []);
+      const data = await warehouseService.getWarehouseUsers(id);
+      setUsers(data || []);
       setError('');
     } catch (err) {
       console.error(err);
@@ -33,8 +33,8 @@ const WarehouseUsers = () => {
 
   const fetchAllUsers = async () => {
     try {
-      const response = await api.get('/api/users'); // Assuming this endpoint exists
-      setAllUsers(response.data || []);
+      const response = await api.get('/api/users'); // TODO: Create user service
+      setAvailableUsers(response.data || []);
     } catch (err) {
       console.error('Could not load user list for assignment', err);
     }
@@ -62,7 +62,11 @@ const WarehouseUsers = () => {
         user_id: parseInt(formData.user_id, 10),
         permission: formData.permission
       };
-      await api.post(`/api/warehouses/${id}/users`, payload);
+      try {
+        await warehouseService.assignWarehouseUser(id, payload);
+      } catch (err) {
+        console.error(err);
+      }
       handleCloseModal();
       fetchUsers();
     } catch (err) {
@@ -74,7 +78,7 @@ const WarehouseUsers = () => {
   const handleRemoveUser = async (userId) => {
     if (window.confirm('Are you sure you want to remove this user from the warehouse?')) {
       try {
-        await api.delete(`/api/warehouses/${id}/users/${userId}`);
+        await warehouseService.removeWarehouseUser(id, userId);
         fetchUsers();
       } catch (err) {
         console.error(err);

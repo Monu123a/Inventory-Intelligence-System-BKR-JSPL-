@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import { reportsService } from '../../../services/reports';
 import { DataTable } from '../../../components/DataTable';
 import { ReportToolbar } from '../../../components/Reporting/ReportToolbar';
 
@@ -21,8 +21,7 @@ export const SalesReport = () => {
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
       
-      const res = await api.get('/api/business-reports/sales', { params });
-      return res.data; // Expected format: { items: [], total: number } or similar array
+      return reportsService.getSalesReport(params);
     }
   });
 
@@ -32,12 +31,10 @@ export const SalesReport = () => {
   const totalPages = Math.ceil(total / limit);
 
   const columns = [
-    { key: 'sale_date', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
-    { key: 'bill_number', label: 'Bill No.' },
-    { key: 'customer_name', label: 'Customer' },
-    { key: 'total_quantity', label: 'Qty' },
-    { key: 'grand_total', label: 'Total Value', render: (val) => `₹${Number(val || 0).toFixed(2)}` },
-    { key: 'status', label: 'Status' }
+    { key: 'period', label: 'Period' },
+    { key: 'total_orders', label: 'Total Orders' },
+    { key: 'total_items_sold', label: 'Total Items Sold' },
+    { key: 'total_revenue', label: 'Total Revenue', render: (val) => `₹${Number(val || 0).toFixed(2)}` }
   ];
 
   return (

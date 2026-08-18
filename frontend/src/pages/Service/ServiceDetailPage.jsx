@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import useCompanyStore from '../../stores/useCompanyStore';
-import ServiceBillRenderer from './ServiceBillRenderer';
+import { FiArrowLeft, FiTool, FiUser, FiMapPin, FiInfo, FiCheckCircle, FiFileText, FiPrinter } from 'react-icons/fi';
+import styles from './ServiceDetailPage.module.css';
 
 export default function ServiceDetailPage() {
   const { id } = useParams();
@@ -12,11 +13,7 @@ export default function ServiceDetailPage() {
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  const [replacementData, setReplacementData] = useState({ itemId: '', replacementItemId: '', quantity: 1 });
-  const [billData, setBillData] = useState({ labour_charges: 0, spare_charges: 0, tax_amount: 0 });
   const [newStatus, setNewStatus] = useState('');
-  
-  const [showBill, setShowBill] = useState(false);
 
   const fetchService = () => {
     setLoading(true);
@@ -46,155 +43,223 @@ export default function ServiceDetailPage() {
     }
   };
 
-  const handleAddReplacement = async () => {
-    if (!replacementData.itemId || !replacementData.replacementItemId) return;
-    try {
-      await api.post(`/api/services/items/${replacementData.itemId}/replacement?replacement_product_id=${replacementData.replacementItemId}&quantity=${replacementData.quantity}`);
-      fetchService();
-      setReplacementData({ itemId: '', replacementItemId: '', quantity: 1 });
-    } catch (err) {
-      console.error(err);
-      alert('Failed to add replacement');
+
+  if (loading) return (
+    <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div>Loading...</div>
+    </div>
+  );
+  
+  if (!service) return (
+    <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div>Service record not found</div>
+    </div>
+  );
+
+
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'Completed': return styles.statusCompleted;
+      case 'In Progress': return styles.statusInProgress;
+      case 'Cancelled': return styles.statusCancelled;
+      default: return styles.statusPending;
     }
   };
-
-  const handleSetBill = async () => {
-    try {
-      await api.post(`/api/services/${id}/bill?labour_charges=${billData.labour_charges || 0}&spare_charges=${billData.spare_charges || 0}&tax_amount=${billData.tax_amount || 0}`);
-      fetchService();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to set bill');
-    }
-  };
-
-  if (loading) return <div style={{ padding: '24px', textAlign: 'center' }}>Loading...</div>;
-  if (!service) return <div style={{ padding: '24px', textAlign: 'center' }}>Service record not found</div>;
-
-  if (showBill) {
-    return (
-      <div style={{ padding: '24px' }}>
-        <button onClick={() => setShowBill(false)} style={{ marginBottom: '16px', padding: '8px 16px', backgroundColor: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}>Back</button>
-        <button onClick={() => window.print()} style={{ marginBottom: '16px', marginLeft: '12px', padding: '8px 16px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Print</button>
-        <ServiceBillRenderer service={service} company={currentCompany} />
-      </div>
-    );
-  }
-
-  const sectionStyle = { backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '24px' };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2>Service Record #{service.id}</h2>
-        <button onClick={() => navigate('/service/records')} style={{ padding: '8px 16px', backgroundColor: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}>Back to Records</button>
-      </div>
-
-      <div style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>Details</h3>
-        <p><strong>Customer:</strong> {service.customer_name || 'N/A'}</p>
-        <p><strong>Type:</strong> {service.service_type}</p>
-        <p><strong>Complaint:</strong> {service.complaint}</p>
-        <p><strong>Date:</strong> {new Date(service.created_at || service.date).toLocaleString()}</p>
-        <p><strong>Status:</strong> <span style={{ padding: '4px 8px', backgroundColor: service.status === 'Completed' ? '#dcfce7' : '#dbeafe', color: service.status === 'Completed' ? '#166534' : '#1e40af', borderRadius: '9999px', fontSize: '12px', fontWeight: '500' }}>{service.status}</span></p>
-      </div>
-
-      <div style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>Update Status</h3>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <select 
-            value={newStatus} 
-            onChange={(e) => setNewStatus(e.target.value)}
-            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-          >
-            <option value="Pending">Pending</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-          <button onClick={handleUpdateStatus} style={{ padding: '8px 16px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Update</button>
-        </div>
-      </div>
-
-      <div style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>Items & Replacements</h3>
-        {service.items && service.items.length > 0 ? (
-          <ul style={{ paddingLeft: '20px' }}>
-            {service.items.map(item => (
-              <li key={item.id} style={{ marginBottom: '8px' }}>
-                Item ID: {item.id} - Sale Item: {item.sku_snapshot || 'N/A'} (Qty: {item.quantity})
-                {item.replacement_product_id ? (
-                  <span style={{ marginLeft: '12px', color: '#166534', fontWeight: '500' }}>(Replaced with Product ID: {item.replacement_product_id}, Qty: {item.replacement_quantity})</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No items associated.</p>
-        )}
+    <div className={styles.pageContainer}>
+      <div className={styles.mainWrapper}>
         
-        <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
-          <h4 style={{ marginTop: 0 }}>Add Replacement</h4>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <input 
-              placeholder="Service Item ID" 
-              value={replacementData.itemId} 
-              onChange={e => setReplacementData({...replacementData, itemId: e.target.value})} 
-              style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
-            <input 
-              placeholder="Replacement Product ID" 
-              value={replacementData.replacementItemId} 
-              onChange={e => setReplacementData({...replacementData, replacementItemId: e.target.value})} 
-              style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
-            <input 
-              type="number"
-              placeholder="Quantity" 
-              value={replacementData.quantity} 
-              onChange={e => setReplacementData({...replacementData, quantity: e.target.value})} 
-              style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px', width: '80px' }}
-            />
-            <button onClick={handleAddReplacement} style={{ padding: '8px 16px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Add</button>
+        {/* Header Area */}
+        <div className={styles.headerCard}>
+          <div>
+            <div className={styles.titleWrapper}>
+              <div className={styles.iconBox}><FiFileText /></div>
+              <h1 className={styles.pageTitle}>Service Record</h1>
+            </div>
+            <p className={styles.pageSubtitle}>#{service.service_number} • Created {new Date(service.created_at || service.service_date).toLocaleDateString()}</p>
+          </div>
+          
+          <div className={styles.actionWrapper}>
+            <button onClick={() => navigate('/service/records')} className={styles.btnSecondary}>
+              <FiArrowLeft /> Back to List
+            </button>
+            <button onClick={() => navigate(`/services/job-cards/new?serviceRecordId=${service.id}`)} className={styles.btnPrimary}>
+              <FiTool /> Create Job Card
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.gridLayout}>
+          
+          {/* Main Content Column */}
+          <div className={styles.mainCol}>
+            
+            <div className={styles.contentCard}>
+              <div className={styles.cardTopGradient}></div>
+              
+              <div className={styles.cardBody}>
+                <div className={styles.cardHeader}>
+                  <div>
+                    <h2 className={styles.cardTitle}>Request Details</h2>
+                    <span className={`${styles.statusBadge} ${getStatusClass(service.status)}`}>
+                      <span className={styles.statusDot}></span>
+                      {service.status}
+                    </span>
+                  </div>
+                  <div style={{textAlign: 'right'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase'}}>Source</div>
+                    <div className={styles.sourceTag}>{service.source_type.toUpperCase()}</div>
+                  </div>
+                </div>
+
+                <div className={styles.detailsGrid}>
+                  {/* Customer Info */}
+                  <div className={styles.infoSection}>
+                    <h3><FiUser color="#6366f1" /> Customer Information</h3>
+                    <div className={styles.infoBox}>
+                      <div style={{fontWeight: 700, fontSize: '1.125rem'}}>{service.customer_name_snapshot || 'Walk-in Customer'}</div>
+                      <div style={{color: '#4b5563'}}>📞 {service.customer_mobile_snapshot || 'No phone provided'}</div>
+                      <div style={{color: '#4b5563', display: 'flex', gap: '0.5rem'}}><FiMapPin style={{marginTop: '0.25rem', color: '#9ca3af'}}/> <span>{service.customer_address_snapshot || 'No address provided'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Machine Info */}
+                  <div className={styles.infoSection}>
+                    <h3><FiTool color="#3b82f6" /> Machine Specifications</h3>
+                    <div className={styles.infoBoxBlue}>
+                      <div style={{fontWeight: 700, fontSize: '1.125rem'}}>{service.machine_type || 'Unspecified Machine'}</div>
+                      <div className={styles.tagList}>
+                        <span className={`${styles.tag} ${styles.tagBlue}`}>Brand: {service.brand || 'N/A'}</span>
+                        <span className={`${styles.tag} ${styles.tagBlue}`}>Power: {service.power_type || 'N/A'}</span>
+                        {service.warranty && <span className={`${styles.tag} ${styles.tagGreen}`}>Under Warranty</span>}
+                      </div>
+                      <div style={{fontSize: '0.875rem', color: '#4b5563', marginTop: '0.5rem'}}><strong>Service Type:</strong> {service.service_type}</div>
+                      <div style={{fontSize: '0.875rem', color: '#4b5563'}}><strong>Location:</strong> {service.service_location || 'N/A'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Complaint Box */}
+                <div className={styles.infoSection}>
+                  <h3 style={{marginBottom: '0.5rem'}}><FiInfo color="#ec4899" /> Issue Description</h3>
+                  <div className={styles.complaintBox}>
+                    {service.complaint || 'No specific complaint documented.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Items & Replacements */}
+            <div className={styles.contentCard} style={{padding: '2rem'}}>
+              <h2 className={styles.cardTitle} style={{marginBottom: '1.5rem'}}>Linked Invoice Items</h2>
+              {service.items && service.items.length > 0 ? (
+                <div>
+                  {service.items.map(item => (
+                    <div key={item.id} className={styles.itemRow}>
+                      <div>
+                        <div style={{fontWeight: 700, color: '#1f2937'}}>SKU: {item.sku_snapshot || 'N/A'}</div>
+                        <div style={{fontSize: '0.875rem', color: '#6b7280'}}>Original Qty: {item.quantity}</div>
+                      </div>
+                      {item.replacement_product_id ? (
+                        <div style={{marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f0fdf4', color: '#15803d', padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 700, border: '1px solid #bbf7d0'}}>
+                          <FiCheckCircle /> Replaced (Qty: {item.replacement_quantity})
+                        </div>
+                      ) : (
+                        <span style={{marginTop: '0.75rem', display: 'inline-block', fontSize: '0.875rem', fontWeight: 500, color: '#9ca3af', background: 'white', padding: '0.25rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb'}}>No Replacement</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{textAlign: 'center', padding: '2.5rem', background: '#f9fafb', borderRadius: '1rem', border: '1px dashed #e5e7eb', color: '#6b7280', fontWeight: 500}}>
+                  No items were imported from an invoice.
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Sidebar Column */}
+          <div className={styles.sideCol}>
+            
+            {/* Status Update Card */}
+            <div className={styles.statusUpdateBox}>
+              <h3 style={{fontSize: '1.125rem', fontWeight: 700, color: '#1f2937', margin: '0 0 1rem'}}>Update Status</h3>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                <select 
+                  style={{width: '100%', borderRadius: '0.75rem', border: '1px solid #e5e7eb', background: '#f9fafb', padding: '0.75rem 1rem', fontWeight: 500, color: '#374151', boxSizing: 'border-box'}}
+                  value={newStatus} 
+                  onChange={(e) => setNewStatus(e.target.value)}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+                <button 
+                  onClick={handleUpdateStatus}
+                  style={{width: '100%', padding: '0.75rem', background: '#111827', color: 'white', borderRadius: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer'}}
+                >
+                  Save Status
+                </button>
+              </div>
+            </div>
+
+            {/* Job Card & Billing Card */}
+            <div className={styles.billBox}>
+              <h3 style={{fontSize: '1.25rem', fontWeight: 700, margin: '0 0 1.5rem'}}>Job Card & Billing</h3>
+              
+              {service.job_cards && service.job_cards.length > 0 ? (
+                <div>
+                  <div style={{marginBottom: '1rem', padding: '1rem', background: '#f3f4f6', borderRadius: '0.5rem', border: '1px solid #e5e7eb'}}>
+                    <div style={{fontSize: '0.875rem', color: '#6b7280', fontWeight: 600}}>LINKED JOB CARD</div>
+                    <div style={{fontWeight: 700, fontSize: '1.125rem', color: '#111827'}}>{service.job_cards[0].job_card_number}</div>
+                    <div style={{marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                      <span style={{fontSize: '0.875rem', fontWeight: 500}}>Status:</span>
+                      <span className={`${styles.statusBadge} ${getStatusClass(service.job_cards[0].status)}`} style={{padding: '0.25rem 0.5rem', fontSize: '0.75rem'}}>
+                        {service.job_cards[0].status}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {service.job_cards[0].status !== 'COMPLETED' && (!service.job_cards[0].invoices || service.job_cards[0].invoices.length === 0) && (
+                    <div style={{fontSize: '0.875rem', color: '#dc2626', background: '#fef2f2', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem', border: '1px solid #fecaca'}}>
+                      ⚠️ The Job Card must be marked as <b>COMPLETED</b> before generating a final tax invoice.
+                    </div>
+                  )}
+
+                  <button 
+                    onClick={() => {
+                      const jc = service.job_cards[0];
+                      if (jc.invoices && jc.invoices.length > 0) {
+                        navigate(`/services/invoices/${jc.invoices[0].id}`);
+                      } else {
+                        navigate(`/services/job-cards/${jc.id}`);
+                      }
+                    }}
+                    className={styles.btnPrimary}
+                    disabled={service.job_cards[0].status !== 'COMPLETED' && (!service.job_cards[0].invoices || service.job_cards[0].invoices.length === 0)}
+                    style={{width: '100%', justifyContent: 'center', opacity: (service.job_cards[0].status !== 'COMPLETED' && (!service.job_cards[0].invoices || service.job_cards[0].invoices.length === 0)) ? 0.5 : 1}}
+                  >
+                    {(service.job_cards[0].invoices && service.job_cards[0].invoices.length > 0) ? 'View Tax Invoice' : 'Generate Tax Invoice'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{textAlign: 'center'}}>
+                  <p style={{fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem'}}>
+                    No Job Card found. You must create a Job Card to proceed with workflow and billing.
+                  </p>
+                  <button onClick={() => navigate(`/services/job-cards/new?serviceRecordId=${service.id}`)} className={styles.btnOutline} style={{width: '100%'}}>
+                    Create Job Card
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
-
-      <div style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>Billing</h3>
-        <p>Current Total: <strong style={{ fontSize: '18px' }}>₹{service.grand_total || 0}</strong> (Labour: ₹{service.labour_charges || 0}, Spares: ₹{service.spare_charges || 0}, Tax: ₹{service.tax_amount || 0})</p>
-        <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
-          <input 
-            type="number" 
-            placeholder="Labour Charges" 
-            value={billData.labour_charges} 
-            onChange={e => setBillData({ ...billData, labour_charges: e.target.value })} 
-            style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px', width: '140px' }}
-          />
-          <input 
-            type="number" 
-            placeholder="Spare Charges" 
-            value={billData.spare_charges} 
-            onChange={e => setBillData({ ...billData, spare_charges: e.target.value })} 
-            style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px', width: '140px' }}
-          />
-          <input 
-            type="number" 
-            placeholder="Tax Amount" 
-            value={billData.tax_amount} 
-            onChange={e => setBillData({ ...billData, tax_amount: e.target.value })} 
-            style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px', width: '140px' }}
-          />
-          <button onClick={handleSetBill} style={{ padding: '8px 16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Update Bill</button>
-        </div>
-        
-        <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-          <button onClick={() => setShowBill(true)} style={{ padding: '10px 20px', backgroundColor: '#4b5563', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '500' }}>
-            View / Print Bill
-          </button>
-        </div>
-      </div>
-
     </div>
   );
 }

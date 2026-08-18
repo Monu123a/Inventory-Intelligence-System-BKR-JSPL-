@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 from app.models.db import get_db
 from app.api.dependencies import get_current_company_id, get_current_user
 from app.services.sales_return_service import SalesReturnService
+from app.services.metrics_service import log_metric
+import logging
+logger = logging.getLogger(__name__)
 from app.models.schema import SalesReturn, User
 
 router = APIRouter(prefix="/sales-returns", tags=["Sales Returns"])
@@ -22,6 +26,7 @@ class SalesReturnItemCreate(BaseModel):
     total_price: float = 0.0
 
 class SalesReturnCreate(BaseModel):
+    idempotency_key: Optional[str] = None
     sale_id: Optional[int] = None
     return_number: Optional[str] = None
     return_type: str = "OFFLINE"
@@ -58,11 +63,31 @@ def create_draft_return(
     user: User = Depends(get_current_user)
 ):
     try:
+        if data.idempotency_key:
+            existing = db.query(SalesReturn).filter(
+                SalesReturn.company_id == company_id,
+                SalesReturn.idempotency_key == data.idempotency_key
+            ).first()
+            if existing:
+                return existing
+
         rtn = SalesReturnService.create_draft(db, company_id, data.model_dump(), user.id)
         db.commit()
         db.refresh(rtn)
         return rtn
+    except IntegrityError as e:
+        db.rollback()
+        if data.idempotency_key:
+            existing = db.query(SalesReturn).filter(
+                SalesReturn.company_id == company_id,
+                SalesReturn.idempotency_key == data.idempotency_key
+            ).first()
+            if existing:
+                return existing
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -77,8 +102,14 @@ def complete_return(
         rtn = SalesReturnService.complete_return(db, company_id, return_id, user.id)
         db.commit()
         db.refresh(rtn)
+        
+        logger.info(f"Action: Sales Return Complete | User: {user.id} | Company: {company_id} | Status: Success | ReturnID: {rtn.id}")
+        log_metric("sales_return_completed", 1, {"company_id": company_id})
+        
         return rtn
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -95,6 +126,8 @@ def cancel_return(
         db.refresh(rtn)
         return rtn
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 

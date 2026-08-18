@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from app.models.db import get_db
-from app.api.dependencies import get_current_user, get_current_company_id
-from app.models.schema import User
+from app.api.dependencies import get_current_company_id
 from app.services.service_reminder_service import ServiceReminderService
 from app.services.audit_log_service import AuditLogService
+from app.models.schema import ServiceReminder
 
 router = APIRouter(prefix="/service-reminders", tags=["Service Reminders"])
 
@@ -28,13 +28,12 @@ def get_reminders(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    from app.models.schema import ServiceReminder
     return db.query(ServiceReminder).filter(ServiceReminder.company_id == company_id).order_by(ServiceReminder.reminder_date.asc()).all()
 
 @router.post("/{id}/status", response_model=ServiceReminderResponse)
 def update_reminder_status(
     id: int,
-    status: str,
+    status: str = Body(..., embed=True),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
@@ -55,5 +54,7 @@ def update_reminder_status(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

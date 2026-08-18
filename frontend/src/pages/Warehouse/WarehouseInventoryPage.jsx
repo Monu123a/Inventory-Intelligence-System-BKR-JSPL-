@@ -5,68 +5,54 @@ import { SearchBar } from '../../components/forms/SearchBar';
 import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
 import { FiArrowLeft, FiPackage, FiMapPin, FiBox } from 'react-icons/fi';
-import api from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
+import { stateHubService } from '../../services/stateHubService';
+import { warehouseService } from '../../services/warehouse';
+import { inventoryService } from '../../services/inventory';
+import { handleApiError } from '../../utils/errorHandler';
 import styles from './Warehouse.module.css';
 
 const WarehouseInventoryPage = () => {
-  const [warehouses, setWarehouses] = useState([]);
-  const [hubs, setHubs] = useState({});
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
-  
-  const [inventory, setInventory] = useState([]);
   const [skuSearch, setSkuSearch] = useState('');
   const [category, setCategory] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   // Fetch warehouses on mount
-  useEffect(() => {
-    const fetchWarehouses = async () => {
-      try {
-        setLoading(true);
-        const [whRes, hubsRes] = await Promise.all([
-          api.get('/api/warehouses'),
-          api.get('/api/state-hubs')
-        ]);
-        const hubMap = {};
-        if (hubsRes.data) {
-          hubsRes.data.forEach(h => {
-            hubMap[h.id] = h;
-          });
-        }
-        setHubs(hubMap);
-        setWarehouses(whRes.data || []);
-      } catch (err) {
-        setError('Failed to load warehouses');
-      } finally {
-        setLoading(false);
+  const { data: warehouseData, isLoading: loadingWarehouses, error: warehousesErrorObj } = useQuery({
+    queryKey: ['warehouse', 'all'],
+    queryFn: async () => {
+      const [whData, hubData] = await Promise.all([
+        warehouseService.getWarehouses(),
+        stateHubService.getAll()
+      ]);
+      const hubMap = {};
+      if (hubData) {
+        hubData.forEach(h => { hubMap[h.id] = h; });
       }
-    };
-    if (!selectedWarehouse) {
-      fetchWarehouses();
+      return { warehouses: whData || [], hubs: hubMap };
     }
-  }, [selectedWarehouse]);
+  });
+
+  const warehouses = warehouseData?.warehouses || [];
+  const hubs = warehouseData?.hubs || {};
+  
+  if (warehousesErrorObj) {
+    handleApiError(warehousesErrorObj, 'Failed to load warehouses');
+  }
 
   // Fetch inventory when a warehouse is selected
-  useEffect(() => {
-    if (selectedWarehouse) {
-      const fetchInventory = async () => {
-        try {
-          setLoading(true);
-          const response = await api.get(`/api/warehouse-inventory?warehouse_id=${selectedWarehouse.id}`);
-          setInventory(response.data || []);
-          setError('');
-        } catch (err) {
-          console.error(err);
-          setError('Failed to load inventory');
-          setInventory([]);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchInventory();
-    }
-  }, [selectedWarehouse]);
+  const { data: inventory = [], isLoading: loadingInventory, error: inventoryErrorObj } = useQuery({
+    queryKey: ['inventory', { warehouse_id: selectedWarehouse?.id }],
+    queryFn: () => inventoryService.getInventory({ warehouse_id: selectedWarehouse.id }),
+    enabled: !!selectedWarehouse,
+  });
+
+  if (inventoryErrorObj) {
+    handleApiError(inventoryErrorObj, 'Failed to load inventory');
+  }
+
+  const loading = loadingWarehouses;
+  const error = warehousesErrorObj ? 'Failed to load warehouses' : '';
 
   // Handle warehouse selection
   if (!selectedWarehouse) {
@@ -134,7 +120,15 @@ const WarehouseInventoryPage = () => {
     { key: 'reserved_qty', label: 'Reserved Qty' },
   ];
 
-  const filteredInventory = inventory.filter(item => {
+  const mappedInventory = inventory.map(item => ({
+    ...item,
+    sku: item.product?.sku || item.sku,
+    name: item.product?.name || item.name,
+    category: item.product?.category || item.category,
+    quantity: item.current_qty !== undefined ? item.current_qty : item.quantity,
+  }));
+
+  const filteredInventory = mappedInventory.filter(item => {
     const matchCategory = !category || item.category === category;
     const matchSearch = !skuSearch || (item.sku && item.sku.toLowerCase().includes(skuSearch.toLowerCase())) || (item.name && item.name.toLowerCase().includes(skuSearch.toLowerCase()));
     return matchCategory && matchSearch;
@@ -177,7 +171,7 @@ const WarehouseInventoryPage = () => {
           <DataTable>
             <TableHeader columns={columns} />
             <tbody>
-              {loading ? (
+              {loadingInventory ? (
                 <tr><td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>Loading inventory...</td></tr>
               ) : filteredInventory.length === 0 ? (
                 <tr>

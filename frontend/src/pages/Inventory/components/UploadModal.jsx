@@ -3,6 +3,7 @@ import { Modal } from '../../../components/Modal/Modal';
 import { ConfirmationDialog } from '../../../components/Modal/ConfirmationDialog';
 import Button from '../../../components/forms/Button';
 import { useUploadInventory } from '../../../hooks/useInventory';
+import AdminPasswordModal from '../../../components/common/AdminPasswordModal';
 import { FiUploadCloud, FiAlertCircle } from 'react-icons/fi';
 import styles from './UploadModal.module.css';
 
@@ -12,6 +13,7 @@ export const UploadModal = ({ isOpen, onClose }) => {
   const [warehouseCode, setWarehouseCode] = useState('WH-01'); // Hardcoded default for this phase
   const [previewData, setPreviewData] = useState(null);
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   
   const uploadMutation = useUploadInventory();
 
@@ -45,16 +47,20 @@ export const UploadModal = ({ isOpen, onClose }) => {
     if (uploadType === 'REPLACE') {
       setConfirmReplace(true);
     } else {
-      executeCommit();
+      setPasswordModalOpen(true);
     }
   };
 
-  const executeCommit = () => {
+  const executeCommit = (adminPassword) => {
     setConfirmReplace(false);
     uploadMutation.mutate(
-      { warehouseCode, uploadType, file, preview: false },
+      { warehouseCode, uploadType, file, preview: false, adminPassword },
       {
-        onSuccess: () => handleClose()
+        onSuccess: () => {
+          setPasswordModalOpen(false);
+          handleClose();
+        },
+        onError: () => setPasswordModalOpen(false)
       }
     );
   };
@@ -146,12 +152,17 @@ export const UploadModal = ({ isOpen, onClose }) => {
       <ConfirmationDialog 
         isOpen={confirmReplace}
         onClose={() => setConfirmReplace(false)}
-        onConfirm={executeCommit}
-        title="DANGER: Replace Inventory"
-        message="You are about to REPLACE the inventory for this warehouse. Any product not in the file will have its stock set to 0. This operation will generate a large number of system events. Are you sure you wish to continue?"
+        onConfirm={() => setPasswordModalOpen(true)}
+        title="Confirm REPLACE"
+        message="WARNING: You are about to REPLACE all inventory at this warehouse. All existing items not in this file will be set to 0. Are you sure?"
         confirmText="Yes, Replace Inventory"
         isDanger={true}
-        isLoading={uploadMutation.isPending}
+      />
+      <AdminPasswordModal 
+        isOpen={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        onSubmit={executeCommit}
+        actionName="upload inventory"
       />
     </>
   );

@@ -1,7 +1,8 @@
-from sqlalchemy.orm import relationship
-
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, UniqueConstraint, Text, text
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.hybrid import hybrid_property
+
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, Enum as SQLEnum, Text, UniqueConstraint, JSON, text
+import enum
 from datetime import datetime
 from app.models.db import Base
 
@@ -183,7 +184,20 @@ class Inventory(Base):
     current_qty = Column(Integer, default=0, server_default=text('0'), nullable=False)
     reserved_qty = Column(Integer, default=0, server_default=text('0'), nullable=False)
     available_qty = Column(Integer, default=0, server_default=text('0'), nullable=False)
+    version_id = Column(Integer, nullable=False, default=1, server_default=text('1'))
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    _allow_mutation = False
+
+    __mapper_args__ = {
+        "version_id_col": version_id
+    }
+
+    @validates('current_qty', 'reserved_qty', 'available_qty')
+    def validate_inventory_mutation(self, key, value):
+        if not getattr(self, '_allow_mutation', False):
+            raise Exception(f"Direct inventory mutation forbidden on {key}. Must use InventoryEventEngine.")
+        return value
 
     __table_args__ = (UniqueConstraint('company_id', 'product_id', 'warehouse_id', name='uix_company_prod_wh'),)
 
@@ -208,6 +222,7 @@ class InventoryMovement(Base):
     qty_after = Column(Integer, nullable=False)
     source = Column(String, nullable=False) # Upload, Amazon, Manual, Transfer
     reference_id = Column(String) # e.g. INV-12345
+    operation_id = Column(String, unique=True, nullable=True, index=True) # Idempotency key
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     metadata_payload = Column(JSON, default=dict)
 
@@ -341,19 +356,30 @@ class CompanySettings(Base):
     company = relationship("Company")
 
 
-class InvoiceSequence(Base):
+class DocumentTypeEnum(str, enum.Enum):
+    SALE = "SALE"
+    DISPATCH = "DISPATCH"
+    CHALLAN = "CHALLAN"
+    RETURN = "RETURN"
+    DAMAGE = "DAMAGE"
+    SERVICE = "SERVICE"
+    BATCH = "BATCH"
+    TRANSFER = "TRANSFER"
+    JOB_CARD = "JOB_CARD"
+    SERVICE_INVOICE = "SERVICE_INVOICE"
+
+class DocumentSequence(Base):
     """
-    Per-company invoice numbering sequence.
-    Example invoice numbers:
-      BKR/26-27/012
-      JSPL/26-27/103
+    Unified per-company document numbering sequence.
     """
-    __tablename__ = "invoice_sequences"
-    __table_args__ = (UniqueConstraint('company_id', 'fiscal_year', name='uix_company_fy_sequence'),)
+    __tablename__ = "document_sequences"
+    __table_args__ = (UniqueConstraint('company_id', 'document_type', 'fiscal_year', name='uix_company_doctype_fy_sequence'),)
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    document_type = Column(SQLEnum(DocumentTypeEnum), nullable=False)
     fiscal_year = Column(String, nullable=False)  # e.g. "26-27"
+    prefix = Column(String, nullable=True) # Optional prefix override
     last_number = Column(Integer, default=0)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -381,9 +407,13 @@ class AuditLog(Base):
 
 class Sale(Base):
     __tablename__ = "sales"
-    __table_args__ = (UniqueConstraint('company_id', 'bill_number', name='uix_company_bill_number'),)
+    __table_args__ = (
+        UniqueConstraint('company_id', 'bill_number', name='uix_company_bill_number'),
+        UniqueConstraint('company_id', 'idempotency_key', name='uix_company_sale_idempotency_key'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String, nullable=True, index=True)
     bill_number = Column(String, index=True, nullable=False)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     customer_name = Column(String, nullable=True)
@@ -520,8 +550,12 @@ class ReplenishmentRecommendation(Base):
 
 class StockTransfer(Base):
     __tablename__ = "stock_transfers"
+    __table_args__ = (
+        UniqueConstraint('from_company_id', 'idempotency_key', name='uix_from_company_transfer_idempotency_key'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String, nullable=True, index=True)
     transfer_number = Column(String, index=True, unique=True, nullable=False)
     from_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     to_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
@@ -658,8 +692,12 @@ class DefectiveInventory(Base):
 
 class SalesReturn(Base):
     __tablename__ = "sales_returns"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'idempotency_key', name='uix_company_salesreturn_idempotency_key'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String, nullable=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
     return_number = Column(String, index=True, nullable=False, unique=True)
@@ -768,23 +806,6 @@ class DeliveryChallanItem(Base):
 # Service Management (Phase 7)
 # =====================================================================
 
-class ServiceSequence(Base):
-    """
-    Per-company service numbering sequence.
-    Example service numbers:
-      SRV/BKR/26-27/00001
-    """
-    __tablename__ = "service_sequences"
-    __table_args__ = (UniqueConstraint('company_id', 'fiscal_year', name='uix_company_fy_srv_sequence'),)
-
-    id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    fiscal_year = Column(String, nullable=False)  # e.g. "26-27"
-    last_number = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    company = relationship("Company")
-
 
 class ServiceRecord(Base):
     __tablename__ = "service_records"
@@ -798,6 +819,11 @@ class ServiceRecord(Base):
     customer_name_snapshot = Column(String, nullable=False)
     customer_mobile_snapshot = Column(String, nullable=True)
     customer_email_snapshot = Column(String, nullable=True)
+    customer_address_snapshot = Column(String, nullable=True)
+    
+    # Source Details
+    source_type = Column(String, default="manual") # "invoice" | "manual"
+    source_invoice_id = Column(String, nullable=True)
     
     # Metadata
     invoice_number = Column(String, nullable=True)
@@ -808,8 +834,15 @@ class ServiceRecord(Base):
     service_type = Column(String, nullable=False) # Repair, Replacement, Installation, General Service
     status = Column(String, default="Pending") # Pending, In Progress, Completed, Cancelled
     
+    # Machinery Details
+    machine_type = Column(String, nullable=True)
+    brand = Column(String, nullable=True)
+    power_type = Column(String, nullable=True) # Petrol, Electric, Manual
+    warranty = Column(Boolean, default=False)
+    
     complaint = Column(Text, nullable=True)
     technician_notes = Column(Text, nullable=True)
+    service_location = Column(String, nullable=True)
     
     # Bill Fields
     labour_charges = Column(Float, default=0.0)
@@ -824,6 +857,7 @@ class ServiceRecord(Base):
     company = relationship("Company")
     creator = relationship("User")
     items = relationship('ServiceRecordItem', back_populates='service_record', cascade='all, delete-orphan')
+    job_cards = relationship('JobCard', back_populates='service_record', cascade='all, delete-orphan')
 
 
 class ServiceRecordItem(Base):
@@ -873,8 +907,12 @@ from datetime import datetime
 
 class FCDispatch(Base):
     __tablename__ = "fc_dispatches"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'idempotency_key', name='uix_company_dispatch_idempotency_key'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String, nullable=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
@@ -882,6 +920,7 @@ class FCDispatch(Base):
     delivery_challan_id = Column(Integer, ForeignKey("delivery_challans.id"), nullable=True)
     
     dispatch_number = Column(String, index=True, nullable=False, unique=True)
+    dispatch_type = Column(String, nullable=False, default="STANDARD") # STANDARD, EMERGENCY
     dispatch_status = Column(String, default="Draft") # Draft, Invoice Generated, Challan Generated, Inventory Updated, Completed, Completed with Errors, XML Pending, Cancelled
     
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -937,8 +976,12 @@ class FCDispatchItem(Base):
 
 class FCReturn(Base):
     __tablename__ = "fc_returns"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'idempotency_key', name='uix_company_fcreturn_idempotency_key'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String, nullable=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     dispatch_id = Column(Integer, ForeignKey("fc_dispatches.id"), nullable=True)
@@ -994,3 +1037,105 @@ class DamageClaim(Base):
     company = relationship("Company")
     warehouse = relationship("Warehouse")
     product = relationship("Product")
+
+class JobCard(Base):
+    __tablename__ = "job_cards"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    service_record_id = Column(Integer, ForeignKey("service_records.id"), nullable=False, index=True)
+    job_card_number = Column(String, unique=True, index=True, nullable=False)
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    # Workshop/Assignment
+    workshop_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    status = Column(String(50), default="OPEN") # OPEN, IN_PROGRESS, COMPLETED, LOCKED
+    is_verified = Column(Boolean, default=False)
+    
+    company = relationship("Company")
+    service_record = relationship("ServiceRecord", back_populates="job_cards")
+    workshop = relationship("Warehouse")
+    assignee = relationship("User")
+    items = relationship("JobCardItem", back_populates="job_card", cascade="all, delete-orphan")
+    invoices = relationship("ServiceInvoice", back_populates="job_card", cascade="all, delete-orphan")
+
+    @property
+    def customer_name(self):
+        return self.service_record.customer_name_snapshot if self.service_record else None
+
+    @property
+    def customer_mobile(self):
+        return self.service_record.customer_mobile_snapshot if self.service_record else None
+
+    @property
+    def address(self):
+        return self.service_record.customer_address_snapshot if self.service_record else None
+
+    @property
+    def product_name(self):
+        return self.service_record.machine_type if self.service_record else None
+
+    @property
+    def brand(self):
+        return self.service_record.brand if self.service_record else None
+
+    @property
+    def complaint(self):
+        return self.service_record.complaint if self.service_record else None
+
+class JobCardItem(Base):
+    __tablename__ = "job_cards_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    job_card_id = Column(Integer, ForeignKey("job_cards.id"), nullable=False)
+    
+    source = Column(String, nullable=False, default="manual") # "product" | "manual"
+    source_invoice_item_id = Column(Integer, nullable=True)
+    
+    item_name = Column(String, nullable=False) # Manual text or product name
+    product_sku = Column(String, nullable=True) # Optional link to inventory product
+    
+    qty = Column(Float, default=1.0)
+    rate = Column(Float, default=0.0)
+    amount = Column(Float, default=0.0)
+    
+    job_card = relationship("JobCard", back_populates="items")
+
+class ServiceInvoice(Base):
+    __tablename__ = "service_invoices"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    invoice_number = Column(String, unique=True, index=True, nullable=False)
+    job_card_id = Column(Integer, ForeignKey("job_cards.id"), nullable=False, unique=True)
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    total_amount = Column(Float, default=0.0)
+    cgst_amount = Column(Float, default=0.0)
+    sgst_amount = Column(Float, default=0.0)
+    grand_total = Column(Float, default=0.0)
+    
+    company = relationship("Company")
+    job_card = relationship("JobCard", back_populates="invoices")
+    items = relationship("ServiceInvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+
+class ServiceInvoiceItem(Base):
+    __tablename__ = "service_invoice_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("service_invoices.id"), nullable=False)
+    
+    description = Column(String, nullable=False)
+    product_sku = Column(String, nullable=True)
+    hsn = Column(String, nullable=True)
+    gst_rate = Column(Float, default=0.0)
+    
+    qty = Column(Float, default=1.0)
+    rate = Column(Float, default=0.0)
+    amount = Column(Float, default=0.0)
+    
+    invoice = relationship("ServiceInvoice", back_populates="items")

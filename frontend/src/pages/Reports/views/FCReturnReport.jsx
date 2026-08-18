@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import { reportsService } from '../../../services/reports';
 import { DataTable } from '../../../components/DataTable';
 import { ReportToolbar } from '../../../components/Reporting/ReportToolbar';
 
@@ -14,15 +14,14 @@ export const FCReturnReport = () => {
   const limit = 20;
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['fcReturnReport', { page, search, dateFrom, dateTo }],
+    queryKey: ['returnsReport', { page, search, dateFrom, dateTo }],
     queryFn: async () => {
       const params = { skip: (page - 1) * limit, limit };
       if (search) params.search = search;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
       
-      const res = await api.get('/api/business-reports/returns', { params });
-      return res.data;
+      return reportsService.getFCReturnsReport(params);
     }
   });
 
@@ -31,12 +30,9 @@ export const FCReturnReport = () => {
   const totalPages = Math.ceil(total / limit);
 
   const columns = [
-    { key: 'return_date', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
-    { key: 'return_id', label: 'Return ID' },
-    { key: 'amazon_order_id', label: 'Amazon Order' },
-    { key: 'sku', label: 'SKU' },
-    { key: 'quantity', label: 'Quantity' },
-    { key: 'return_reason', label: 'Reason' },
+    { key: 'created_at', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
+    { key: 'return_number', label: 'Return ID' },
+    { key: 'total_returned_qty', label: 'Total Quantity' },
     { key: 'status', label: 'Status' }
   ];
 

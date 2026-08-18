@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+import logging
+from datetime import datetime
 
 from app.models.db import get_db
 from app.models.schema import Product
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_admin
+from app.api.routers.auth import verify_admin_action_password
+from app.services.audit_log_service import AuditLogService
+from app.models.schema import Inventory, InventoryMovement, SaleItem, SalesReturnItem, DeliveryChallanItem, StockTransferItem, ServiceRecord, User, DamageClaim, DefectiveInventory, FCDispatchItem, FCReturnItem
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -24,6 +31,7 @@ class ProductCreate(BaseModel):
     reorder_level: Optional[int] = None
     safety_stock: Optional[int] = None
     default_gst_rate: Optional[float] = None
+    admin_password: Optional[str] = Field(default=None, exclude=True)
 
 class ProductResponse(ProductCreate):
     id: int
@@ -39,8 +47,9 @@ def get_product_filters(company_id: int = Depends(get_current_company_id), db: S
 def get_products(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     return db.query(Product).filter(Product.company_id == company_id).all()
 
-@router.post("/", response_model=ProductResponse)
-def create_product(product: ProductCreate, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+@router.post("/", response_model=ProductResponse, dependencies=[Depends(require_admin)])
+def create_product(product: ProductCreate, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    verify_admin_action_password(product.admin_password, current_user)
     existing = db.query(Product).filter(Product.sku == product.sku, Product.company_id == company_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Product with this SKU already exists")
@@ -48,6 +57,13 @@ def create_product(product: ProductCreate, company_id: int = Depends(get_current
     db.add(new_prod)
     db.commit()
     db.refresh(new_prod)
+    logger.info({
+        "action": "CREATE_PRODUCT",
+        "user_id": current_user.id,
+        "company_id": company_id,
+        "sku": product.sku,
+        "timestamp": datetime.utcnow().isoformat()
+    })
     return new_prod
 
 @router.get("/{sku}", response_model=ProductResponse)
@@ -57,8 +73,9 @@ def get_product(sku: str, company_id: int = Depends(get_current_company_id), db:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
-@router.put("/{sku}", response_model=ProductResponse)
-def update_product(sku: str, product: ProductCreate, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+@router.put("/{sku}", response_model=ProductResponse, dependencies=[Depends(require_admin)])
+def update_product(sku: str, product: ProductCreate, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    verify_admin_action_password(product.admin_password, current_user)
     existing = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -73,11 +90,21 @@ def update_product(sku: str, product: ProductCreate, company_id: int = Depends(g
         
     db.commit()
     db.refresh(existing)
+    logger.info({
+        "action": "UPDATE_PRODUCT",
+        "user_id": current_user.id,
+        "company_id": company_id,
+        "sku": sku,
+        "timestamp": datetime.utcnow().isoformat()
+    })
     return existing
 
-@router.delete("/{sku}")
-def delete_product(sku: str, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
-    from app.models.schema import Inventory, InventoryMovement, SaleItem, SalesReturnItem, DeliveryChallanItem, StockTransferItem, ServiceRecord
+class DeleteRequest(BaseModel):
+    admin_password: Optional[str] = Field(default=None)
+
+@router.delete("/{sku}", dependencies=[Depends(require_admin)])
+def delete_product(sku: str, payload: DeleteRequest, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    verify_admin_action_password(payload.admin_password, current_user)
     
     existing = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
     if not existing:
@@ -91,13 +118,34 @@ def delete_product(sku: str, company_id: int = Depends(get_current_company_id), 
     has_challans = db.query(DeliveryChallanItem).filter(DeliveryChallanItem.product_id == existing.id).first()
     has_transfers = db.query(StockTransferItem).filter(StockTransferItem.product_id == existing.id).first()
     has_services = db.query(ServiceRecord).filter(ServiceRecord.product_id == existing.id).first()
+    has_damage = db.query(DamageClaim).filter(DamageClaim.product_id == existing.id).first()
+    has_defective = db.query(DefectiveInventory).filter(DefectiveInventory.product_id == existing.id).first()
+    has_fcdispatch = db.query(FCDispatchItem).filter(FCDispatchItem.product_id == existing.id).first()
+    has_fcreturn = db.query(FCReturnItem).filter(FCReturnItem.product_id == existing.id).first()
     
-    if any([has_inventory, has_movements, has_sales, has_returns, has_challans, has_transfers, has_services]):
+    if any([has_inventory, has_movements, has_sales, has_returns, has_challans, has_transfers, has_services, has_damage, has_defective, has_fcdispatch, has_fcreturn]):
         raise HTTPException(
             status_code=400, 
             detail="Cannot hard-delete this product because it has historical inventory or order records (Sales, Returns, Challans, etc). Please Deactivate it instead."
         )
         
+    AuditLogService.log(
+        db,
+        company_id=company_id,
+        entity_type="Product",
+        entity_id=existing.id,
+        event_type="PRODUCT_DELETED",
+        message=f"Product {existing.sku} ({existing.name}) deleted",
+        metadata={"sku": existing.sku, "name": existing.name}
+    )
+        
     db.delete(existing)
     db.commit()
-    return {"message": "Product deleted successfully"}
+    logger.info({
+        "action": "DELETE_PRODUCT",
+        "user_id": current_user.id,
+        "company_id": company_id,
+        "sku": sku,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    return {"detail": "Product deactivated successfully"}

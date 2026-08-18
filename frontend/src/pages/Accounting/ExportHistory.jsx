@@ -69,7 +69,7 @@ const ExportHistory = () => {
               ) : (
                 batches.map(b => (
                   <tr key={b.id}>
-                    <td style={{ fontWeight: 600 }}>#{b.id}</td>
+                    <td style={{ fontWeight: 600, fontSize: '0.9rem' }}>{b.batch_number || `#${b.id}`}</td>
                     <td>{b.batch_type}</td>
                     <td>{new Date(b.generated_at).toLocaleString()}</td>
                     <td>{b.generated_by}</td>

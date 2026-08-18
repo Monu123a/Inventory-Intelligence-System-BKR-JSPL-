@@ -106,6 +106,7 @@ const Sidebar = () => {
       icon: FiTool,
       items: [
         { path: ROUTES.SERVICE_DASHBOARD, label: 'Service Dashboard', icon: FiPieChart },
+        { path: ROUTES.BKR_JOB_CARDS, label: 'BKR Job Cards', icon: FiFileText },
         { path: ROUTES.SERVICE_CREATE, label: 'New Service', icon: FiFileText },
         { path: ROUTES.SERVICE_RECORDS, label: 'Service Records', icon: FiList },
         { path: ROUTES.SERVICE_HISTORY, label: 'Service History', icon: FiClock },
@@ -126,6 +127,14 @@ const Sidebar = () => {
       icon: FiSettings,
       items: [
         { path: ROUTES.SETTINGS, label: 'Settings', icon: FiSettings },
+      ]
+    },
+    {
+      id: 'help',
+      label: 'Help & Support',
+      icon: FiFileText,
+      items: [
+        { path: ROUTES.HELP, label: 'User Manual', icon: FiFileText },
       ]
     },
   ];

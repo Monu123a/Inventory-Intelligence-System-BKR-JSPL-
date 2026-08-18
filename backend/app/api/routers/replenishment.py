@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.models.schema import User, Inventory, Product
-from app.api.dependencies import get_current_user, get_db, get_current_company_id
+from app.models.schema import Inventory, Product
+from app.api.dependencies import get_db, get_current_company_id
 from app.services.replenishment_service import ReplenishmentService
 
 router = APIRouter(prefix="/replenishment", tags=["Replenishment"])
@@ -11,8 +11,15 @@ router = APIRouter(prefix="/replenishment", tags=["Replenishment"])
 def analyze_inventory(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     try:
         run = ReplenishmentService.analyze_inventory(db, company_id)
+        db.commit()
         return {"status": "success", "run_id": run.id}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/verify-sync")
@@ -21,9 +28,12 @@ def verify_amazon_sync(company_id: int = Depends(get_current_company_id), db: Se
         is_synced = ReplenishmentService.verify_amazon_sync(db, company_id)
         return {"status": "success", "synced": is_synced}
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 from sqlalchemy import func
+from app.models.schema import Warehouse
 
 @router.get("/recommendations")
 def get_recommendations(
@@ -32,7 +42,6 @@ def get_recommendations(
     state_hub_id: Optional[int] = None,
     warehouse_id: Optional[int] = None
 ):
-    from app.models.schema import Warehouse
     
     # Group inventory by product_id
     query = db.query(

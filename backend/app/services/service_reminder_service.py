@@ -51,7 +51,7 @@ class ServiceReminderService:
                     count += 1
         
         if count > 0:
-            db.commit()
+            db.flush()
             
         return count
         

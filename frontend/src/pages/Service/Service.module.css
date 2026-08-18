@@ -1,0 +1,39 @@
+.container {
+  padding: 1.5rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.printableArea {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printableArea, .printableArea * {
+    visibility: visible;
+  }
+  .printableArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .noPrint {
+    display: none !important;
+  }
+}

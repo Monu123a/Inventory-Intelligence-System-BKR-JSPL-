@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { posService } from '../../services/pos';
+import { handleApiError } from '../../utils/errorHandler';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
 import styles from './SalesHistoryPage.module.css';
@@ -8,9 +10,7 @@ import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock } from 'react-icons/fi';
 
 const SalesHistoryPage = () => {
   const navigate = useNavigate();
-  const [sales, setSales] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   
   // Filters
   const [search, setSearch] = useState('');
@@ -26,51 +26,41 @@ const SalesHistoryPage = () => {
 
   const [retryingId, setRetryingId] = useState(null);
 
-  const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = { skip, limit };
-      if (search) params.search = search;
-      if (status) params.status = status;
-      if (invoiceType) params.invoice_type = invoiceType;
-      if (returnStatus) params.return_status = returnStatus;
-      if (tallyStatus) params.tally_status = tallyStatus;
-      if (startDate) params.date_from = startDate;
-      if (endDate) params.date_to = endDate;
-      
-      const res = await api.get('/api/pos/history', { params });
-      setSales(res.data.items);
-      setTotal(res.data.total);
-    } catch (err) {
-      console.error("Failed to fetch history", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [limit, search, skip, status, invoiceType, returnStatus, tallyStatus, startDate, endDate]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['sales', skip, limit, search, status, invoiceType, returnStatus, tallyStatus, startDate, endDate],
+    queryFn: () => posService.getSalesHistory({
+      skip, limit,
+      search: search || undefined,
+      status: status || undefined,
+      invoice_type: invoiceType || undefined,
+      return_status: returnStatus || undefined,
+      tally_status: tallyStatus || undefined,
+      date_from: startDate || undefined,
+      date_to: endDate || undefined,
+    }),
+  });
 
-  // Debounced fetch
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchHistory();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [fetchHistory]);
+  const sales = data?.items || [];
+  const total = data?.total || 0;
 
   const formatDate = (isoString) => {
     return new Date(isoString).toLocaleString();
   };
 
-  const handleRetryTally = async (saleId) => {
-    setRetryingId(saleId);
-    try {
-      await api.post(`/api/pos/sales/${saleId}/retry-tally`);
-      fetchHistory(); // refresh data
-    } catch (err) {
-      console.error("Failed to retry Tally sync", err);
-      alert("Failed to retry Tally sync: " + (err.response?.data?.detail || err.message));
-    } finally {
-      setRetryingId(null);
-    }
+  const retryTallyMutation = useMutation({
+    mutationFn: posService.retryTallySync,
+    onMutate: (saleId) => setRetryingId(saleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+    },
+    onError: (err) => {
+      handleApiError(err, "Failed to retry Tally sync");
+    },
+    onSettled: () => setRetryingId(null)
+  });
+
+  const handleRetryTally = (saleId) => {
+    retryTallyMutation.mutate(saleId);
   };
 
   const renderTallyStatus = (sale) => {
@@ -269,7 +259,7 @@ const SalesHistoryPage = () => {
         <DataTable>
           <TableHeader columns={columns} />
           <tbody>
-            {loading ? (
+            {isLoading ? (
               <tr>
                 <td colSpan={columns.length} style={{textAlign: 'center', padding: '2rem'}}>Loading...</td>
               </tr>

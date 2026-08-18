@@ -6,6 +6,7 @@ import Button from '../../components/forms/Button';
 import Input from '../../components/forms/Input';
 import { Card } from '../../components/Card/Card';
 import styles from './Login.module.css';
+import api from '../../services/api';
 
 const Login = () => {
   const [username, setUsername] = useState('admin');
@@ -28,19 +29,12 @@ const Login = () => {
     setLoading(true);
     setError(null);
     try {
-      // Import api locally or use fetch if needed. Let's use fetch to be safe from interceptor loops,
-      // or we can import api from '../../services/api'.
-      const response = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+      const response = await api.post('/api/auth/login', {
+        username,
+        password
       });
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.detail || 'Login failed');
-      }
+      const data = response.data;
       
       setAuth(data.user, data.token);
       navigate(ROUTES.OVERVIEW);

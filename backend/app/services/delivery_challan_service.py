@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.schema import DeliveryChallan, DeliveryChallanItem
+from app.models.schema import SaleItem
+from app.models.schema import Sale
 
 class DeliveryChallanService:
 
@@ -17,7 +19,6 @@ class DeliveryChallanService:
         buyer_snapshot = challan_data.get("buyer_snapshot")
         
         if sale_id and (not seller_snapshot or not buyer_snapshot):
-            from app.models.schema import Sale
             sale = db.query(Sale).filter(Sale.id == sale_id).first()
             if sale:
                 if not seller_snapshot:
@@ -53,7 +54,6 @@ class DeliveryChallanService:
 
         items_to_add = challan_data.get("items", [])
         if not items_to_add and challan.sale_id:
-            from app.models.schema import SaleItem
             sale_items = db.query(SaleItem).filter(SaleItem.sale_id == challan.sale_id).all()
             items_to_add = [
                 {

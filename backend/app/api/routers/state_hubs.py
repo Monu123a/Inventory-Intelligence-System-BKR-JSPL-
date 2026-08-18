@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 from app.models.db import get_db
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, require_admin
 from app.services.state_hub_service import StateHubService
 
 router = APIRouter(prefix="/state-hubs", tags=["State Hubs"])
@@ -31,10 +31,18 @@ def get_state_hubs(company_id: int = Depends(get_current_company_id), db: Sessio
     return StateHubService.get_all(db, company_id)
 
 @router.post("/", response_model=StateHubResponse)
-def create_state_hub(hub: StateHubBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def create_state_hub(hub: StateHubBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db), admin_user = Depends(require_admin)):
     try:
-        return StateHubService.create(db, company_id, hub.model_dump())
+        result = StateHubService.create(db, company_id, hub.model_dump())
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{hub_id}", response_model=StateHubResponse)
@@ -45,18 +53,33 @@ def get_state_hub(hub_id: int, company_id: int = Depends(get_current_company_id)
     return hub
 
 @router.put("/{hub_id}", response_model=StateHubResponse)
-def update_state_hub(hub_id: int, hub: StateHubBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def update_state_hub(hub_id: int, hub: StateHubBase, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db), admin_user = Depends(require_admin)):
     try:
-        return StateHubService.update(db, hub_id, company_id, hub.model_dump(exclude_unset=True))
+        result = StateHubService.update(db, hub_id, company_id, hub.model_dump(exclude_unset=True))
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/{hub_id}")
-def delete_state_hub(hub_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def delete_state_hub(hub_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db), admin_user = Depends(require_admin)):
     try:
         StateHubService.delete(db, hub_id, company_id)
+        db.commit()
         return {"detail": "State Hub deleted successfully"}
     except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))

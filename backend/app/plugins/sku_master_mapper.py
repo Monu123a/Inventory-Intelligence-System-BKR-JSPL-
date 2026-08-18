@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, Any
 import pandas as pd
 from app.plugins.base import BasePlugin
 from app.models.context import ExecutionContext, LogLevel

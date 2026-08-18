@@ -1,9 +1,7 @@
 import os
-from typing import List, Dict, Optional
-from datetime import datetime
+from typing import List, Dict
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from app.services.accounting.connector import AccountingConnector
 from app.services.accounting.dtos import InvoiceDTO, AccountingExportResult
 from app.models.accounting_schema import AccountingConfiguration, AccountingMapping
@@ -41,7 +39,7 @@ class TallyXMLConnector(AccountingConnector):
     def _resolve_company(self, erp_ref: str) -> str:
         return self.mappings["Company"].get(erp_ref, erp_ref)
 
-    def _render_invoice(self, invoice: InvoiceDTO) -> str:
+    def _render_invoice(self, invoice: InvoiceDTO, category: str) -> str:
         template = self.jinja_env.get_template("sales.xml.j2")
         
         # Calculate totals for taxes
@@ -53,9 +51,12 @@ class TallyXMLConnector(AccountingConnector):
         sum_components = invoice.total_taxable_amount + invoice.total_tax
         round_off = round(invoice.grand_total - sum_components, 2)
         
+        voucher_mappings = self.config.voucher_mappings or {}
+        voucher_type = voucher_mappings.get(category, category)
+        
         return template.render(
             invoice=invoice,
-            voucher_type=self.config.default_voucher_type or "Sales",
+            voucher_type=voucher_type,
             customer_ledger_name=self._resolve_ledger(invoice.customer_name or "Cash"),
             resolve_product=self._resolve_product,
             resolve_ledger=self._resolve_ledger,
@@ -68,9 +69,9 @@ class TallyXMLConnector(AccountingConnector):
             round_off=round_off
         )
 
-    def generate_invoice_export(self, invoices: List[InvoiceDTO]) -> AccountingExportResult:
+    def generate_invoice_export(self, invoices: List[InvoiceDTO], category: str = "Sales Invoice") -> AccountingExportResult:
         try:
-            rendered_vouchers = [self._render_invoice(inv) for inv in invoices]
+            rendered_vouchers = [self._render_invoice(inv, category) for inv in invoices]
             
             # Note: Need the real company name to map
             company_ref = str(self.company_id) # Should be company code

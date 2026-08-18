@@ -3,7 +3,6 @@ import os
 import sys
 import logging
 import schedule
-import yaml
 
 # Add backend directory to Python path for absolute imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

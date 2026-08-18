@@ -171,8 +171,11 @@ export default function DeliveryChallanRenderer({ challan }) {
           <div className={styles.footerLayout}>
             <div className={styles.footerLeft}>
               <div className={styles.declarationSection}>
-                <div className={styles.declarationTitle}>Declaration</div>
+                <div className={styles.declarationTitle}>Declaration & Instructions</div>
                 <div>We declare that this challan shows the actual price of the goods described and that all particulars are true and correct.</div>
+                <div style={{ marginTop: '6px', fontStyle: 'italic', fontWeight: '600' }}>
+                  Important: This bill/challan is NOT a proof of item sold and cannot be considered as a valid proof of purchase.
+                </div>
               </div>
             </div>
             

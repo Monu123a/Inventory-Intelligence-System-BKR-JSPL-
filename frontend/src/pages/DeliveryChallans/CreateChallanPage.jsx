@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
+import toast from 'react-hot-toast';
+import { deliveryChallanService } from '../../services/deliveryChallanService';
 import useCompanyStore from '../../stores/useCompanyStore';
+import api from '../../services/api';
 import styles from './DeliveryChallansPage.module.css';
 
 export default function CreateChallanPage() {
@@ -20,13 +22,19 @@ export default function CreateChallanPage() {
   
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (currentCompany?.id) {
+      setLoading(true);
       // Fetch recent sales to link to the challan
       api.get('/api/pos/history?limit=50')
         .then(res => setSales(res.data?.items || []))
-        .catch(err => console.error(err));
+        .catch(err => {
+          console.error(err);
+          setError('Failed to load recent sales.');
+        })
+        .finally(() => setLoading(false));
     }
   }, [currentCompany]);
 
@@ -44,8 +52,10 @@ export default function CreateChallanPage() {
         sale_id: parseInt(selectedSaleId),
         ...transport
       };
-      const response = await api.post('/api/delivery-challans/', payload);
-      navigate(`/delivery-challans/${response.data.id}`);
+      const response = await deliveryChallanService.createChallan(payload);
+      const challanId = response.id;
+      toast.success('Delivery Challan created successfully');
+      navigate(`/delivery-challans/${challanId}`);
     } catch (err) {
       console.error(err);
       let errorMessage = 'Failed to create Delivery Challan';
@@ -57,6 +67,7 @@ export default function CreateChallanPage() {
         }
       }
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setCreating(false);
     }
@@ -68,6 +79,7 @@ export default function CreateChallanPage() {
         <h2>Create Delivery Challan</h2>
       </div>
       
+      {loading && <div style={{ marginBottom: '16px', color: '#666' }}>Loading invoices...</div>}
       {error && <div className={styles.errorText} style={{ color: 'red', marginBottom: '16px' }}>{error}</div>}
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

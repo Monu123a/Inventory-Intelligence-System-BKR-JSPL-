@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.models.db import get_db
 from app.models.schema import AmazonReturn, DefectiveInventory, User
@@ -42,20 +41,14 @@ def get_return_metrics(
         AmazonReturn.inspection_status == "DEFECTIVE"
     ).count()
     
-    # Inspection Pending > 2 Days
-    # Using SQLite dialect safely for datetime math if needed, or simply pulling and filtering
-    # In SQLite, date('now', '-2 days') could be used, but since we are using SQLAlchemy:
-    pending_2_days = db.query(AmazonReturn).filter(
+    # Inspection Pending > 2 Days (SQL filter instead of Python loop)
+    two_days_ago = datetime.utcnow() - timedelta(days=2)
+    pending_count = db.query(AmazonReturn).filter(
         AmazonReturn.company_id == company_id,
         AmazonReturn.return_status == "Received",
-        AmazonReturn.inspection_status.is_(None)
-    ).all()
-    
-    pending_count = 0
-    now = datetime.utcnow()
-    for r in pending_2_days:
-        if r.received_at and (now - r.received_at).days > 2:
-            pending_count += 1
+        AmazonReturn.inspection_status.is_(None),
+        AmazonReturn.received_at < two_days_ago
+    ).count()
 
     return {
         "returns_today": returns_today,
@@ -74,17 +67,19 @@ def amazon_returns_report(
         User, AmazonReturn.inspected_by == User.id
     ).filter(AmazonReturn.company_id == company_id).all()
     
-    return [
-        {
-            "return_id": r.AmazonReturn.amazon_return_id,
-            "sku": r.AmazonReturn.sku,
-            "product": r.AmazonReturn.product_name,
-            "reason": r.AmazonReturn.return_reason,
-            "inspection_status": r.AmazonReturn.inspection_status or "Pending",
-            "inspector": r.inspector_name,
-            "date": r.AmazonReturn.requested_at
-        } for r in returns
-    ]
+    return {
+        "data": [
+            {
+                "return_id": r.AmazonReturn.amazon_return_id,
+                "sku": r.AmazonReturn.sku,
+                "product": r.AmazonReturn.product_name,
+                "reason": r.AmazonReturn.return_reason,
+                "inspection_status": r.AmazonReturn.inspection_status or "Pending",
+                "inspector": r.inspector_name,
+                "date": r.AmazonReturn.requested_at
+            } for r in returns
+        ]
+    }
 
 @router.get("/defective-inventory")
 def defective_inventory_report(
@@ -95,12 +90,14 @@ def defective_inventory_report(
         DefectiveInventory.company_id == company_id
     ).all()
     
-    return [
-        {
-            "sku": d.sku_snapshot,
-            "product": d.product_name_snapshot,
-            "defect_status": d.status,
-            "quantity": d.quantity,
-            "inspection_date": d.inspection_date
-        } for d in defectives
-    ]
+    return {
+        "data": [
+            {
+                "sku": d.sku_snapshot,
+                "product": d.product_name_snapshot,
+                "defect_status": d.status,
+                "quantity": d.quantity,
+                "inspection_date": d.inspection_date
+            } for d in defectives
+        ]
+    }

@@ -3,7 +3,7 @@ import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { FiBox } from 'react-icons/fi';
-import { getCompanies } from '../../services/companies';
+import { companyService } from '../../services/companies';
 import useCompanyStore from '../../stores/useCompanyStore';
 import styles from './CompanySelector.module.css';
 
@@ -19,7 +19,7 @@ const CompanySelector = () => {
   
   const { data: companies, isLoading, error } = useQuery({
     queryKey: ['companies'],
-    queryFn: getCompanies,
+    queryFn: () => companyService.getCompanies(),
   });
 
   const availableCompanies = companies?.length ? companies : FALLBACK_COMPANIES;
