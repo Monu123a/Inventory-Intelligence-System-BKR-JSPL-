@@ -82,7 +82,7 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
             event_type="cross_company_transfer.create", 
             message="Created cross company transfer", 
             metadata={"source_company_id": src_comp, "destination_company_id": dest_comp},
-            user_id=current_user.id
+            
         )
 
     for it in req.items:

@@ -24,8 +24,8 @@ def upgrade() -> None:
     with op.batch_alter_table('stock_transfers', schema=None) as batch_op:
         batch_op.add_column(sa.Column('source_warehouse_id', sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column('destination_warehouse_id', sa.Integer(), nullable=True))
-        batch_op.create_foreign_key(None, 'warehouses', ['source_warehouse_id'], ['id'])
-        batch_op.create_foreign_key(None, 'warehouses', ['destination_warehouse_id'], ['id'])
+        batch_op.create_foreign_key('fk_st_src_wh', 'warehouses', ['source_warehouse_id'], ['id'])
+        batch_op.create_foreign_key('fk_st_dst_wh', 'warehouses', ['destination_warehouse_id'], ['id'])
 
     # ### end Alembic commands ###
 

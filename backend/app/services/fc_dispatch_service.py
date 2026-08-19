@@ -162,7 +162,7 @@ class FCDispatchService:
                     AuditLogService.log(
                         db,
                         company_id=company_id,
-                        user_id=user_id,
+                        
                         entity_type="FCDispatch",
                         entity_id=0,
                         event_type="CROSS_COMPANY_TRANSFER_INITIATED",

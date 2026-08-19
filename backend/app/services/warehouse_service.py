@@ -4,7 +4,7 @@ from app.models.schema import FCDispatch, FCReturn
 from app.models.schema import WarehouseExternalMapping
 
 class WarehouseService:
-@staticmethod
+    @staticmethod
     def get_all(db: Session, company_id: int):
         return db.query(Warehouse).filter(Warehouse.company_id == company_id).all()
 
