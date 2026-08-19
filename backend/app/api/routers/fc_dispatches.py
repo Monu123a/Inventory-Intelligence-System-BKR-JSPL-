@@ -111,6 +111,8 @@ def get_dispatch_inventory(
                 "sku": inv.product.sku,
                 "name": inv.product.name,
                 "currentStock": inv.available_qty,
+                "item_rate": inv.product.item_rate or 0.0,
+                "gst_rate": inv.product.default_gst_rate or 0.0,
                 "recommended": int(inv.available_qty * 0.1) if inv.available_qty > 10 else 1 # Dummy logic for wizard
             }
             for inv in inventory_records if inv.product

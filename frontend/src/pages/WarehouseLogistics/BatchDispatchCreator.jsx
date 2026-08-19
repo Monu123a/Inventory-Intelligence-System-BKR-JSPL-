@@ -175,9 +175,9 @@ const BatchDispatchCreator = () => {
 
     const mockItems = products.map((p, i) => {
       // Mock pricing (since we don't fetch price in inventory yet for this wizard)
-      const unit_price = 500 + i * 100;
+      const unit_price = p.item_rate || 0;
       const taxable = p.transferQty * unit_price;
-      const tax_rate = 18;
+      const tax_rate = p.gst_rate || 18;
       const tax_amount = taxable * (tax_rate / 100);
       const total = taxable + tax_amount;
       

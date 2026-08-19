@@ -227,6 +227,24 @@ class FCDispatchService:
                     taxable_total += taxable
                     tax_total += gst
                     
+
+                    is_inter_state = False
+                    if hub and source_warehouse:
+                        hub_state = str(hub.state_code).strip() if hub.state_code else ""
+                        src_state = "07" # Default BKR Haryana
+                        # You might want to get actual source state code, but let's assume cross state
+                        if hub_state and hub_state != "07":
+                            is_inter_state = True
+
+                    cgst = 0.0
+                    sgst = 0.0
+                    igst = 0.0
+                    if is_inter_state:
+                        igst = gst
+                    else:
+                        cgst = gst / 2
+                        sgst = gst / 2
+
                     pos_items.append(PosCartItem(
                         product_id=product.id,
                         sku=product.sku,
@@ -238,11 +256,12 @@ class FCDispatchService:
                         discount=0.0,
                         gst_rate=gst_rate,
                         taxable_amount=taxable,
-                        cgst=gst/2,
-                        sgst=gst/2,
-                        igst=0.0,
+                        cgst=cgst,
+                        sgst=sgst,
+                        igst=igst,
                         line_total=line_total
                     ))
+
                 
                 pos_request = PosCheckoutRequest(
                     customer_name=hub.hub_name,

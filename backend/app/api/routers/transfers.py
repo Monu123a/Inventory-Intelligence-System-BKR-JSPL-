@@ -86,6 +86,10 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
         )
 
     for it in req.items:
+        if not it.unit_price:
+            prod = db.query(Product).filter(Product.id == it.product_id).first()
+            if prod:
+                it.unit_price = prod.item_rate
         ti = StockTransferItem(
             transfer_id=transfer.id,
             product_id=it.product_id,
