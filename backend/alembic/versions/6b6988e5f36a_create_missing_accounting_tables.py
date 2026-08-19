@@ -22,7 +22,7 @@ def upgrade() -> None:
     conn = op.get_bind()
     from app.models.db import Base
     from app.models.schema import Company, User, Warehouse, Product, Inventory, InventoryMovement, AmazonSyncLog, Alert, JobExecutionLog, Sale, SaleItem, SalesReturn, DeliveryChallan, FCDispatch, FCReturn, ServiceRecord
-    from app.models.accounting_schema import AccountingExportBatch, AccountingSystemConfig, AccountingMapping, AccountingMasterSyncLog
+    from app.models.accounting_schema import AccountingConfiguration, AccountingMapping, AccountingExportBatch, AccountingExportLog, MasterSyncLog
     Base.metadata.create_all(bind=conn)
 
 def downgrade() -> None:
