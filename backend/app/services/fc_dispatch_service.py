@@ -149,14 +149,18 @@ class FCDispatchService:
                     if not has_permission:
                         raise HTTPException(status_code=403, detail="Not authorized to create cross-company transfers")
                         
+
                     # Validate SKUs exist in destination company
                     missing_skus = []
-                    for it in pos_items:
-                        dest_prod = db.query(Product).filter(Product.sku == it.sku, Product.company_id == dest_warehouse.company_id).first()
-                        if not dest_prod:
-                            missing_skus.append(it.sku)
+                    for req_item in request.items:
+                        src_prod = db.query(Product).filter(Product.id == req_item.product_id).first()
+                        if src_prod:
+                            dest_prod = db.query(Product).filter(Product.sku == src_prod.sku, Product.company_id == dest_warehouse.company_id).first()
+                            if not dest_prod:
+                                missing_skus.append(src_prod.sku)
                     if missing_skus:
                         raise HTTPException(status_code=400, detail={"message": "Products missing in destination company", "missing_skus": missing_skus})
+
                             
                     # Audit log
                     AuditLogService.log(
