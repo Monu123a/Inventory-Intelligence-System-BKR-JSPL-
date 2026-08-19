@@ -203,7 +203,10 @@ const BatchDispatchCreator = () => {
         unit: 'PCS',
         gst_rate: tax_rate,
         rate: unit_price,
-        amount: taxable
+        amount: taxable,
+        igst: isInterState ? tax_amount : 0,
+        cgst: isInterState ? 0 : tax_amount / 2,
+        sgst: isInterState ? 0 : tax_amount / 2
       };
     });
 
