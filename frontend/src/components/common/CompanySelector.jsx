@@ -9,7 +9,7 @@ import styles from './CompanySelector.module.css';
 
 // Fallback companies used only if the API fails to fetch the companies list
 const FALLBACK_COMPANIES = [
-  { id: 1, code: 'JSPL', name: 'JSPL' },
+  { id: 3, code: 'JSPL', name: 'JSPL' },
   { id: 2, code: 'BKR', name: 'BKR' },
 ];
 
@@ -25,8 +25,9 @@ const CompanySelector = () => {
   const availableCompanies = companies?.length ? companies : FALLBACK_COMPANIES;
   const selectedCompany = useMemo(() => (
     availableCompanies.find((company) => company.id === companyId) ||
-    currentCompany ||
     availableCompanies.find((company) => company.code === companyCode) ||
+    availableCompanies.find((company) => company.id === currentCompany?.id) ||
+    availableCompanies.find((company) => company.code === currentCompany?.code) ||
     FALLBACK_COMPANIES[0]
   ), [availableCompanies, companyId, currentCompany, companyCode]);
 

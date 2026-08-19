@@ -308,3 +308,12 @@
 {"timestamp": 1786955575123, "metric": "inventory_write_conflict", "value": 1}
 {"timestamp": 1786955575234, "metric": "sale_completed", "value": 1, "company_id": 2}
 {"timestamp": 1786959639888, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1787042441540, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042453085, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042462474, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042470199, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042476601, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042597329, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042609437, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042661660, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787042707286, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}

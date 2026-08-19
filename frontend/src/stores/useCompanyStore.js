@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 const DEFAULT_COMPANY = {
-  id: 1,
+  id: 3,
   code: 'JSPL',
   name: 'JSPL',
 };

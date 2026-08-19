@@ -180,7 +180,7 @@ def _orchestrate_daily_replenishment():
     _run_for_all_companies("Daily Replenishment Report", daily_replenishment_report)
 
 def _orchestrate_amazon_polling():
-    default_co_id = int(os.getenv("DEFAULT_AMAZON_COMPANY_ID", "1"))
+    default_co_id = int(os.getenv("DEFAULT_AMAZON_COMPANY_ID", "3"))
     execute_job_with_logging("Amazon Polling", poll_amazon_orders, company_id=default_co_id)
 
 def daily_service_reminders(db, company_id: int):
