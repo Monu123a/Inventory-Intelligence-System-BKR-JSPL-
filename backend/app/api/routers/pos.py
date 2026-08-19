@@ -312,6 +312,9 @@ def complete_sale(
                 product_name=item.product_name or (product.name if product else None),
                 hsn_sac=item.hsn_sac or (product.hsn_code if product else None),
                 unit=item.unit or (product.unit if product else None),
+                product_name=item.product_name or (product.name if product else None),
+                hsn_sac=item.hsn_sac or (product.hsn_code if product else None),
+                unit=item.unit or (product.unit if product else None),
             )
             db.add(sale_item)
             

@@ -342,10 +342,6 @@ class FCDispatchService:
                         "state_code": hub.state_code,
                         "gstin": hub.gstin # Usually same GSTIN for same state
                     },
-                    "items": [{
-                        "product_id": it.product_id,
-                        "quantity": it.quantity
-                    } for it in pos_items]
                 }
                 challan_dto = DeliveryChallanService.create_challan(db, company_id, challan_data, user_id)
                 dispatch.delivery_challan_id = challan_dto.id
