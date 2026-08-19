@@ -23,8 +23,10 @@ export const warehouseService = {
     return normalizeResponse(response.data);
   },
 
-  deleteWarehouse: async (id) => {
-    const response = await api.delete(`${API_ROUTES.WAREHOUSES}/${id}`);
+  deleteWarehouse: async (id, adminPassword) => {
+    const response = await api.delete(`${API_ROUTES.WAREHOUSES}/${id}`, {
+      data: { admin_password: adminPassword }
+    });
     return normalizeResponse(response.data);
   },
 

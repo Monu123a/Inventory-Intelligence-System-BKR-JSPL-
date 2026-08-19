@@ -7,6 +7,7 @@ import { Modal } from '../../components/Modal/Modal';
 import { FiChevronDown, FiChevronRight, FiMapPin, FiPackage, FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { stateHubService } from '../../services/stateHubService';
 import { warehouseService } from '../../services/warehouse';
+import AdminPasswordModal from '../../components/common/AdminPasswordModal';
 import styles from './Warehouse.module.css';
 
 const StateHubsPage = () => {
@@ -23,6 +24,11 @@ const StateHubsPage = () => {
   const [selectedUnassignedWhId, setSelectedUnassignedWhId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [pendingActionType, setPendingActionType] = useState(''); // 'warehouse_submit', 'warehouse_delete'
+
 
   const fetchData = async () => {
     try {
@@ -123,53 +129,65 @@ const StateHubsPage = () => {
     setEditingWarehouse(null);
   };
 
-  const handleWarehouseSubmit = async (e) => {
+  
+  const handleWarehouseSubmit = (e) => {
     e.preventDefault();
-    try {
-      if (!editingWarehouse && isAssignMode) {
-        if (!selectedUnassignedWhId) {
-          alert('Please select a warehouse to assign');
-          return;
-        }
-        const existingWh = warehouses.find(w => w.id === parseInt(selectedUnassignedWhId, 10));
-        const payload = { ...existingWh, hub_id: parseInt(warehouseFormData.hub_id, 10) };
-        await warehouseService.update(existingWh.id, payload);
-        handleCloseWarehouseModal();
-        fetchData();
-        if (payload.hub_id) {
-          setExpandedHubs(prev => ({ ...prev, [payload.hub_id]: true }));
-        }
-        return;
-      }
-
-      const payload = {
-        ...warehouseFormData,
-        hub_id: warehouseFormData.hub_id ? parseInt(warehouseFormData.hub_id, 10) : null
-      };
-      
-      if (editingWarehouse) {
-        await warehouseService.update(editingWarehouse.id, payload);
-      } else {
-        await warehouseService.create(payload);
-      }
-      handleCloseWarehouseModal();
-      fetchData();
-      if (payload.hub_id) {
-        setExpandedHubs(prev => ({ ...prev, [payload.hub_id]: true }));
-      }
-    } catch (err) {
-      alert('Failed to save warehouse: ' + (err.response?.data?.detail || err.message));
-    }
+    setPendingActionType('warehouse_submit');
+    setIsAdminModalOpen(true);
   };
 
-  const handleDeleteWarehouse = async (id) => {
-    if (window.confirm('Are you sure you want to delete this warehouse?')) {
-      try {
-        await warehouseService.delete(id);
+
+  
+  const handleDeleteWarehouse = (id) => {
+    setPendingAction(id);
+    setPendingActionType('warehouse_delete');
+    setIsAdminModalOpen(true);
+  };
+
+
+
+  const executeAdminAction = async (password) => {
+    try {
+      if (pendingActionType === 'warehouse_submit') {
+        if (!editingWarehouse && isAssignMode) {
+          if (!selectedUnassignedWhId) {
+            alert('Please select a warehouse to assign');
+            return;
+          }
+          const existingWh = warehouses.find(w => w.id === parseInt(selectedUnassignedWhId, 10));
+          const payload = { ...existingWh, hub_id: parseInt(warehouseFormData.hub_id, 10), admin_password: password };
+          await warehouseService.updateWarehouse(existingWh.id, payload);
+          handleCloseWarehouseModal();
+          fetchData();
+          if (payload.hub_id) {
+            setExpandedHubs(prev => ({ ...prev, [payload.hub_id]: true }));
+          }
+        } else {
+          const payload = {
+            ...warehouseFormData,
+            hub_id: warehouseFormData.hub_id ? parseInt(warehouseFormData.hub_id, 10) : null,
+            admin_password: password
+          };
+          if (editingWarehouse) {
+            await warehouseService.updateWarehouse(editingWarehouse.id, payload);
+          } else {
+            await warehouseService.createWarehouse(payload);
+          }
+          handleCloseWarehouseModal();
+          fetchData();
+          if (payload.hub_id) {
+            setExpandedHubs(prev => ({ ...prev, [payload.hub_id]: true }));
+          }
+        }
+      } else if (pendingActionType === 'warehouse_delete') {
+        await warehouseService.deleteWarehouse(pendingAction, password);
         fetchData();
-      } catch (err) {
-        alert('Failed to delete warehouse');
       }
+      setIsAdminModalOpen(false);
+      setPendingAction(null);
+      setPendingActionType('');
+    } catch (err) {
+      alert('Action failed: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -392,6 +410,18 @@ const StateHubsPage = () => {
           </div>
         </form>
       </Modal>
+    
+      <AdminPasswordModal
+        isOpen={isAdminModalOpen}
+        onClose={() => {
+          setIsAdminModalOpen(false);
+          setPendingAction(null);
+          setPendingActionType('');
+        }}
+        onSubmit={executeAdminAction}
+        actionName={pendingActionType === 'warehouse_delete' ? 'Delete Warehouse' : 'Save Warehouse'}
+      />
+
     </PageContainer>
   );
 };
