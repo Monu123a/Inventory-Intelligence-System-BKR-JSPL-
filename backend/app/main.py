@@ -198,7 +198,8 @@ origins = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
     "http://127.0.0.1:5175",
-    "https://halte-data-transformation.vercel.app"
+    "https://halte-data-transformation.vercel.app",
+    "https://inventory-intelligence-system-bkr-j.vercel.app"
 ]
 
 # Allow dynamic origins via environment variable (useful for Vercel preview URLs)
