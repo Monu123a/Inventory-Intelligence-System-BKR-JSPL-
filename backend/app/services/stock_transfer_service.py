@@ -50,19 +50,30 @@ class StockTransferService:
             if not product:
                 continue
 
-            # ===== ADD to DESTINATION (JSPL) =====
-            # check dest_warehouse first
-            dest_warehouse = db.query(Warehouse).filter(
-                Warehouse.company_id == transfer.to_company_id
-            ).first()
-            if not dest_warehouse:
-                raise ValueError(f"Destination company {transfer.to_company_id} has no warehouse.")
+            # ===== VALIDATE SKU IN DESTINATION COMPANY =====
+            if transfer.from_company_id != transfer.to_company_id:
+                dest_product = db.query(Product).filter(Product.sku == product.sku, Product.company_id == transfer.to_company_id).first()
+                if not dest_product:
+                    raise ValueError(f"Product SKU {product.sku} is missing in destination company. Please create/map it first before transferring.")
 
-            # ===== DEDUCT from SOURCE (BKR) =====
-            source_invs = db.query(Inventory).filter(
+            # ===== ADD to DESTINATION =====
+            if transfer.destination_warehouse_id:
+                dest_warehouse = db.query(Warehouse).filter(Warehouse.id == transfer.destination_warehouse_id).first()
+            else:
+                dest_warehouse = db.query(Warehouse).filter(Warehouse.company_id == transfer.to_company_id).first()
+                
+            if not dest_warehouse:
+                raise ValueError(f"Destination company {transfer.to_company_id} has no valid warehouse.")
+
+            # ===== DEDUCT from SOURCE =====
+            source_query = db.query(Inventory).filter(
                 Inventory.company_id == transfer.from_company_id,
                 Inventory.product_id == item.product_id
-            ).with_for_update().all()
+            )
+            if transfer.source_warehouse_id:
+                source_query = source_query.filter(Inventory.warehouse_id == transfer.source_warehouse_id)
+                
+            source_invs = source_query.with_for_update().all()
             
             requested_qty = qty
             total_available = sum((inv.current_qty - (inv.reserved_qty or 0)) for inv in source_invs)

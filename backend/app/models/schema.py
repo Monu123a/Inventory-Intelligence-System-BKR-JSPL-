@@ -559,6 +559,8 @@ class StockTransfer(Base):
     transfer_number = Column(String, index=True, unique=True, nullable=False)
     from_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     to_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
+    destination_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     
     # Draft, Pending Approval, Approved, Invoice Generated, Dispatched, Received, Completed, Cancelled
     status = Column(String, default="Draft")
@@ -579,6 +581,8 @@ class StockTransfer(Base):
     creator = relationship("User", foreign_keys=[created_by])
     approver = relationship("User", foreign_keys=[approved_by])
     invoice = relationship("Sale", foreign_keys=[invoice_id])
+    source_warehouse = relationship("Warehouse", foreign_keys=[source_warehouse_id])
+    destination_warehouse = relationship("Warehouse", foreign_keys=[destination_warehouse_id])
     items = relationship("StockTransferItem", back_populates="transfer", cascade="all, delete-orphan")
 
 

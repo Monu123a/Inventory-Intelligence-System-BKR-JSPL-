@@ -1,3 +1,4 @@
+from app.services.audit_log_service import AuditLogService
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -135,6 +136,36 @@ class FCDispatchService:
                 dest_warehouse = db.query(Warehouse).filter(Warehouse.id == dest_warehouse_id).first()
                 if not dest_warehouse:
                     raise HTTPException(status_code=404, detail=f"Destination Warehouse {dest_warehouse_id} not found")
+
+                is_cross_company = dest_warehouse.company_id != company_id
+                cross_enabled = os.getenv("CROSS_COMPANY_TRANSFERS", "false").lower() == "true"
+
+                if is_cross_company:
+                    if not cross_enabled:
+                        raise HTTPException(status_code=403, detail="Cross-company transfers are currently disabled")
+                        
+                    user_obj = db.query(User).filter(User.id == user_id).first()
+                    has_permission = user_obj.role in ["Admin", "SuperAdmin"] or "cross_company_transfer" in (user_obj.permissions or [])
+                    if not has_permission:
+                        raise HTTPException(status_code=403, detail="Not authorized to create cross-company transfers")
+                        
+                    # Validate SKUs exist in destination company
+                    for it in pos_items:
+                        dest_prod = db.query(Product).filter(Product.sku == it.sku, Product.company_id == dest_warehouse.company_id).first()
+                        if not dest_prod:
+                            raise HTTPException(status_code=400, detail=f"SKU {it.sku} missing in destination company. Please map/create it first.")
+                            
+                    # Audit log
+                    AuditLogService.log(
+                        db,
+                        company_id=company_id,
+                        user_id=user_id,
+                        entity_type="FCDispatch",
+                        entity_id=0,
+                        event_type="CROSS_COMPANY_TRANSFER_INITIATED",
+                        message=f"Initiating cross company transfer to {dest_warehouse.company_id}",
+                        metadata={"destination_company_id": dest_warehouse.company_id, "source_company_id": company_id}
+                    )
 
                 # Destination Amazon Validation
                 amazon_mapping = db.query(WarehouseExternalMapping).filter(
@@ -326,14 +357,14 @@ class FCDispatchService:
                     # Add to Dest FC
                     InventoryEventEngine.process_event(
                         db=db,
-                        company_id=company_id,
+                        company_id=dest_warehouse.company_id,
                         product_sku=it.sku,
                         warehouse_id=dest_warehouse.id,
                         quantity=it.quantity,
                         event_type="TRANSFER_IN",
                         source="FC_DISPATCH_IN",
                         reference_id=dispatch_num,
-                        metadata_payload={"dispatch_id": dispatch.id}
+                        metadata_payload={"dispatch_id": dispatch.id, "source_company_id": company_id}
                     )
                 db.flush()
                 FCDispatchService._log_timeline(db, dispatch.id, "Inventory Updated", "Success", user_id, "Stock transferred")

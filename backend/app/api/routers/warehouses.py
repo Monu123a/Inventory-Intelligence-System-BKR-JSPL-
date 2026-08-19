@@ -56,8 +56,12 @@ class WarehouseUserResponse(WarehouseUserBase):
     warehouse_id: int
     model_config = ConfigDict(from_attributes=True)
 
+from typing import Optional
+
 @router.get("/", response_model=List[WarehouseResponse])
-def get_warehouses(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def get_warehouses(all_companies: Optional[bool] = False, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    if all_companies:
+        return WarehouseService.get_all_across_companies(db)
     return WarehouseService.get_all(db, company_id)
 
 @router.post("/", response_model=WarehouseResponse)

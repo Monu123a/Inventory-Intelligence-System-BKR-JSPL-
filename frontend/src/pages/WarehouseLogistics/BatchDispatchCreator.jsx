@@ -34,6 +34,12 @@ const BatchDispatchCreator = () => {
   const [hubs, setHubs] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [allowOtherCompanies, setAllowOtherCompanies] = useState(false);
+  const [showCrossModal, setShowCrossModal] = useState(false);
+  const [crossConfirmText, setCrossConfirmText] = useState('');
+  const [crossConfirmed, setCrossConfirmed] = useState(false);
+
+  const isCrossCompanyEnabled = import.meta.env.VITE_CROSS_COMPANY_TRANSFERS === 'true';
 
   // Products
   const [inventory, setInventory] = useState([]);
@@ -55,7 +61,7 @@ const BatchDispatchCreator = () => {
 
         const [hubsRes, whRes] = await Promise.all([
           api.get('/api/state-hubs', { headers }),
-          api.get('/api/warehouses', { headers })
+          api.get(`/api/warehouses?all_companies=${allowOtherCompanies}`, { headers })
         ]);
         setHubs(hubsRes.data || []);
         setWarehouses(whRes.data || []);
@@ -66,7 +72,7 @@ const BatchDispatchCreator = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [allowOtherCompanies]);
 
 
 
@@ -422,6 +428,13 @@ const BatchDispatchCreator = () => {
           {step === 2 && (
             <div>
               <h2 className={styles.stepTitle}><Truck color="#2563eb" /> Select State Hub</h2>
+              {isCrossCompanyEnabled && (
+                <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input type="checkbox" id="crossCompanyToggle" checked={allowOtherCompanies} onChange={(e) => setAllowOtherCompanies(e.target.checked)} />
+                  <label htmlFor="crossCompanyToggle" style={{ fontWeight: '500' }}>Allow other company warehouses (Cross-Company Transfers)</label>
+                </div>
+              )}
+
               <div className={styles.grid}>
                 {hubs.map(hub => (
                   <div 
@@ -477,6 +490,12 @@ const BatchDispatchCreator = () => {
                       <p>Code: <strong>{fc.code}</strong></p>
                       <p>GSTIN: <strong>{fc.gstin || 'N/A'}</strong></p>
                     </div>
+                    {fc.company_id !== currentCompany?.id && (
+                      <span style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', marginTop: '4px', display: 'inline-block' }}>
+                        Cross-Company: {fc.company?.code || fc.company_id}
+                      </span>
+                    )}
+
                   </div>
                 ))}
                 {warehouses.filter(w => w.hub_id === selectedHub && w.status?.toUpperCase() === 'ACTIVE').length === 0 && (
