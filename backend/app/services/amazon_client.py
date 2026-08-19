@@ -66,7 +66,7 @@ class SPAPIAmazonClient(AmazonClient):
                 status = amazon_order.get("OrderStatus")
                 
                 # Fetch order items
-                items_res = orders_api.get_order_items(order_id)
+                import time; time.sleep(1.5); items_res = orders_api.get_order_items(order_id)
                 items_data = items_res.payload.get("OrderItems", [])
                 
                 parsed_items = []
