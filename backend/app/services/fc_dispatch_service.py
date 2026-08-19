@@ -388,7 +388,7 @@ class FCDispatchService:
                             transfer_id=st_obj.id,
                             product_id=db.query(Product).filter(Product.sku == it.sku, Product.company_id == dest_warehouse.company_id).first().id if is_cross_company else it.product_id,
                             requested_qty=it.quantity,
-                            transferred_qty=it.quantity,
+                            dispatched_qty=it.quantity, approved_qty=it.quantity, received_qty=it.quantity,
                             unit_price=it.selling_price
                         ))
 
