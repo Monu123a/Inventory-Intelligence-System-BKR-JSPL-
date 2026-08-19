@@ -34,7 +34,7 @@ def get_bkr_company_id(company_id: int = Depends(get_current_company_id), db: Se
 def _resolve_default_bkr_warehouse(db: Session, company_id: int) -> Warehouse:
     warehouses = db.query(Warehouse).filter(
         Warehouse.company_id == company_id,
-        Warehouse.status.in_(["Active", "ACTIVE"])
+        Warehouse.status == "ACTIVE"
     ).order_by(Warehouse.id.asc()).all()
 
     if not warehouses:

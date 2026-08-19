@@ -317,3 +317,16 @@
 {"timestamp": 1787042609437, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
 {"timestamp": 1787042661660, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
 {"timestamp": 1787042707286, "metric": "api_failure", "value": 1, "route": "/api/products/HA0001", "method": "DELETE"}
+{"timestamp": 1787126610484, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787126610499, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787126610505, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787126666719, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787126666734, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787126666741, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787126877352, "metric": "api_failure", "value": 1, "route": "/api/transfers/create", "method": "POST"}
+{"timestamp": 1787127084971, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1787127085076, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1787127085278, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1787127100302, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1787127100414, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1787127100619, "metric": "inventory_write_conflict", "value": 1}

@@ -165,7 +165,7 @@ def inspect_return(
     if request.decision == "RESTOCK":
         warehouses = db.query(Warehouse).filter(
             Warehouse.company_id == company_id,
-            Warehouse.status == "Active"
+            Warehouse.status == "ACTIVE"
         ).order_by(Warehouse.id.asc()).all()
         if not warehouses:
             raise HTTPException(status_code=400, detail="No active warehouse configured for company")

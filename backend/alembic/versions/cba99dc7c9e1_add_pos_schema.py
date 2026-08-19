@@ -136,7 +136,7 @@ def upgrade() -> None:
 
     with op.batch_alter_table('alerts', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
 
     with op.batch_alter_table('amazon_sync_logs', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
@@ -147,7 +147,7 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_amazon_sync_logs_id'), ['id'], unique=False)
         batch_op.create_index(batch_op.f('ix_amazon_sync_logs_order_id'), ['order_id'], unique=False)
         batch_op.create_unique_constraint('uix_company_order_id', ['company_id', 'order_id'])
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
 
     with op.batch_alter_table('inventory', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
@@ -157,29 +157,29 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_inventory_warehouse_id'), ['warehouse_id'], unique=False)
         batch_op.create_unique_constraint('uix_company_prod_wh', ['company_id', 'product_id', 'warehouse_id'])
         batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
-        batch_op.create_foreign_key(None, 'products', ['product_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'products', ['product_id'], ['id'])
         batch_op.drop_column('product_sku')
 
     with op.batch_alter_table('inventory_movements', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
         batch_op.add_column(sa.Column('product_id', sa.Integer(), nullable=False))
         batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
-        batch_op.create_foreign_key(None, 'products', ['product_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'products', ['product_id'], ['id'])
         batch_op.drop_column('product_sku')
 
     with op.batch_alter_table('inventory_snapshots', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
         batch_op.add_column(sa.Column('product_id', sa.Integer(), nullable=False))
         batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
-        batch_op.create_foreign_key(None, 'products', ['product_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'products', ['product_id'], ['id'])
         batch_op.drop_column('product_sku')
 
     with op.batch_alter_table('job_execution_logs', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
 
     with op.batch_alter_table('products', schema=None) as batch_op:
         batch_op.add_column(sa.Column('id', sa.Integer(), nullable=False))
@@ -188,18 +188,18 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('default_gst_rate', sa.Float(), nullable=True))
         batch_op.create_index(batch_op.f('ix_products_id'), ['id'], unique=False)
         batch_op.create_unique_constraint('uix_company_sku', ['company_id', 'sku'])
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
 
     with op.batch_alter_table('reports_history', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
 
     with op.batch_alter_table('warehouses', schema=None) as batch_op:
         batch_op.add_column(sa.Column('company_id', sa.Integer(), nullable=False))
         batch_op.drop_index(batch_op.f('ix_warehouses_code'))
         batch_op.create_index(batch_op.f('ix_warehouses_code'), ['code'], unique=False)
         batch_op.create_unique_constraint('uix_company_warehouse_code', ['company_id', 'code'])
-        batch_op.create_foreign_key(None, 'companies', ['company_id'], ['id'])
+        batch_op.create_foreign_key('fk_company_id', 'companies', ['company_id'], ['id'])
 
     # ### end Alembic commands ###
 
@@ -235,7 +235,7 @@ def downgrade() -> None:
         batch_op.add_column(sa.Column('product_sku', sa.VARCHAR(), nullable=False))
         batch_op.drop_constraint(None, type_='foreignkey')
         batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'products', ['product_sku'], ['sku'])
+        batch_op.create_foreign_key('fk_company_id', 'products', ['product_sku'], ['sku'])
         batch_op.drop_column('product_id')
         batch_op.drop_column('company_id')
 
@@ -243,7 +243,7 @@ def downgrade() -> None:
         batch_op.add_column(sa.Column('product_sku', sa.VARCHAR(), nullable=False))
         batch_op.drop_constraint(None, type_='foreignkey')
         batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'products', ['product_sku'], ['sku'])
+        batch_op.create_foreign_key('fk_company_id', 'products', ['product_sku'], ['sku'])
         batch_op.drop_column('product_id')
         batch_op.drop_column('company_id')
 
@@ -251,7 +251,7 @@ def downgrade() -> None:
         batch_op.add_column(sa.Column('product_sku', sa.VARCHAR(), nullable=False))
         batch_op.drop_constraint(None, type_='foreignkey')
         batch_op.drop_constraint(None, type_='foreignkey')
-        batch_op.create_foreign_key(None, 'products', ['product_sku'], ['sku'])
+        batch_op.create_foreign_key('fk_company_id', 'products', ['product_sku'], ['sku'])
         batch_op.drop_constraint('uix_company_prod_wh', type_='unique')
         batch_op.drop_index(batch_op.f('ix_inventory_warehouse_id'))
         batch_op.drop_index(batch_op.f('ix_inventory_product_id'))

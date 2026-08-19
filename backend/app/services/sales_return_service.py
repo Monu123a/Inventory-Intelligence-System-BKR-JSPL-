@@ -124,7 +124,7 @@ class SalesReturnService:
                 raise ValueError("Only OFFLINE returns can fallback to a default warehouse.")
             warehouses = db.query(Warehouse).filter(
                 Warehouse.company_id == company_id,
-                Warehouse.status == "Active"
+                Warehouse.status == "ACTIVE"
             ).order_by(Warehouse.id.asc()).all()
             if not warehouses:
                 raise ValueError("No active warehouse found to accept return stock.")

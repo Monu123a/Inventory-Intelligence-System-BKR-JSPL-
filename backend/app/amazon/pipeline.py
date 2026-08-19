@@ -71,7 +71,7 @@ class AmazonPipeline:
             sync_log.api_response_status = "200 OK"
             
             # Find a default warehouse to deduct from
-            default_warehouse = db.query(Warehouse).filter(Warehouse.status == "Active").first()
+            default_warehouse = db.query(Warehouse).filter(Warehouse.status == "ACTIVE").first()
             if not default_warehouse:
                 raise Exception("No active warehouse found to deduct inventory from.")
             
