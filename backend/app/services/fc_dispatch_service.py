@@ -352,7 +352,22 @@ class FCDispatchService:
                 db.flush()
                 FCDispatchService._log_timeline(db, dispatch.id, "Challan Generated", "Success", user_id, f"Challan ID {challan_dto.id}")
                 
-                # 6. Process Inventory
+# 6. Process Inventory
+                
+                # Auto-create StockTransfer if cross-company so it appears in Inter-Company History
+                st_obj = None
+                if is_cross_company:
+                    from app.models.schema import StockTransfer, StockTransferItem
+                    st_obj = StockTransfer(
+                        from_company_id=company_id,
+                        to_company_id=dest_warehouse.company_id,
+                        source_warehouse_id=source_warehouse.id,
+                        destination_warehouse_id=dest_warehouse.id,
+                        status="Completed",
+                        invoice_id=sale_id
+                    )
+                    db.add(st_obj)
+                    db.flush()
                 for it in pos_items:
                     di = FCDispatchItem(
                         dispatch_id=dispatch.id,
@@ -369,6 +384,16 @@ class FCDispatchService:
                     )
                     db.add(di)
                     
+                    if st_obj:
+                        from app.models.schema import StockTransferItem
+                        db.add(StockTransferItem(
+                            transfer_id=st_obj.id,
+                            product_id=db.query(Product).filter(Product.sku == it.sku, Product.company_id == dest_warehouse.company_id).first().id if is_cross_company else it.product_id,
+                            requested_qty=it.quantity,
+                            transferred_qty=it.quantity,
+                            unit_price=it.selling_price
+                        ))
+
                     # Deduct from Source
                     InventoryEventEngine.process_event(
                         db=db,
