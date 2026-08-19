@@ -223,14 +223,6 @@ def complete_sale(
         invoice_number = InvoiceNumberService.generate_next(
             db,
             company_id=company_id,
-            customer_name=payload.customer_name,
-            customer_gstin=payload.customer_gstin,
-            customer_address=payload.customer_address,
-            customer_state=payload.customer_state,
-            customer_state_code=payload.customer_state_code,
-            customer_phone=payload.customer_phone,
-            customer_email=payload.customer_email,
-            place_of_supply=payload.place_of_supply,
             company_code=(company.code if company else "CO"),
         )
 
@@ -350,14 +342,6 @@ def complete_sale(
         AuditLogService.log(
             db,
             company_id=company_id,
-            customer_name=payload.customer_name,
-            customer_gstin=payload.customer_gstin,
-            customer_address=payload.customer_address,
-            customer_state=payload.customer_state,
-            customer_state_code=payload.customer_state_code,
-            customer_phone=payload.customer_phone,
-            customer_email=payload.customer_email,
-            place_of_supply=payload.place_of_supply,
             entity_type="Sale",
             entity_id=sale.id,
             event_type="INVOICE_CREATED",
