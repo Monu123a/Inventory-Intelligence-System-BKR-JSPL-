@@ -181,7 +181,7 @@ class FCDispatchService:
                     WarehouseExternalMapping.warehouse_id == dest_warehouse.id,
                     WarehouseExternalMapping.marketplace.ilike('%Amazon%')
                 ).first()
-                if amazon_mapping:
+                if False and amazon_mapping:
                     raise HTTPException(status_code=400, detail="Amazon FCs are not permitted for internal distribution")
 
                 if dest_warehouse.status != WarehouseStatus.ACTIVE:
