@@ -31,9 +31,14 @@ const InvoiceSummary = ({ company, items, totals }) => {
 
   return (
     <div className={styles.summaryContainer}>
-      <div className={styles.amountChargeable}>
+      <div className={styles.amountChargeable} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
         Amount Chargeable (in words)<br/>
         <strong>INR {totals?.grand_total ? amountInWords(totals.grand_total) : ''}</strong>
+        </div>
+        <div style={{ textAlign: "right", fontSize: "1.1em" }}>
+          Amount Chargeable: <strong>₹{totals?.grand_total ? formatCurrency(totals.grand_total) : "0.00"}</strong>
+        </div>
       </div>
 
       {gstSummaryEntries.length > 0 && (
