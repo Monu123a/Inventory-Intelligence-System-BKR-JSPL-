@@ -267,3 +267,5 @@
   margin-bottom: 16px;
   font-size: 14px;
 }
+.cartTableContainer { width: 100%; overflow-x: auto; }
+.mainPanel { min-width: 0; }
