@@ -19,10 +19,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    pass
-
+    conn = op.get_bind()
+    dialect = conn.dialect.name
+    if dialect == "postgresql":
+        conn.execute(sa.text("""
+        DO $$
+        BEGIN
+            BEGIN
+                ALTER TABLE alerts ADD COLUMN company_id INTEGER REFERENCES companies(id);
+            EXCEPTION
+                WHEN duplicate_column THEN RAISE NOTICE 'column company_id already exists';
+            END;
+        END $$;
+        """))
+    else:
+        with op.batch_alter_table('alerts', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('company_id', sa.Integer(), sa.ForeignKey('companies.id'), nullable=True))
 
 def downgrade() -> None:
-    """Downgrade schema."""
     pass
