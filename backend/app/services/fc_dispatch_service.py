@@ -353,8 +353,10 @@ class FCDispatchService:
                 # Auto-create StockTransfer if cross-company so it appears in Inter-Company History
                 st_obj = None
                 if is_cross_company:
+                    import uuid
                     from app.models.schema import StockTransfer, StockTransferItem
                     st_obj = StockTransfer(
+                        transfer_number=f"TR-ST-{uuid.uuid4().hex[:6].upper()}",
                         from_company_id=company_id,
                         to_company_id=dest_warehouse.company_id,
                         source_warehouse_id=source_warehouse.id,

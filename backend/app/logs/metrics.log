@@ -330,3 +330,5 @@
 {"timestamp": 1787127100302, "metric": "inventory_write_conflict", "value": 1}
 {"timestamp": 1787127100414, "metric": "inventory_write_conflict", "value": 1}
 {"timestamp": 1787127100619, "metric": "inventory_write_conflict", "value": 1}
+{"timestamp": 1787159272634, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1787159340810, "metric": "sale_completed", "value": 1, "company_id": 2}
