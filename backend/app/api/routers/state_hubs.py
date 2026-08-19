@@ -27,7 +27,9 @@ class StateHubResponse(StateHubBase):
     model_config = ConfigDict(from_attributes=True)
 
 @router.get("/", response_model=List[StateHubResponse])
-def get_state_hubs(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def get_state_hubs(all_companies: Optional[bool] = False, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    if all_companies:
+        return StateHubService.get_all_across_companies(db)
     return StateHubService.get_all(db, company_id)
 
 @router.post("/", response_model=StateHubResponse)

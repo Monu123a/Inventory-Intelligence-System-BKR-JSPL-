@@ -7,6 +7,10 @@ class StateHubService:
         return db.query(StateHub).filter(StateHub.company_id == company_id).all()
 
     @staticmethod
+    def get_all_across_companies(db: Session):
+        return db.query(StateHub).all()
+
+    @staticmethod
     def get_by_id(db: Session, hub_id: int, company_id: int):
         return db.query(StateHub).filter(StateHub.id == hub_id, StateHub.company_id == company_id).first()
 

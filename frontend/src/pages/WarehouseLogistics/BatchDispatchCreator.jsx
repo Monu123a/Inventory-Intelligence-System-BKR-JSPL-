@@ -60,7 +60,7 @@ const BatchDispatchCreator = () => {
         }
 
         const [hubsRes, whRes] = await Promise.all([
-          api.get('/api/state-hubs', { headers }),
+          api.get(`/api/state-hubs?all_companies=${allowOtherCompanies}`, { headers }),
           api.get(`/api/warehouses?all_companies=${allowOtherCompanies}`, { headers })
         ]);
         setHubs(hubsRes.data || []);
