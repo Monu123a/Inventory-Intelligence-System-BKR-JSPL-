@@ -14,7 +14,7 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
   const companyId = useCompanyStore((state) => state.companyId);
   const invQuery = useQuery({
     queryKey: ['inventory', warehouseId, companyId],
-    queryFn: () => inventoryService.getInventory(warehouseId || null),
+    queryFn: () => inventoryService.getInventory(warehouseId ? { warehouse_id: warehouseId } : {}),
   });
 
   const prodQuery = useQuery({
