@@ -43,7 +43,7 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
         
     is_cross_company = src_comp != dest_comp
     if is_cross_company:
-        cross_enabled = os.getenv("CROSS_COMPANY_TRANSFERS", "false").lower() == "true"
+        cross_enabled = os.getenv("CROSS_COMPANY_TRANSFERS", "true").lower() == "true"
         if not cross_enabled:
             raise HTTPException(status_code=403, detail="Cross company transfers are currently disabled")
             

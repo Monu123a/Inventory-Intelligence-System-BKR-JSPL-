@@ -140,7 +140,7 @@ class FCDispatchService:
                     raise HTTPException(status_code=404, detail=f"Destination Warehouse {dest_warehouse_id} not found")
 
                 is_cross_company = dest_warehouse.company_id != company_id
-                cross_enabled = os.getenv("CROSS_COMPANY_TRANSFERS", "false").lower() == "true"
+                cross_enabled = os.getenv("CROSS_COMPANY_TRANSFERS", "true").lower() == "true"
 
                 if is_cross_company:
                     if not cross_enabled:
