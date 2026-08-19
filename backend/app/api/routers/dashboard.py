@@ -144,17 +144,17 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
 
     pending_dispatches = db.query(FCDispatch).filter(
         FCDispatch.company_id == company_id,
-        FCDispatch.dispatch_status == 'DRAFT'
+        FCDispatch.dispatch_status == 'Draft'
     ).count()
 
     failed_amazon_syncs = db.query(AmazonSyncLog).filter(
         AmazonSyncLog.company_id == company_id,
-        AmazonSyncLog.status == 'FAILED'
+        AmazonSyncLog.status == 'Failed'
     ).count()
 
     pending_accounting_exports = db.query(AccountingExportBatch).filter(
         AccountingExportBatch.company_id == company_id,
-        AccountingExportBatch.status == 'PENDING'
+        AccountingExportBatch.status == 'Queued'
     ).count() if (company and company.code == "BKR") else 0
 
     return {
@@ -215,7 +215,7 @@ def get_recent_activity(company_id: int = Depends(get_current_company_id), db: S
         })
 
     # 3. Return Completed
-    returns = db.query(FCReturn).filter(FCReturn.company_id == company_id, FCReturn.status == 'COMPLETED').order_by(FCReturn.created_at.desc()).limit(5).all()
+    returns = db.query(FCReturn).filter(FCReturn.company_id == company_id, FCReturn.status == 'Completed').order_by(FCReturn.created_at.desc()).limit(5).all()
     for r in returns:
         activity_feed.append({
             "id": f"ret_{r.id}", "timestamp": r.created_at, "type": "Return Completed",
@@ -229,7 +229,7 @@ def get_recent_activity(company_id: int = Depends(get_current_company_id), db: S
         activity_feed.append({
             "id": f"sync_{s.id}", "timestamp": s.sync_start_time, "type": "Amazon Sync",
             "description": f"Amazon Sync: {s.orders_processed} orders processed",
-            "status": "Success" if s.status == 'SUCCESS' else "Warning", "metadata": {"status": s.status}
+            "status": "Success" if s.status == 'Success' else "Warning", "metadata": {"status": s.status}
         })
 
     # 5. Service Completed
