@@ -32,6 +32,21 @@ class StockTransferService:
             
         unfulfilled_items = []
 
+        # ===== PRE-FLIGHT DESTINATION SKU VALIDATION =====
+        if transfer.from_company_id != transfer.to_company_id:
+            missing_skus = []
+            for item in transfer.items:
+                qty = fulfilled_qty_map.get(item.product_id, 0)
+                if qty <= 0: continue
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+                if product:
+                    dest_product = db.query(Product).filter(Product.sku == product.sku, Product.company_id == transfer.to_company_id).first()
+                    if not dest_product:
+                        missing_skus.append(product.sku)
+            if missing_skus:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=400, detail={"message": "Products missing in destination company", "missing_skus": missing_skus})
+
         for item in transfer.items:
             qty = fulfilled_qty_map.get(item.product_id, 0)
             
@@ -50,11 +65,7 @@ class StockTransferService:
             if not product:
                 continue
 
-            # ===== VALIDATE SKU IN DESTINATION COMPANY =====
-            if transfer.from_company_id != transfer.to_company_id:
-                dest_product = db.query(Product).filter(Product.sku == product.sku, Product.company_id == transfer.to_company_id).first()
-                if not dest_product:
-                    raise ValueError(f"Product SKU {product.sku} is missing in destination company. Please create/map it first before transferring.")
+
 
             # ===== ADD to DESTINATION =====
             if transfer.destination_warehouse_id:

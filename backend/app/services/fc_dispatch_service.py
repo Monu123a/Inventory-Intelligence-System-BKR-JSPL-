@@ -150,10 +150,13 @@ class FCDispatchService:
                         raise HTTPException(status_code=403, detail="Not authorized to create cross-company transfers")
                         
                     # Validate SKUs exist in destination company
+                    missing_skus = []
                     for it in pos_items:
                         dest_prod = db.query(Product).filter(Product.sku == it.sku, Product.company_id == dest_warehouse.company_id).first()
                         if not dest_prod:
-                            raise HTTPException(status_code=400, detail=f"SKU {it.sku} missing in destination company. Please map/create it first.")
+                            missing_skus.append(it.sku)
+                    if missing_skus:
+                        raise HTTPException(status_code=400, detail={"message": "Products missing in destination company", "missing_skus": missing_skus})
                             
                     # Audit log
                     AuditLogService.log(
