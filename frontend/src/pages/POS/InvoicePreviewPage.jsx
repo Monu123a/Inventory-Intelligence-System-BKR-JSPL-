@@ -26,12 +26,14 @@ export default function InvoicePreviewPage() {
   const queryClient = useQueryClient();
   const invoiceRef = useRef(null);
 
-  const { data: invoice, isLoading: loading, error: fetchError } = useQuery({
+  const { data: rawInvoice, isLoading: loading, error: fetchError } = useQuery({
+
     queryKey: ['sale', saleId],
     queryFn: () => posService.getSaleById(saleId),
     initialData: location.state?.receipt,
   });
 
+  const invoice = rawInvoice?.receipt || rawInvoice;
   const error = fetchError ? (fetchError.response?.data?.detail || fetchError.message) : null;
 
   const [retryingTally, setRetryingTally] = useState(false);
