@@ -21,8 +21,10 @@ class TransferItemRequest(BaseModel):
     unit_price: Optional[float] = 0.0
 
 class CreateTransferRequest(BaseModel):
-    from_company_id: int
-    to_company_id: int
+    source_company_id: Optional[int] = None
+    destination_company_id: Optional[int] = None
+    from_company_id: Optional[int] = None  # Backward compatibility
+    to_company_id: Optional[int] = None    # Backward compatibility
     source_warehouse_id: Optional[int] = None
     destination_warehouse_id: Optional[int] = None
     idempotency_key: Optional[str] = None
@@ -33,32 +35,35 @@ from app.services.audit_log_service import AuditLogService
 
 @router.post("/create")
 def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), company_id: int = Depends(get_current_company_id)):
-    if req.from_company_id != company_id and req.to_company_id != company_id:
+    src_comp = req.source_company_id or req.from_company_id
+    dest_comp = req.destination_company_id or req.to_company_id
+    
+    if src_comp != company_id and dest_comp != company_id:
         raise HTTPException(status_code=403, detail="Cannot create transfer for unrelated companies")
         
-    is_cross_company = req.from_company_id != req.to_company_id
+    is_cross_company = src_comp != dest_comp
     if is_cross_company:
         cross_enabled = os.getenv("CROSS_COMPANY_TRANSFERS", "false").lower() == "true"
         if not cross_enabled:
             raise HTTPException(status_code=403, detail="Cross company transfers are currently disabled")
             
-        has_permission = current_user.role in ["Admin", "SuperAdmin"] or "create_transfer" in (current_user.permissions or [])
+        has_permission = current_user.role in ["Admin", "SuperAdmin"] or "create_transfer" in (current_user.permissions or []) or "cross_company_transfer" in (current_user.permissions or [])
         if not has_permission:
             raise HTTPException(status_code=403, detail="Not authorized to create cross-company transfers")
         
     if req.idempotency_key:
         existing = db.query(StockTransfer).filter(
-            StockTransfer.from_company_id == req.from_company_id,
+            StockTransfer.from_company_id == src_comp,
             StockTransfer.idempotency_key == req.idempotency_key
         ).first()
         if existing:
             return {"status": "success", "transfer_id": existing.id, "message": "Idempotent response"}
 
-    transfer_num = TransferNumberService.generate_next(db, company_id=req.from_company_id)
+    transfer_num = TransferNumberService.generate_next(db, company_id=src_comp)
     transfer = StockTransfer(
         transfer_number=transfer_num,
-        from_company_id=req.from_company_id,
-        to_company_id=req.to_company_id,
+        from_company_id=src_comp,
+        to_company_id=dest_comp,
         source_warehouse_id=req.source_warehouse_id,
         destination_warehouse_id=req.destination_warehouse_id,
         idempotency_key=req.idempotency_key,
@@ -76,7 +81,7 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
             entity_id=transfer.id, 
             event_type="cross_company_transfer.create", 
             message="Created cross company transfer", 
-            metadata={"from": req.from_company_id, "to": req.to_company_id},
+            metadata={"source_company_id": src_comp, "destination_company_id": dest_comp},
             user_id=current_user.id
         )
 
