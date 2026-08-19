@@ -203,7 +203,7 @@ const BatchDispatchCreator = () => {
         unit: 'PCS',
         gst_rate: tax_rate,
         rate: unit_price,
-        amount: taxable,
+        taxable_value: taxable,
         igst: isInterState ? tax_amount : 0,
         cgst: isInterState ? 0 : tax_amount / 2,
         sgst: isInterState ? 0 : tax_amount / 2
@@ -219,7 +219,7 @@ const BatchDispatchCreator = () => {
       shipping: shipping,
       items: mockItems,
       totals: {
-        total_taxable: totalTaxable,
+        taxable_amount: totalTaxable,
         total_tax: totalTax,
         grand_total: totalTaxable + totalTax,
         igst_total: isInterState ? totalTax : 0,
