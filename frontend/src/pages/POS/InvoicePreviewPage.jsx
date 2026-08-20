@@ -42,6 +42,7 @@ export default function InvoicePreviewPage() {
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
+  const [emailDomain, setEmailDomain] = useState('@gmail.com');
   const [emailing, setEmailing] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
@@ -130,7 +131,7 @@ export default function InvoicePreviewPage() {
       // 2. Create FormData
       const formData = new FormData();
       formData.append('file', pdfBlob, opt.filename);
-      formData.append('to_email', emailAddress);
+      formData.append('to_email', emailAddress + emailDomain);
       
       emailMutation.mutate({ saleId: invoice.id, formData });
     } catch (err) {
@@ -319,14 +320,32 @@ export default function InvoicePreviewPage() {
             <div className={styles.modalBody}>
               <div className={styles.formGroup}>
                 <label>Customer Email</label>
-                <input 
-                  type="email" 
-                  value={emailAddress} 
-                  onChange={e => setEmailAddress(e.target.value)}
-                  placeholder="customer@example.com"
-                  className={styles.inputField}
-                  autoFocus
-                />
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input 
+                    type="text" 
+                    value={emailAddress} 
+                    onChange={e => setEmailAddress(e.target.value.replace(/@.*$/, ''))}
+                    placeholder="customer"
+                    className={styles.inputField}
+                    style={{ flex: 1 }}
+                    autoFocus
+                  />
+                  <select 
+                    value={emailDomain} 
+                    onChange={e => setEmailDomain(e.target.value)}
+                    className={styles.inputField}
+                    style={{ width: '140px' }}
+                  >
+                    <option value="@gmail.com">@gmail.com</option>
+                    <option value="@yahoo.com">@yahoo.com</option>
+                    <option value="@outlook.com">@outlook.com</option>
+                    <option value="@hotmail.com">@hotmail.com</option>
+                    <option value="">(Custom / Full Email)</option>
+                  </select>
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                  Will send to: <strong>{emailAddress ? `${emailAddress}${emailDomain}` : ''}</strong>
+                </div>
               </div>
               
               {emailError && <div className={styles.errorText} style={{ color: 'red', marginTop: '10px' }}>{emailError}</div>}
