@@ -75,6 +75,7 @@ const POSPage = () => {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [error, setError] = useState('');
+  const [completedReceipt, setCompletedReceipt] = useState(null);
 
   const idempotencyKeyRef = useRef(window.crypto.randomUUID());
 
