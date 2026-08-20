@@ -60,6 +60,13 @@ def _resolve_default_warehouse(db: Session, company_id: int) -> Warehouse:
     if len(warehouses) == 1:
         return warehouses[0]
 
+    # JSPL-specific override: strictly use VSHB (FC VSHB Chandigarh)
+    if company_code == "JSPL":
+        vshb = next((w for w in warehouses if (w.code or "").strip().upper() == "VSHB"), None)
+        if vshb:
+            return vshb
+        raise HTTPException(status_code=400, detail="JSPL POS requires the 'VSHB' warehouse, but it was not found or is inactive.")
+
     preferred_codes = {"DEFAULT", f"{company_code}-DEFAULT", f"{company_code}_DEFAULT", "MAIN", "POS"}
     for warehouse in warehouses:
         code = (warehouse.code or "").strip().upper()
