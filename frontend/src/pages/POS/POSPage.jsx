@@ -296,10 +296,8 @@ const POSPage = () => {
 
       if (!receipt?.id) return;
 
-      if (invoiceType === 'B2B') {
+      if (saleId) {
         navigate(`/sales/${saleId}/invoice`, { state: { receipt } });
-      } else {
-        setCompletedReceipt(receipt);
       }
     },
     onError: (err) => {
