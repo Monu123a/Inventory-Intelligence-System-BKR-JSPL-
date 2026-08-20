@@ -49,10 +49,26 @@ api.interceptors.response.use(
         if (data && data.detail && data.detail.toLowerCase().includes('admin access required') && config.data) {
            try {
              const payload = JSON.parse(config.data);
-             // Best effort mapping of generic URLs to Executor Registry types
+             // Strip the dummy admin password so it doesn't show in the diff
+             if (payload.admin_password) delete payload.admin_password;
+
+             // Map URL/Method to Executor request types
              let reqType = "UNKNOWN_OPERATION";
-             if (config.url.includes('/price')) reqType = "UPDATE_PRODUCT_PRICE";
-             // Add more mappings here later (e.g., ADD_WAREHOUSE)
+             const url = config.url.toLowerCase();
+             const method = config.method ? config.method.toLowerCase() : '';
+             
+             if (url.includes('/products')) {
+                 if (method === 'put' || method === 'patch') reqType = "UPDATE_PRODUCT";
+                 if (method === 'post') reqType = "CREATE_PRODUCT";
+                 if (method === 'delete') reqType = "DELETE_PRODUCT";
+             } else if (url.includes('/warehouses')) {
+                 if (method === 'put' || method === 'patch') reqType = "UPDATE_WAREHOUSE";
+                 if (method === 'post') reqType = "CREATE_WAREHOUSE";
+                 if (method === 'delete') reqType = "DELETE_WAREHOUSE";
+             } else if (url.includes('/inventory/adjust')) {
+                 reqType = "INVENTORY_ADJUSTMENT";
+             }
+
              
              useApprovalStore.getState().openModal(reqType, payload);
              return Promise.reject(error); // Stop propagation so we don't show generic toast
