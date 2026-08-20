@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import ApprovalModal from './ApprovalModal';
-import { FiLock } from 'react-icons/fi';
+import { FiLock, FiCheckCircle } from 'react-icons/fi';
+import styles from './Approvals.module.css';
 
 const ApprovalDashboard = () => {
   const [requests, setRequests] = useState([]);
@@ -47,24 +48,32 @@ const ApprovalDashboard = () => {
     }
   };
 
+  const getStatusBadge = (status) => {
+    const cls = status === 'PENDING' ? styles.badgePending
+      : status === 'EXECUTED' ? styles.badgeExecuted
+      : status === 'FAILED' ? styles.badgeFailed
+      : styles.badgeDefault;
+    return <span className={`${styles.badge} ${cls}`}>{status}</span>;
+  };
+
   if (!isUnlocked) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh] p-6">
-        <form onSubmit={handleUnlock} className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-          <div className="flex justify-center mb-4 text-indigo-600">
+      <div className={styles.lockScreen}>
+        <form onSubmit={handleUnlock} className={styles.lockCard}>
+          <div className={styles.lockIcon}>
             <FiLock size={48} />
           </div>
-          <h2 className="text-2xl font-bold text-center mb-6">Admin Approvals</h2>
-          <p className="text-sm text-gray-600 text-center mb-6">
+          <h2 className={styles.lockTitle}>Admin Approvals</h2>
+          <p className={styles.lockDescription}>
             Please enter your admin password to view and manage pending approvals. Once unlocked, you will not be asked again during this session.
           </p>
           
-          {authError && <div className="bg-red-100 text-red-700 p-2 text-sm rounded mb-4 text-center">{authError}</div>}
+          {authError && <div className={styles.lockError}>{authError}</div>}
           
           <input
             type="password"
             autoFocus
-            className="w-full border rounded p-3 mb-4 focus:ring focus:ring-indigo-200"
+            className={styles.lockInput}
             placeholder="Admin Password"
             value={authPassword}
             onChange={e => setAuthPassword(e.target.value)}
@@ -72,7 +81,7 @@ const ApprovalDashboard = () => {
           <button
             type="submit"
             disabled={authLoading || !authPassword}
-            className="w-full bg-indigo-600 text-white font-semibold py-3 rounded hover:bg-indigo-700 disabled:opacity-50"
+            className={styles.lockBtn}
           >
             {authLoading ? 'Verifying...' : 'Unlock Approvals'}
           </button>
@@ -82,15 +91,15 @@ const ApprovalDashboard = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <FiLock className="text-green-500" size={20} /> Admin Approvals
+    <div className={styles.container}>
+      <div className={styles.toolbar}>
+        <h1 className={styles.pageTitle}>
+          <FiCheckCircle color="var(--color-success)" size={20} /> Admin Approvals
         </h1>
         <select 
           value={statusFilter} 
           onChange={e => setStatusFilter(e.target.value)}
-          className="border rounded p-2"
+          className={styles.select}
         >
           <option value="">All Statuses</option>
           <option value="PENDING">Pending</option>
@@ -103,41 +112,32 @@ const ApprovalDashboard = () => {
       </div>
 
       {loading ? (
-        <p>Loading...</p>
+        <p style={{ padding: 'var(--spacing-6)', color: 'var(--color-text-muted)' }}>Loading...</p>
       ) : (
-        <div className="bg-white rounded shadow overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className={styles.tableWrapper}>
+          <table className={styles.table}>
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requested By</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Requested By</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {requests.map(req => (
                 <tr key={req.id}>
-                  <td className="px-6 py-4 text-sm">{req.id}</td>
-                  <td className="px-6 py-4 text-sm font-semibold">{req.request_type}</td>
-                  <td className="px-6 py-4 text-sm">{req.requested_by}</td>
-                  <td className="px-6 py-4 text-sm">{new Date(req.created_at).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      req.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                      req.status === 'EXECUTED' ? 'bg-green-100 text-green-800' :
-                      req.status === 'FAILED' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {req.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td>{req.id}</td>
+                  <td className={styles.typeBold}>{req.request_type}</td>
+                  <td>{req.requested_by}</td>
+                  <td>{new Date(req.created_at).toLocaleString()}</td>
+                  <td>{getStatusBadge(req.status)}</td>
+                  <td>
                     <button 
                       onClick={() => setSelectedReqId(req.id)}
-                      className="text-indigo-600 hover:text-indigo-900 font-medium"
+                      className={styles.reviewBtn}
                     >
                       {req.status === 'PENDING' ? 'Review & Approve' : 'View Details'}
                     </button>
@@ -145,7 +145,7 @@ const ApprovalDashboard = () => {
                 </tr>
               ))}
               {requests.length === 0 && (
-                <tr><td colSpan="6" className="px-6 py-4 text-center text-gray-500">No requests found.</td></tr>
+                <tr><td colSpan="6" className={styles.emptyRow}>No requests found.</td></tr>
               )}
             </tbody>
           </table>

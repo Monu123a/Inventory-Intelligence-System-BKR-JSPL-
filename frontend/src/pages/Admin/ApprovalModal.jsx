@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { FiX } from 'react-icons/fi';
+import styles from './Approvals.module.css';
 
 const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
   const [preview, setPreview] = useState(null);
@@ -37,7 +39,7 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
       onHide();
     } catch (err) {
       setError(err.response?.data?.detail?.reason === "snapshot_mismatch" 
-        ? "Data changed since request. " + JSON.stringify(err.response.data.detail.diff)
+        ? "⚠️ Data has changed since this request was created. Diff: " + JSON.stringify(err.response.data.detail.diff)
         : err.response?.data?.detail || "Approval failed");
     } finally {
       setLoading(false);
@@ -60,48 +62,62 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg w-3/4 max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Review Request #{requestId}</h2>
-        
-        {error && <div className="bg-red-100 text-red-700 p-2 mb-4 rounded">{error}</div>}
-        
-        {loading ? (
-          <div>Loading preview...</div>
-        ) : preview ? (
-          <div className="mb-6">
-            <h3 className="font-semibold mb-2">Impact Preview</h3>
-            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-              {JSON.stringify(preview.preview, null, 2)}
-            </pre>
-            
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-semibold text-sm">Original State (When Requested)</h4>
-                <pre className="text-xs bg-gray-50 p-2 border">{JSON.stringify(preview.original_snapshot, null, 2)}</pre>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm">Current State (Live DB)</h4>
-                <pre className="text-xs bg-gray-50 p-2 border">{JSON.stringify(preview.current_snapshot, null, 2)}</pre>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700">Admin Comment (Optional)</label>
-          <textarea 
-            className="w-full mt-1 border rounded p-2" 
-            rows="2"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-          />
+    <div className={styles.modalOverlay}>
+      <div className={styles.modalCard}>
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>Review Request #{requestId}</h3>
+          <button onClick={onHide} className={styles.closeBtn}>
+            <FiX size={20} />
+          </button>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onHide} className="px-4 py-2 border rounded">Close</button>
-          <button onClick={handleReject} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50" disabled={loading}>Reject</button>
-          <button onClick={handleApprove} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50" disabled={loading || error}>Approve & Execute</button>
+        <div className={styles.modalBody}>
+          {error && <div className={styles.errorBox}>{error}</div>}
+
+          {loading ? (
+            <p style={{ color: 'var(--color-text-muted)' }}>Loading preview...</p>
+          ) : preview ? (
+            <>
+              <div style={{ marginBottom: 'var(--spacing-4)' }}>
+                <h4 className={styles.sectionTitle}>Impact Preview</h4>
+                <pre className={styles.preBlock}>
+                  {JSON.stringify(preview.preview, null, 2)}
+                </pre>
+              </div>
+
+              <div className={styles.snapshotGrid}>
+                <div>
+                  <span className={styles.sectionLabel}>Original State (When Requested)</span>
+                  <pre className={styles.preBlock}>
+                    {JSON.stringify(preview.original_snapshot, null, 2)}
+                  </pre>
+                </div>
+                <div>
+                  <span className={styles.sectionLabel}>Current State (Live DB)</span>
+                  <pre className={styles.preBlock}>
+                    {JSON.stringify(preview.current_snapshot, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          <div style={{ marginTop: 'var(--spacing-4)' }}>
+            <label className={styles.sectionLabel}>Admin Comment (Optional)</label>
+            <textarea 
+              className={styles.commentArea}
+              rows="2"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Add a note..."
+            />
+          </div>
+        </div>
+
+        <div className={styles.modalFooter}>
+          <button onClick={onHide} className={styles.btnCancel}>Close</button>
+          <button onClick={handleReject} className={styles.btnReject} disabled={loading}>Reject</button>
+          <button onClick={handleApprove} className={styles.btnApprove} disabled={loading || error}>Approve & Execute</button>
         </div>
       </div>
     </div>
