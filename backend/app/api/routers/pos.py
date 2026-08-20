@@ -93,7 +93,8 @@ class PosCheckoutRequest(BaseModel):
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
 
-    invoice_type: str = "B2C"  # B2C | B2B
+    invoice_type: str = "B2C"
+    invoice_prefix: Optional[str] = None  # B2C | B2B
     payment_terms: Optional[str] = None
     delivery_note: Optional[str] = None
     delivery_note_date: Optional[datetime] = None
@@ -219,11 +220,18 @@ def complete_sale(
         bill_number = _generate_bill_number()
 
         # 2.1 Generate Invoice Number (sequence-based)
+        from app.services.document_number_service import DocumentNumberService
+        from app.models.schema import DocumentTypeEnum
+        from app.services.invoice_number_service import _get_fiscal_year_string
+        from datetime import datetime
         company = db.query(Company).filter(Company.id == company_id).first()
-        invoice_number = InvoiceNumberService.generate_next(
-            db,
+        fy = _get_fiscal_year_string(datetime.today().date())
+        invoice_number = DocumentNumberService.generate_number(
+            db=db,
             company_id=company_id,
-            company_code=(company.code if company else "CO"),
+            document_type=DocumentTypeEnum.SALE,
+            fiscal_year=fy,
+            prefix_override=payload.invoice_prefix or (company.code if company else "CO")
         )
 
         # Company snapshot source (settings)

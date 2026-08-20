@@ -373,7 +373,7 @@ class DocumentSequence(Base):
     Unified per-company document numbering sequence.
     """
     __tablename__ = "document_sequences"
-    __table_args__ = (UniqueConstraint('company_id', 'document_type', 'fiscal_year', name='uix_company_doctype_fy_sequence'),)
+    __table_args__ = (UniqueConstraint('company_id', 'document_type', 'fiscal_year', 'prefix', name='uix_company_doctype_fy_prefix_sequence'),)
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)

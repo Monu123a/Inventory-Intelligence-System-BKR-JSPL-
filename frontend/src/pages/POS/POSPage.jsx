@@ -70,6 +70,7 @@ const POSPage = () => {
 
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
+  const [invoicePrefix, setInvoicePrefix] = useState('GST');
   const [searchResults, setSearchResults] = useState([]);
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
@@ -339,6 +340,7 @@ const POSPage = () => {
     const payload = {
       idempotency_key: idempotencyKeyRef.current,
       invoice_type: invoiceType,
+      invoice_prefix: invoicePrefix,
       customer_name: customerInfo.name || null,
       customer_mobile: customerInfo.mobile || null,
       customer_gstin: customerInfo.gstin || null,
@@ -697,6 +699,42 @@ const POSPage = () => {
             <span>₹{totals.grand.toFixed(2)}</span>
           </div>
 
+                    {/* Invoice Series Dropdown */}
+          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+            <label>Invoice Series (Prefix)</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select 
+                value={['GST', 'JGST', 'BKR'].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                onChange={e => {
+                  if (e.target.value !== 'CUSTOM') {
+                    setInvoicePrefix(e.target.value);
+                  } else {
+                    setInvoicePrefix('');
+                  }
+                }}
+                className={styles.inputField}
+                style={{ width: '120px' }}
+              >
+                <option value="GST">GST-</option>
+                <option value="JGST">JGST-</option>
+                <option value="BKR">BKR/</option>
+                <option value="CUSTOM">Custom</option>
+              </select>
+              {!['GST', 'JGST', 'BKR'].includes(invoicePrefix) && (
+                <input 
+                  type="text" 
+                  value={invoicePrefix} 
+                  onChange={e => setInvoicePrefix(e.target.value.toUpperCase())}
+                  placeholder="Custom Prefix"
+                  className={styles.inputField}
+                  style={{ flex: 1 }}
+                />
+              )}
+            </div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+              Next bill will automatically be: <strong>{invoicePrefix}-...</strong>
+            </div>
+          </div>
           {invoiceType === 'B2B' && (
             <div className={styles.b2bNotice}>
               B2B Invoice — will attempt Tally sync if enabled

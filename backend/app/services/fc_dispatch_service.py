@@ -276,6 +276,7 @@ class FCDispatchService:
                     customer_state=hub.state,
                     customer_state_code=hub.state_code,
                     invoice_type="B2B",
+                    invoice_prefix="BKR",
                     payment_method="CASH", # Default
                     total_taxable_amount=taxable_total,
                     total_tax=tax_total,
