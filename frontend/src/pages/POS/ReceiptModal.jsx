@@ -30,10 +30,10 @@ const ReceiptModal = ({ receipt, onClose }) => {
             <span>Date:</span>
             <span>{formatDate(receipt.sale_date)}</span>
           </div>
-          {receipt.customer_name && (
+          {receipt.customer?.name && (
             <div className={styles.row}>
               <span>Customer:</span>
-              <span>{receipt.customer_name}</span>
+              <span>{receipt.customer?.name}</span>
             </div>
           )}
 
@@ -56,8 +56,8 @@ const ReceiptModal = ({ receipt, onClose }) => {
                     <div style={{fontSize: '10px', color: '#666'}}>GST {item.gst_rate}%</div>
                   </td>
                   <td>{item.quantity}</td>
-                  <td>{item.selling_price.toFixed(2)}</td>
-                  <td>{item.line_total.toFixed(2)}</td>
+                  <td>{(item.rate || 0).toFixed(2)}</td>
+                  <td>{(item.line_total || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -67,15 +67,15 @@ const ReceiptModal = ({ receipt, onClose }) => {
 
           <div className={styles.row}>
             <span>Taxable Amount:</span>
-            <span>₹{receipt.total_taxable_amount.toFixed(2)}</span>
+            <span>₹{(receipt.totals?.taxable_amount || 0).toFixed(2)}</span>
           </div>
           <div className={styles.row}>
             <span>Total Tax (GST):</span>
-            <span>₹{receipt.total_tax.toFixed(2)}</span>
+            <span>₹{(receipt.totals?.total_tax || 0).toFixed(2)}</span>
           </div>
           <div className={`${styles.row} ${styles.bold}`} style={{fontSize: '18px', marginTop: '8px'}}>
             <span>Grand Total:</span>
-            <span>₹{receipt.grand_total.toFixed(2)}</span>
+            <span>₹{(receipt.totals?.grand_total || 0).toFixed(2)}</span>
           </div>
 
           <div className={styles.divider}></div>
