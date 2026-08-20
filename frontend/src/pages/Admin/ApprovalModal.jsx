@@ -78,6 +78,15 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
             <p style={{ color: 'var(--color-text-muted)' }}>Loading preview...</p>
           ) : preview ? (
             <>
+              {preview.request_reason && (
+                <div style={{ marginBottom: 'var(--spacing-4)' }}>
+                  <h4 className={styles.sectionTitle}>Requester Reason</h4>
+                  <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '4px', border: '1px solid #e2e8f0', color: '#334155' }}>
+                    {preview.request_reason}
+                  </div>
+                </div>
+              )}
+
               <div style={{ marginBottom: 'var(--spacing-4)' }}>
                 <h4 className={styles.sectionTitle}>Impact Preview</h4>
                 <pre className={styles.preBlock}>

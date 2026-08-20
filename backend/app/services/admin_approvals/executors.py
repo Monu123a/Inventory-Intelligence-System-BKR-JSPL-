@@ -162,14 +162,24 @@ class UpdateProductExecutor(Executor):
         snapshot = self.before_snapshot(db, payload)
         changes = []
         for key, new_val in payload.items():
-            if key in snapshot and snapshot[key] != new_val:
-                changes.append({
-                    "entity": "Product",
-                    "id": snapshot["id"],
-                    "field": key,
-                    "old_value": snapshot[key],
-                    "new_value": new_val
-                })
+            if key in snapshot:
+                old_val = snapshot[key]
+                is_changed = False
+                
+                if isinstance(old_val, float) and isinstance(new_val, (int, float)):
+                    if not math.isclose(old_val, float(new_val), abs_tol=1e-5):
+                        is_changed = True
+                elif old_val != new_val:
+                    is_changed = True
+                    
+                if is_changed:
+                    changes.append({
+                        "entity": "Product",
+                        "id": snapshot["id"],
+                        "field": key,
+                        "old_value": old_val,
+                        "new_value": new_val
+                    })
                 
         return {
             "changes": changes,

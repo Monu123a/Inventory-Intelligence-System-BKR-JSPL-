@@ -19,7 +19,10 @@ export default function OperatorApprovalModal() {
     try {
       const res = await api.post('/api/admin-approvals/', {
         request_type: requestType,
-        payload,
+        payload: {
+          ...payload,
+          _reason: comment
+        },
         idempotency_key: idempotencyKey,
         company_id: payload.company_id,
         related_entity: payload.product_id || payload.id || null

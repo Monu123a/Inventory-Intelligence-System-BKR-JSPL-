@@ -202,7 +202,8 @@ def preview_request(
             "request_id": req.id, 
             "preview": preview_data,
             "original_snapshot": req.before_snapshot,
-            "current_snapshot": executor.before_snapshot(db, req.payload)
+            "current_snapshot": executor.before_snapshot(db, req.payload),
+            "request_reason": req.payload.get("_reason", "No reason provided.") if req.payload else "No reason provided."
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Preview failed: {str(e)}")
