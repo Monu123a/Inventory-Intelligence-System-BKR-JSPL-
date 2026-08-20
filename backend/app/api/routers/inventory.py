@@ -28,6 +28,8 @@ class ProductInfo(BaseModel):
     name: str
     category: Optional[str] = None
     brand: Optional[str] = None
+    item_rate: Optional[float] = 0.0
+    min_stock_level: Optional[int] = 10
     model_config = ConfigDict(from_attributes=True)
 
 class InventoryResponse(BaseModel):
