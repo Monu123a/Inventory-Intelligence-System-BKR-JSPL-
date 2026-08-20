@@ -8,14 +8,14 @@ import styles from './ProductFormModal.module.css';
 export const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = null, isLoading = false }) => {
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: initialData || {
-      sku: '', name: '', category: '', brand: '', hsn: '', barcode: '', unit: '', min_stock_level: 0, item_rate: 0, status: 'Active'
+      sku: '', name: '', category: '', brand: '', hsn: '', barcode: '', unit: '', min_stock_level: 0, item_rate: 0, default_gst_rate: 0, status: 'Active'
     }
   });
 
   useEffect(() => {
     if (isOpen) {
       reset(initialData || {
-        sku: '', name: '', category: '', brand: '', hsn: '', barcode: '', unit: '', min_stock_level: 0, item_rate: 0, status: 'Active'
+        sku: '', name: '', category: '', brand: '', hsn: '', barcode: '', unit: '', min_stock_level: 0, item_rate: 0, default_gst_rate: 0, status: 'Active'
       });
     }
   }, [isOpen, initialData, reset]);
@@ -33,6 +33,7 @@ export const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = null
       unit: data.unit?.trim() || '',
       min_stock_level: parseInt(data.min_stock_level, 10) || 0,
       item_rate: parseFloat(data.item_rate) || 0.0,
+      default_gst_rate: parseFloat(data.default_gst_rate) || 0.0,
     };
     onSubmit(processed);
   };
@@ -86,6 +87,14 @@ export const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = null
             min="0"
             {...register('min_stock_level', { valueAsNumber: true, min: { value: 0, message: 'Cannot be negative' } })}
             error={errors.min_stock_level}
+          />
+          <Input 
+            label="GST Rate (%)" 
+            type="number" 
+            min="0"
+            step="0.01"
+            {...register('default_gst_rate', { valueAsNumber: true, min: { value: 0, message: 'Cannot be negative' } })}
+            error={errors.default_gst_rate}
           />
           <Input 
             label="Item Rate" 
