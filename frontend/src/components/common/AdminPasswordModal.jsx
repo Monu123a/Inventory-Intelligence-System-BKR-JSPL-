@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { FiLock, FiX } from 'react-icons/fi';
+import { FiLock, FiX, FiSend } from 'react-icons/fi';
+import { useAuthStore } from '../../stores/authStore';
 
 const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
   const [password, setPassword] = useState('');
+  const user = useAuthStore(state => state.user);
+
+  // Only show "Request Approval" for non-Admin users
+  const isAdmin = user?.role === 'Admin';
 
   if (!isOpen) return null;
 
@@ -32,7 +37,7 @@ const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
         <form onSubmit={handleSubmit}>
           <div style={bodyStyle}>
             <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569' }}>
-              Please enter your admin password to {actionName}, or request an admin to approve this action.
+              Please enter your admin password to {actionName}.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a', textTransform: 'uppercase' }}>
@@ -54,9 +59,12 @@ const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
               Cancel
             </button>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="button" onClick={handleRequestApproval} style={requestApprovalBtnStyle}>
-                Request Approval
-              </button>
+              {!isAdmin && (
+                <button type="button" onClick={handleRequestApproval} style={requestApprovalBtnStyle}>
+                  <FiSend size={14} style={{ marginRight: '4px' }} />
+                  Request Approval
+                </button>
+              )}
               <button type="submit" style={submitBtnStyle}>
                 Verify & Proceed
               </button>
@@ -151,7 +159,9 @@ const requestApprovalBtnStyle = {
   color: '#d97706',
   fontWeight: '500',
   cursor: 'pointer',
-  fontSize: '14px'
+  fontSize: '14px',
+  display: 'flex',
+  alignItems: 'center'
 };
 
 const submitBtnStyle = {
