@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { getAuthHeaders } from '../../utils/auth';
+import api from '../../services/api';
 
 const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
   const [preview, setPreview] = useState(null);
@@ -17,9 +16,7 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
   const loadPreview = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:8000/api/admin-approvals/${requestId}/preview`, {
-        headers: getAuthHeaders()
-      });
+      const res = await api.get(`/api/admin-approvals/${requestId}/preview`);
       setPreview(res.data);
       setError(null);
     } catch (err) {
@@ -32,10 +29,10 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
   const handleApprove = async () => {
     try {
       setLoading(true);
-      await axios.post(`http://localhost:8000/api/admin-approvals/${requestId}/approve`, {
+      await api.post(`/api/admin-approvals/${requestId}/approve`, {
         idempotency_key: `ui-exec-${Date.now()}`,
         comment: comment
-      }, { headers: getAuthHeaders() });
+      });
       onActionComplete();
       onHide();
     } catch (err) {
@@ -50,7 +47,7 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
   const handleReject = async () => {
     try {
       setLoading(true);
-      await axios.post(`http://localhost:8000/api/admin-approvals/${requestId}/cancel`, {}, { headers: getAuthHeaders() });
+      await api.post(`/api/admin-approvals/${requestId}/cancel`, {});
       onActionComplete();
       onHide();
     } catch (err) {

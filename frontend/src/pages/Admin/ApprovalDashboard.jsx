@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { getAuthHeaders } from '../../utils/auth';
+import api from '../../services/api';
 import ApprovalModal from './ApprovalModal';
 
 const ApprovalDashboard = () => {
@@ -12,9 +11,8 @@ const ApprovalDashboard = () => {
   const loadRequests = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:8000/api/admin-approvals?status=${statusFilter}`, {
-        headers: getAuthHeaders()
-      });
+      const res = await api.get(`/api/admin-approvals?status=${statusFilter}`);
+        
       setRequests(res.data);
     } catch (err) {
       console.error(err);
