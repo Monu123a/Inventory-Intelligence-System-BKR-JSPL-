@@ -1,7 +1,9 @@
 import React from 'react';
 import styles from '../InvoiceRenderer.module.css';
 
-const InvoiceHeader = ({ company, invoiceType, tallyData }) => {
+const InvoiceHeader = ({ company, invoiceType, tallyData, items }) => {
+  const hasOnlyZeroGst = items?.length > 0 && items.every(item => parseFloat(item.gst_rate || 0) === 0);
+  const invoiceTitle = hasOnlyZeroGst ? 'BILL OF SUPPLY' : 'TAX INVOICE';
   // If we have actual IRN and QR data in tallyData, we could display it here.
   // For now, we only show it if tallyData has e_invoice_details (which we will add in future)
   const hasEInvoice = tallyData && tallyData.irn;
@@ -22,7 +24,7 @@ const InvoiceHeader = ({ company, invoiceType, tallyData }) => {
       </div>
       
       <div className={styles.titleBox}>
-        <h2 className={styles.invoiceTitle}>TAX INVOICE</h2>
+        <h2 className={styles.invoiceTitle}>{invoiceTitle}</h2>
         <div className={styles.invoiceType}>{invoiceType}</div>
       </div>
       

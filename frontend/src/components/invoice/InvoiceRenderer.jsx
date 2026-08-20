@@ -16,6 +16,7 @@ const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
           company={invoice.company} 
           invoiceType={invoice.invoice_type} 
           tallyData={invoice.tally} 
+          items={invoice.items}
         />
         
         <div className={styles.middleSection}>

@@ -293,9 +293,10 @@ const POSPage = () => {
 
       if (!receipt?.id) return;
 
-      // Navigate to invoice preview (route-based)
-      if (saleId) {
+      if (invoiceType === 'B2B') {
         navigate(`/sales/${saleId}/invoice`, { state: { receipt } });
+      } else {
+        setCompletedReceipt(receipt);
       }
     },
     onError: (err) => {
@@ -709,6 +710,12 @@ const POSPage = () => {
           </button>
         </div>
       </div>
+      {completedReceipt && (
+        <ReceiptModal 
+          receipt={completedReceipt} 
+          onClose={() => setCompletedReceipt(null)} 
+        />
+      )}
     </div>
   );
 };
