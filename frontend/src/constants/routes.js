@@ -47,4 +47,5 @@ export const ROUTES = {
   BKR_JOB_CARD_DETAIL: '/services/job-cards/:id',
   BKR_SERVICE_INVOICE: '/services/invoices/:id',
   HELP: '/help',
+  ADMIN_APPROVALS: '/admin/approvals',
 };

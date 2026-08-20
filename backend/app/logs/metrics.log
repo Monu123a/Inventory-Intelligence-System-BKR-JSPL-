@@ -334,3 +334,4 @@
 {"timestamp": 1787159340810, "metric": "sale_completed", "value": 1, "company_id": 2}
 {"timestamp": 1787159602065, "metric": "sale_completed", "value": 1, "company_id": 2}
 {"timestamp": 1787159832909, "metric": "sale_completed", "value": 1, "company_id": 2}
+{"timestamp": 1787214404131, "metric": "api_failure", "value": 1, "route": "/api/admin-approvals/", "method": "POST"}

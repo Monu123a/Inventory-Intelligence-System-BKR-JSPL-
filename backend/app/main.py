@@ -47,6 +47,7 @@ from app.api.routers.fc_returns import router as fc_returns_router
 from app.api.routers.damage_claims import router as damage_claims_router
 from app.api.routers.services import router as services_router
 from app.api.routers.bkr_services import router as bkr_services_router
+from app.api.routers.admin_approvals import router as admin_approvals_router
 from app.api.routers.service_reminders import router as service_reminders_router
 from app.api.routers.documents import router as documents_router
 
@@ -250,6 +251,7 @@ app.include_router(fc_returns_router, prefix="/api")
 app.include_router(business_reports_router, prefix="/api")
 app.include_router(damage_claims_router, prefix="/api")
 app.include_router(bkr_services_router, prefix="/api")
+app.include_router(admin_approvals_router, prefix="/api/admin-approvals", tags=["Admin Approvals"])
 
 # ---------------------------------------------------------------------------
 # Pydantic response models

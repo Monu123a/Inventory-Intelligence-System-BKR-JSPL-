@@ -2,6 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
 import useCompanyStore from '../stores/useCompanyStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useApprovalStore } from '../stores/useApprovalStore';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
@@ -36,7 +37,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
     
-    const { status, data } = error.response;
+    const { status, data, config } = error.response;
     
     switch (status) {
       case 401:
@@ -44,6 +45,22 @@ api.interceptors.response.use(
         window.location.href = '/login';
         break;
       case 403:
+        // Intercept Admin access block and trigger Approval Modal
+        if (data && data.detail && data.detail.toLowerCase().includes('admin access required') && config.data) {
+           try {
+             const payload = JSON.parse(config.data);
+             // Best effort mapping of generic URLs to Executor Registry types
+             let reqType = "UNKNOWN_OPERATION";
+             if (config.url.includes('/price')) reqType = "UPDATE_PRODUCT_PRICE";
+             // Add more mappings here later (e.g., ADD_WAREHOUSE)
+             
+             useApprovalStore.getState().openModal(reqType, payload);
+             return Promise.reject(error); // Stop propagation so we don't show generic toast
+           } catch(e) {
+             console.error("Failed to parse request for escalation", e);
+           }
+        }
+        
         useNotificationStore.getState().addNotification({
           type: 'error',
           title: 'Access Denied',

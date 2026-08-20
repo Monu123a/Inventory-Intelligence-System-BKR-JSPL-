@@ -4,7 +4,8 @@ import { ROUTES } from './constants/routes';
 import MainLayout from './components/layout/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationManager from './components/Notification/NotificationManager';
-import LoadingOverlay from './components/LoadingOverlay/LoadingOverlay';
+import LoadingOverlay from "./components/LoadingOverlay/LoadingOverlay";
+import OperatorApprovalModal from "./components/Admin/OperatorApprovalModal";
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 
 const Overview = lazy(() => import('./pages/Overview/Overview'));
@@ -51,6 +52,7 @@ const JobCardList = lazy(() => import('./pages/Service/JobCardList'));
 const ServiceInvoicePreview = lazy(() => import('./pages/Service/ServiceInvoicePreview'));
 
 // Warehouse Phase 8 Routes
+const ApprovalDashboard = lazy(() => import("./pages/Admin/ApprovalDashboard"));
 const WarehouseDashboard = lazy(() => import('./pages/Warehouse/WarehouseDashboard'));
 const StateHubsPage = lazy(() => import('./pages/Warehouse/StateHubsPage'));
 const WarehouseMasterList = lazy(() => import('./pages/Warehouse/WarehouseMasterList'));
@@ -73,6 +75,7 @@ const App = () => {
       <BrowserRouter>
         <Suspense fallback={<div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center' }}>Loading Application...</div>}>
           <NotificationManager />
+          <OperatorApprovalModal />
           <LoadingOverlay />
           <Routes>
             {/* Public Routes */}
@@ -90,6 +93,7 @@ const App = () => {
                 <Route path={ROUTES.DOWNLOAD_CENTRE} element={<DownloadCentre />} />
                 <Route path={ROUTES.SETTINGS} element={<Settings />} />
                 <Route path={ROUTES.HELP} element={<UserManualPage />} />
+                <Route path={ROUTES.ADMIN_APPROVALS} element={<ApprovalDashboard />} />
                 <Route path={ROUTES.POS} element={<POSPage />} />
                 <Route path={ROUTES.POS_HISTORY} element={<SalesHistoryPage />} />
                 <Route path={ROUTES.POS_INVOICE} element={<InvoicePreviewPage />} />

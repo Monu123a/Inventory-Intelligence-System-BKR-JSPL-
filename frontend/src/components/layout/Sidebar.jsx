@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
+import usePendingCount from "../../hooks/usePendingCount";
 import { useUIStore } from '../../stores/uiStore';
 import useCompanyStore from '../../stores/useCompanyStore';
 import { 
@@ -12,6 +13,7 @@ import { FaAmazon } from 'react-icons/fa';
 import styles from './Sidebar.module.css';
 
 const Sidebar = () => {
+  const pendingCount = usePendingCount();
   const { isSidebarOpen } = useUIStore();
   const { currentCompany } = useCompanyStore();
   
@@ -127,6 +129,7 @@ const Sidebar = () => {
       icon: FiSettings,
       items: [
         { path: ROUTES.SETTINGS, label: 'Settings', icon: FiSettings },
+        { path: ROUTES.ADMIN_APPROVALS, label: 'Approvals', icon: FiList, badge: pendingCount > 0 },
       ]
     },
     {
@@ -173,7 +176,7 @@ const Sidebar = () => {
                       title={!isSidebarOpen ? item.label : ''}
                     >
                       <item.icon className={styles.icon} />
-                      <span className={styles.label}>{item.label}</span>
+                      <span className={styles.label}>{item.label}</span>{item.badge && <span className="w-2 h-2 rounded-full bg-red-500 ml-auto mr-2"></span>}
                     </NavLink>
                   ))}
                 </div>

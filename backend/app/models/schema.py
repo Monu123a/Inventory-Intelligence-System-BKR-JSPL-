@@ -414,6 +414,7 @@ class Sale(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
+    execution_idempotency_key = Column(String, unique=True, index=True)
     bill_number = Column(String, index=True, nullable=False)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     customer_name = Column(String, nullable=True)
@@ -556,6 +557,7 @@ class StockTransfer(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
+    execution_idempotency_key = Column(String, unique=True, index=True)
     transfer_number = Column(String, index=True, unique=True, nullable=False)
     from_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     to_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
@@ -702,6 +704,7 @@ class SalesReturn(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
+    execution_idempotency_key = Column(String, unique=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
     return_number = Column(String, index=True, nullable=False, unique=True)
@@ -917,6 +920,7 @@ class FCDispatch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
+    execution_idempotency_key = Column(String, unique=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
@@ -986,6 +990,7 @@ class FCReturn(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
+    execution_idempotency_key = Column(String, unique=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     dispatch_id = Column(Integer, ForeignKey("fc_dispatches.id"), nullable=True)
@@ -1143,3 +1148,44 @@ class ServiceInvoiceItem(Base):
     amount = Column(Float, default=0.0)
     
     invoice = relationship("ServiceInvoice", back_populates="items")
+
+from sqlalchemy.dialects.postgresql import JSONB
+
+class AdminApprovalRequest(Base):
+    __tablename__ = "admin_approval_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    request_type = Column(String, nullable=False)
+    payload = Column(JSONB, nullable=False)
+    payload_hash = Column(String, index=True)
+    expires_at = Column(DateTime)
+
+    requested_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    company_id = Column(Integer, index=True)
+    related_entity = Column(Integer)
+    status = Column(String, nullable=False, default="PENDING", index=True)
+    approver_id = Column(Integer, ForeignKey("users.id"), index=True)
+    approved_at = Column(DateTime)
+    admin_comment = Column(String)
+    before_snapshot = Column(JSONB)
+    after_snapshot = Column(JSONB)
+    revert_payload = Column(JSONB)
+    idempotency_key = Column(String, unique=True, index=True)
+    execution_idempotency_key = Column(String, unique=True, index=True)
+    priority = Column(Integer, default=10)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint('request_type', 'idempotency_key', name='uq_request_type_idempotency_key'),
+    )
+
+class AdminApprovalEvent(Base):
+    __tablename__ = "admin_approval_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    approval_request_id = Column(Integer, ForeignKey("admin_approval_requests.id"), nullable=False)
+    event_type = Column(String, nullable=False)
+    actor_id = Column(Integer, ForeignKey("users.id"))
+    data = Column(JSONB)
+    created_at = Column(DateTime, default=datetime.utcnow)
