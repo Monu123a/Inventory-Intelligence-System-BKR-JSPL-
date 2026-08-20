@@ -18,10 +18,15 @@ const WarehouseDashboard = () => {
 
   const metrics = {
     totalProducts: data.length || 0,
-    inventoryValue: data.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 0), 0),
+    inventoryValue: data.reduce((acc, item) => {
+      const qty = item.current_qty || item.quantity || 0;
+      const price = item.product?.item_rate || item.price || 0;
+      return acc + (price * qty);
+    }, 0),
     lowStock: data.filter(item => {
-      const minLevel = item.min_stock_level || 10;
-      return (item.quantity || 0) > 0 && (item.quantity || 0) < minLevel;
+      const qty = item.current_qty || item.quantity || 0;
+      const minLevel = item.product?.min_stock_level || item.min_stock_level || 10;
+      return qty > 0 && qty < minLevel;
     }).length || 0
   };
 
