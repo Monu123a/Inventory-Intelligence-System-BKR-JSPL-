@@ -40,5 +40,24 @@ export const posService = {
       },
     });
     return normalizeResponse(res.data);
+  },
+
+  // --- Offline POS Queue ---
+  submitOffline: async (payload, idempotencyKey) => {
+    const res = await api.post('/api/pos/offline/submit', {
+      idempotency_key: idempotencyKey,
+      payload
+    });
+    return normalizeResponse(res.data);
+  },
+
+  getPending: async () => {
+    const res = await api.get('/api/pos/offline/pending');
+    return normalizeResponse(res.data);
+  },
+
+  syncOffline: async () => {
+    const res = await api.post('/api/pos/offline/sync');
+    return normalizeResponse(res.data);
   }
 };

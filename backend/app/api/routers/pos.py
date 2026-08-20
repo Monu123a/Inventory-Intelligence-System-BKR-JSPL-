@@ -19,31 +19,48 @@ from app.core.limiter import limiter
 from fastapi import Request
 import logging
 
+import os
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pos", tags=["POS"])
 
 # --- Authorization Dependency ---
-def get_bkr_company_id(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)) -> int:
+def get_pos_company_id(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)) -> int:
+    """Allow BKR always. Allow JSPL only when ENABLE_POS_JSPL=true. Reject others."""
     company = db.query(Company).filter(Company.id == company_id).first()
-    if not company or company.code != "BKR":
-        raise HTTPException(status_code=403, detail="Offline POS is strictly restricted to BKR.")
+    if not company:
+        raise HTTPException(status_code=403, detail="Company not found.")
+
+    allowed_codes = {"BKR"}
+    if os.environ.get("ENABLE_POS_JSPL", "false").lower() == "true":
+        allowed_codes.add("JSPL")
+
+    if company.code not in allowed_codes:
+        raise HTTPException(status_code=403, detail=f"POS is not enabled for {company.code}.")
     return company_id
 
+# Keep old name as alias so nothing breaks if imported elsewhere
+get_bkr_company_id = get_pos_company_id
 
-def _resolve_default_bkr_warehouse(db: Session, company_id: int) -> Warehouse:
+
+def _resolve_default_warehouse(db: Session, company_id: int) -> Warehouse:
+    """Resolve the default POS warehouse for any company."""
+    company = db.query(Company).filter(Company.id == company_id).first()
+    company_code = company.code if company else "UNKNOWN"
+
     warehouses = db.query(Warehouse).filter(
         Warehouse.company_id == company_id,
         Warehouse.status == "ACTIVE"
     ).order_by(Warehouse.id.asc()).all()
 
     if not warehouses:
-        raise HTTPException(status_code=400, detail="No active warehouse configured for BKR")
+        raise HTTPException(status_code=400, detail=f"No active warehouse configured for {company_code}")
 
     if len(warehouses) == 1:
         return warehouses[0]
 
-    preferred_codes = {"DEFAULT", "BKR-DEFAULT", "BKR_DEFAULT", "MAIN", "POS"}
+    preferred_codes = {"DEFAULT", f"{company_code}-DEFAULT", f"{company_code}_DEFAULT", "MAIN", "POS"}
     for warehouse in warehouses:
         code = (warehouse.code or "").strip().upper()
         name = (warehouse.name or "").strip().lower()
@@ -52,14 +69,17 @@ def _resolve_default_bkr_warehouse(db: Session, company_id: int) -> Warehouse:
 
     raise HTTPException(
         status_code=400,
-        detail="Multiple active BKR warehouses found. Mark one clearly as the default warehouse before using POS."
+        detail=f"Multiple active {company_code} warehouses found. Mark one clearly as the default warehouse before using POS."
     )
 
+# Keep old name as alias
+_resolve_default_bkr_warehouse = _resolve_default_warehouse
 
-def _generate_bill_number() -> str:
+
+def _generate_bill_number(company_code: str = "BKR") -> str:
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S%f")
     suffix = uuid4().hex[:6].upper()
-    return f"BKR-{timestamp}-{suffix}"
+    return f"{company_code}-{timestamp}-{suffix}"
 
 # --- Pydantic Models ---
 from pydantic import BaseModel, Field
@@ -195,7 +215,7 @@ def complete_sale(
         if not default_warehouse:
             raise HTTPException(status_code=400, detail="Origin warehouse not found")
     else:
-        default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
+        default_warehouse = _resolve_default_warehouse(db, company_id)
 
     try:
         # 1. Validate Stock (Aggregated to prevent overselling on duplicate items)
@@ -216,8 +236,10 @@ def complete_sale(
                     sku_name = product.sku if product else str(product_id)
                     raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
-        # 2. Generate Bill Number
-        bill_number = _generate_bill_number()
+        # 2. Generate Bill Number (company-aware)
+        company = db.query(Company).filter(Company.id == company_id).first()
+        company_code = company.code if company else "CO"
+        bill_number = _generate_bill_number(company_code)
 
         # 2.1 Generate Invoice Number (sequence-based)
         from app.services.document_number_service import DocumentNumberService
@@ -740,3 +762,123 @@ def get_tally_payload(sale_id: int, company_id: int = Depends(get_bkr_company_id
         import logging
         logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred while generating the export.")
+
+
+# =============================================================================
+# OFFLINE POS QUEUE ENDPOINTS
+# =============================================================================
+
+from app.models.schema import OfflineSale
+
+class OfflineSaleSubmitRequest(BaseModel):
+    idempotency_key: str
+    payload: dict
+
+@router.post("/offline/submit")
+def submit_offline_sale(
+    data: OfflineSaleSubmitRequest,
+    company_id: int = Depends(get_pos_company_id),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Store a single offline sale in the queue for later sync."""
+    # Idempotency check
+    existing = db.query(OfflineSale).filter(OfflineSale.idempotency_key == data.idempotency_key).first()
+    if existing:
+        return {"message": "Already queued (idempotent)", "offline_sale_id": existing.id, "status": existing.status}
+
+    offline = OfflineSale(
+        company_id=company_id,
+        operator_id=user.id,
+        payload=data.payload,
+        status="PENDING",
+        idempotency_key=data.idempotency_key
+    )
+    db.add(offline)
+    db.commit()
+    db.refresh(offline)
+
+    logger.info(f"Offline sale queued: id={offline.id} company={company_id} user={user.id}")
+    return {"message": "Offline sale queued", "offline_sale_id": offline.id, "status": "PENDING"}
+
+
+@router.get("/offline/pending")
+def list_pending_offline_sales(
+    company_id: int = Depends(get_pos_company_id),
+    db: Session = Depends(get_db)
+):
+    """List all PENDING offline sales for the current company."""
+    pending = db.query(OfflineSale).filter(
+        OfflineSale.company_id == company_id,
+        OfflineSale.status == "PENDING"
+    ).order_by(OfflineSale.created_at.asc()).all()
+
+    return [
+        {
+            "id": p.id,
+            "idempotency_key": p.idempotency_key,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "status": p.status,
+            "payload_summary": {
+                "items_count": len(p.payload.get("items", [])) if isinstance(p.payload, dict) else 0,
+                "grand_total": p.payload.get("grand_total") if isinstance(p.payload, dict) else None
+            }
+        }
+        for p in pending
+    ]
+
+
+@router.post("/offline/sync")
+def sync_offline_sales(
+    request: Request,
+    company_id: int = Depends(get_pos_company_id),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Process all PENDING offline sales for the current company. Uses existing sale logic with idempotency."""
+    pending = db.query(OfflineSale).filter(
+        OfflineSale.company_id == company_id,
+        OfflineSale.status == "PENDING"
+    ).order_by(OfflineSale.created_at.asc()).all()
+
+    if not pending:
+        return {"synced": 0, "failed": 0, "details": [], "message": "No pending offline sales"}
+
+    synced = 0
+    failed = 0
+    details = []
+
+    for item in pending:
+        try:
+            # Build PosCheckoutRequest from the stored payload
+            checkout_payload = PosCheckoutRequest(**item.payload)
+            # Use the offline sale's idempotency_key to prevent duplicates
+            checkout_payload.idempotency_key = item.idempotency_key
+
+            result = complete_sale(
+                request=request,
+                payload=checkout_payload,
+                company_id=company_id,
+                db=db,
+                user=user,
+                commit=False  # We commit once at the end
+            )
+
+            item.status = "SYNCED"
+            item.synced_at = datetime.utcnow()
+            if result and "receipt" in result:
+                item.sale_id = result["receipt"].get("id")
+            synced += 1
+            details.append({"offline_id": item.id, "status": "SYNCED", "sale_id": item.sale_id})
+
+        except Exception as e:
+            item.status = "FAILED"
+            item.error_message = str(e)[:500]
+            failed += 1
+            details.append({"offline_id": item.id, "status": "FAILED", "error": str(e)[:200]})
+            logger.error(f"Offline sync failed for id={item.id}: {e}")
+
+    db.commit()
+
+    logger.info(f"Offline sync complete: company={company_id} synced={synced} failed={failed}")
+    return {"synced": synced, "failed": failed, "details": details}

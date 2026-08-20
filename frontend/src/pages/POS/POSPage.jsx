@@ -5,7 +5,8 @@ import { posService } from '../../services/pos';
 import { handleApiError } from '../../utils/errorHandler';
 import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
-import { FiX, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import useCompanyStore from '../../stores/useCompanyStore';
+import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw } from 'react-icons/fi';
 
 // ---------------------------------------------------------------------------
 // GSTIN validation (basic format: 2-digit state + 10 PAN + 1 entity + 1 Z + 1 check)
@@ -67,10 +68,13 @@ const CollapsibleSection = ({ title, defaultOpen = false, children }) => {
 // ---------------------------------------------------------------------------
 const POSPage = () => {
   const navigate = useNavigate();
+  const currentCompany = useCompanyStore(state => state.currentCompany);
+  const companyName = currentCompany?.name || 'POS';
+  const companyCode = useCompanyStore(state => state.companyCode) || '';
 
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
-  const [invoicePrefix, setInvoicePrefix] = useState('GST');
+  const [invoicePrefix, setInvoicePrefix] = useState(companyCode || 'GST');
   const [searchResults, setSearchResults] = useState([]);
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
@@ -78,10 +82,22 @@ const POSPage = () => {
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
 
+  // Offline queue state
+  const [pendingCount, setPendingCount] = useState(0);
+  const [showPending, setShowPending] = useState(false);
+  const [pendingItems, setPendingItems] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+
   const idempotencyKeyRef = useRef(window.crypto.randomUUID());
 
   const queryClient = useQueryClient();
 
+  // Load pending offline count on mount
+  useEffect(() => {
+    posService.getPending().then(items => {
+      if (Array.isArray(items)) setPendingCount(items.length);
+    }).catch(() => {});
+  }, []);
   // New: Invoice Type
   const [invoiceType, setInvoiceType] = useState('B2C');
 
@@ -392,7 +408,32 @@ const POSPage = () => {
   return (
     <div className={styles.posContainer}>
       <div className={styles.header}>
-        <h1>Offline POS (BKR)</h1>
+        <h1>Offline POS ({companyName})</h1>
+        {pendingCount > 0 && (
+          <button 
+            onClick={async () => {
+              setSyncing(true);
+              try {
+                const result = await posService.syncOffline();
+                setPendingCount(0);
+                alert(`Sync complete: ${result.synced || 0} synced, ${result.failed || 0} failed`);
+              } catch (e) { 
+                alert('Sync failed. Try again later.'); 
+              } finally { 
+                setSyncing(false); 
+              }
+            }}
+            style={{ 
+              background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px',
+              padding: '6px 14px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px'
+            }}
+            disabled={syncing}
+          >
+            <FiRefreshCw size={14} className={syncing ? 'spin' : ''} />
+            {syncing ? 'Syncing...' : `Sync ${pendingCount} Pending`}
+          </button>
+        )}
         {/* Invoice Type Selector */}
         <div className={styles.invoiceTypeSelector}>
           <label>Invoice Type</label>
@@ -702,7 +743,7 @@ const POSPage = () => {
             <label>Invoice Series (Prefix)</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <select 
-                value={['GST', 'JGST', 'BKR'].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                value={['GST', 'JGST', companyCode].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
                 onChange={e => {
                   if (e.target.value !== 'CUSTOM') {
                     setInvoicePrefix(e.target.value);
@@ -715,10 +756,10 @@ const POSPage = () => {
               >
                 <option value="GST">GST-</option>
                 <option value="JGST">JGST-</option>
-                <option value="BKR">BKR/</option>
+                {companyCode && <option value={companyCode}>{companyCode}/</option>}
                 <option value="CUSTOM">Custom</option>
               </select>
-              {!['GST', 'JGST', 'BKR'].includes(invoicePrefix) && (
+              {!['GST', 'JGST', companyCode].includes(invoicePrefix) && (
                 <input 
                   type="text" 
                   value={invoicePrefix} 

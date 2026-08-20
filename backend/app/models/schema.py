@@ -1151,6 +1151,26 @@ class ServiceInvoiceItem(Base):
 
 from sqlalchemy.dialects.postgresql import JSONB
 
+
+class OfflineSale(Base):
+    """Offline POS queue — stores sales that were created while offline for later sync."""
+    __tablename__ = "offline_sales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    payload = Column(JSONB, nullable=False)
+    status = Column(String, default="PENDING", nullable=False)  # PENDING / SYNCED / FAILED
+    idempotency_key = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, nullable=True)
+    error_message = Column(String, nullable=True)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)  # linked after sync
+
+    company = relationship("Company")
+    operator = relationship("User")
+
+
 class AdminApprovalRequest(Base):
     __tablename__ = "admin_approval_requests"
     
