@@ -122,6 +122,8 @@ class PosCheckoutRequest(BaseModel):
 
     invoice_type: str = "B2C"
     invoice_prefix: Optional[str] = None  # B2C | B2B
+    custom_invoice_number: Optional[str] = None
+    custom_invoice_date: Optional[datetime] = None
     payment_terms: Optional[str] = None
     delivery_note: Optional[str] = None
     delivery_note_date: Optional[datetime] = None
@@ -254,14 +256,18 @@ def complete_sale(
         from app.services.invoice_number_service import _get_fiscal_year_string
         from datetime import datetime
         company = db.query(Company).filter(Company.id == company_id).first()
-        fy = _get_fiscal_year_string(datetime.today().date())
-        invoice_number = DocumentNumberService.generate_number(
-            db=db,
-            company_id=company_id,
-            document_type=DocumentTypeEnum.SALE,
-            fiscal_year=fy,
-            prefix_override=payload.invoice_prefix or (company.code if company else "CO")
-        )
+        
+        if payload.custom_invoice_number:
+            invoice_number = payload.custom_invoice_number
+        else:
+            fy = _get_fiscal_year_string(datetime.today().date())
+            invoice_number = DocumentNumberService.generate_number(
+                db=db,
+                company_id=company_id,
+                document_type=DocumentTypeEnum.SALE,
+                fiscal_year=fy,
+                prefix_override=payload.invoice_prefix or (company.code if company else "CO")
+            )
 
         # Company snapshot source (settings)
         settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
@@ -276,6 +282,7 @@ def complete_sale(
             customer_state=payload.customer_state,
             customer_state_code=payload.customer_state_code,
             customer_phone=payload.customer_phone,
+            created_at=payload.custom_invoice_date or datetime.utcnow(),
             customer_email=payload.customer_email,
             place_of_supply=payload.place_of_supply,
             idempotency_key=payload.idempotency_key,
@@ -284,6 +291,10 @@ def complete_sale(
             vehicle_number=payload.vehicle_number,
             lr_rr_number=payload.lr_rr_number,
             terms_of_delivery=payload.terms_of_delivery,
+            delivery_note=payload.delivery_note,
+            delivery_note_date=payload.delivery_note_date,
+            dispatch_document_number=payload.dispatch_document_number,
+            dispatch_through=payload.dispatch_through,
 
             company_name_snapshot=(settings.legal_name if settings and settings.legal_name else (company.name if company else None)),
             company_gstin_snapshot=(settings.gstin if settings else None),

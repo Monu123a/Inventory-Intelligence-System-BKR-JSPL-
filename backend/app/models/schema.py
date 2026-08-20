@@ -930,6 +930,7 @@ class FCDispatch(Base):
     dispatch_number = Column(String, index=True, nullable=False, unique=True)
     dispatch_type = Column(String, nullable=False, default="STANDARD") # STANDARD, EMERGENCY
     dispatch_status = Column(String, default="Draft") # Draft, Invoice Generated, Challan Generated, Inventory Updated, Completed, Completed with Errors, XML Pending, Cancelled
+    payload = Column(JSON, nullable=True) # Used for storing edited preview fields (invoice_number, notes, etc)
     
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

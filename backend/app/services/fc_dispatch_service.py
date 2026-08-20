@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 class FCDispatchRequestItem(BaseModel):
     product_id: int
     quantity: int
+    edited_cost_price: Optional[float] = None
+    edited_selling_price: Optional[float] = None
+    edited_gst_percent: Optional[float] = None
+    edited_notes: Optional[str] = None
 
 class FCDispatchBatchRequest(BaseModel):
     idempotency_key: Optional[str] = None
@@ -31,6 +35,9 @@ class FCDispatchBatchRequest(BaseModel):
     warehouse_ids: List[int] # Dest FCs
     hub_id: Optional[int] = None # Optional manual override from frontend
     items: List[FCDispatchRequestItem]
+    edited_invoice_number: Optional[str] = None
+    edited_invoice_date: Optional[str] = None
+    edited_notes: Optional[str] = None
 
 class FCDispatchService:
     @staticmethod
@@ -223,25 +230,24 @@ class FCDispatchService:
                         raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name} at source warehouse. Needed {req_item.quantity}, available {avail_qty}")
                     
                     qty = req_item.quantity
-                    unit_price = product.item_rate or 0.0
-                    gst_rate = product.default_gst_rate or 0.0
                     
-                    taxable = qty * unit_price
+                    # Apply edited values if provided
+                    unit_price = req_item.edited_selling_price if req_item.edited_selling_price is not None else (product.item_rate or 0.0)
+                    gst_rate = req_item.edited_gst_percent if req_item.edited_gst_percent is not None else (product.default_gst_rate or 0.0)
+
+                    taxable = unit_price * qty
                     gst = taxable * (gst_rate / 100.0)
                     line_total = taxable + gst
-                    
+
                     taxable_total += taxable
                     tax_total += gst
                     
-
                     is_inter_state = False
-                    if hub and source_warehouse:
-                        hub_state = str(hub.state_code).strip() if hub.state_code else ""
-                        src_state = "07" # Default BKR Haryana
-                        # You might want to get actual source state code, but let's assume cross state
-                        if hub_state and hub_state != "07":
-                            is_inter_state = True
-
+                    dest_state = hub.state if hub else ""
+                    src_state = source_warehouse.hub.state if (source_warehouse and source_warehouse.hub) else ""
+                    if dest_state and src_state and dest_state != src_state:
+                         is_inter_state = True
+                         
                     cgst = 0.0
                     sgst = 0.0
                     igst = 0.0
@@ -269,6 +275,7 @@ class FCDispatchService:
                     ))
 
                 
+                # Use edited top-level fields if provided
                 pos_request = PosCheckoutRequest(
                     customer_name=hub.hub_name,
                     customer_gstin=hub.gstin,
@@ -283,8 +290,32 @@ class FCDispatchService:
                     grand_total=taxable_total + tax_total,
                     origin_warehouse_id=source_warehouse.id,
                     skip_inventory_update=True,
-                    items=pos_items
+                    items=pos_items,
+                    custom_invoice_number=request.edited_invoice_number,
+                    custom_invoice_date=request.edited_invoice_date,
+                    delivery_note=request.edited_notes
                 )
+                
+                # Store the edited fields in payload for audit
+                edited_payload = {
+                    "edited_invoice_number": request.edited_invoice_number,
+                    "edited_invoice_date": request.edited_invoice_date,
+                    "edited_notes": request.edited_notes,
+                    "items": [
+                        {
+                            "product_id": req.product_id,
+                            "edited_cost_price": req.edited_cost_price,
+                            "edited_selling_price": req.edited_selling_price,
+                            "edited_gst_percent": req.edited_gst_percent,
+                            "edited_notes": req.edited_notes
+                        } for req in request.items if (
+                            req.edited_selling_price is not None or 
+                            req.edited_gst_percent is not None or 
+                            req.edited_cost_price is not None or
+                            req.edited_notes is not None
+                        )
+                    ]
+                }
                 
                 # Create FCDispatch Orchestrator
                 dispatch_num = FCDispatchService._generate_dispatch_number(db, company_id, hub.hub_code)
@@ -296,6 +327,7 @@ class FCDispatchService:
                     idempotency_key=f"{request.idempotency_key}_{dest_warehouse.id}" if request.idempotency_key else None,
                     dispatch_type=request.dispatch_type,
                     dispatch_status="Processing",
+                    payload=edited_payload,
                     created_by=user_id
                 )
                 db.add(dispatch)

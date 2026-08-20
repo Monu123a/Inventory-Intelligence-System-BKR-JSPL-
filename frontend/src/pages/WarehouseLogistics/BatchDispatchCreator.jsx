@@ -46,6 +46,8 @@ const BatchDispatchCreator = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState([]); // Will store items with transferQty > 0
   const [loadingInventory, setLoadingInventory] = useState(false);
+  const [editedFields, setEditedFields] = useState({});
+  const [topLevelEdits, setTopLevelEdits] = useState({ invoice_number: '', invoice_date: '', notes: '' });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -174,10 +176,11 @@ const BatchDispatchCreator = () => {
     const isInterState = seller.state !== buyer.state;
 
     const mockItems = products.map((p, i) => {
-      // Mock pricing (since we don't fetch price in inventory yet for this wizard)
-      const unit_price = p.item_rate || 0;
+      const edited = editedFields[p.id] || {};
+      const unit_price = edited.edited_selling_price !== undefined ? edited.edited_selling_price : (p.item_rate || 0);
+      const tax_rate = edited.edited_gst_percent !== undefined ? edited.edited_gst_percent : (p.gst_rate || 18);
+      
       const taxable = p.transferQty * unit_price;
-      const tax_rate = p.gst_rate || 18;
       const tax_amount = taxable * (tax_rate / 100);
       const total = taxable + tax_amount;
       
@@ -186,7 +189,7 @@ const BatchDispatchCreator = () => {
 
       return {
         // Fields for DeliveryChallanRenderer
-        product_name_snapshot: p.name,
+        product_name_snapshot: p.name + (edited.edited_notes ? ` (${edited.edited_notes})` : ''),
         sku_snapshot: p.sku,
         hsn_snapshot: '8467',
         unit_snapshot: 'PCS',
@@ -197,7 +200,7 @@ const BatchDispatchCreator = () => {
         total_price: total,
         
         // Fields for InvoiceRenderer
-        product_name: p.name,
+        product_name: p.name + (edited.edited_notes ? ` (${edited.edited_notes})` : ''),
         sku: p.sku,
         hsn_sac: '8467',
         unit: 'PCS',
@@ -211,8 +214,9 @@ const BatchDispatchCreator = () => {
     });
 
     const mockInvoice = {
-      invoice_number: mockInvNo,
-      date: mockDate,
+      invoice_number: topLevelEdits.invoice_number || mockInvNo,
+      date: topLevelEdits.invoice_date || mockDate,
+      delivery_note: topLevelEdits.notes,
       invoice_type: 'B2B',
       company: seller,
       customer: buyer,
@@ -266,7 +270,14 @@ const BatchDispatchCreator = () => {
         hub_id: selectedHub ? parseInt(selectedHub, 10) : null,
         dispatch_type: dispatchType,
         source_warehouse_id: resolvedSourceId,
-        items: products.map(p => ({ product_id: p.id, quantity: p.transferQty }))
+        items: products.map(p => ({ 
+          product_id: p.id, 
+          quantity: p.transferQty,
+          ...(editedFields[p.id] || {})
+        })),
+        edited_invoice_number: topLevelEdits.invoice_number || null,
+        edited_invoice_date: topLevelEdits.invoice_date || null,
+        edited_notes: topLevelEdits.notes || null
       }, { headers });
       
       // Reset idempotency key for the next operation
@@ -587,19 +598,102 @@ const BatchDispatchCreator = () => {
                   <p style={{color: '#047857', margin: 0}}>Sufficient inventory is available for this dispatch request.</p>
                 </div>
               </div>
-              <div style={{marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                {products.map(p => (
-                  <div key={p.id} style={{display: 'flex', justifyContent: 'space-between', padding: '16px', border: '1px solid #f3f4f6', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'}}>
-                    <span style={{fontWeight: '500'}}>{p.name}</span>
-                    <span style={{fontFamily: 'monospace', backgroundColor: '#f3f4f6', padding: '4px 8px', borderRadius: '4px'}}>
-                      Req: <strong style={{color: '#2563eb'}}>{p.transferQty}</strong> / Avail: {p.currentStock}
-                    </span>
+              
+              {/* Top-Level Edits */}
+              <div style={{marginTop: '24px', backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb'}}>
+                <h4 style={{margin: '0 0 12px 0', fontSize: '14px', fontWeight: 'bold'}}>Document Overrides (Optional)</h4>
+                <div style={{display: 'flex', gap: '16px', flexWrap: 'wrap'}}>
+                  <div style={{flex: '1 1 200px'}}>
+                    <label style={{display: 'block', fontSize: '12px', marginBottom: '4px'}}>Custom Invoice Number</label>
+                    <input 
+                      type="text" 
+                      className={styles.inputField} 
+                      value={topLevelEdits.invoice_number} 
+                      onChange={e => setTopLevelEdits({...topLevelEdits, invoice_number: e.target.value})} 
+                      placeholder="Leave blank for auto-generation"
+                    />
                   </div>
-                ))}
+                  <div style={{flex: '1 1 200px'}}>
+                    <label style={{display: 'block', fontSize: '12px', marginBottom: '4px'}}>Custom Invoice Date</label>
+                    <input 
+                      type="datetime-local" 
+                      className={styles.inputField} 
+                      value={topLevelEdits.invoice_date} 
+                      onChange={e => setTopLevelEdits({...topLevelEdits, invoice_date: e.target.value})} 
+                    />
+                  </div>
+                  <div style={{flex: '1 1 100%'}}>
+                    <label style={{display: 'block', fontSize: '12px', marginBottom: '4px'}}>Delivery Notes</label>
+                    <input 
+                      type="text" 
+                      className={styles.inputField} 
+                      value={topLevelEdits.notes} 
+                      onChange={e => setTopLevelEdits({...topLevelEdits, notes: e.target.value})} 
+                      placeholder="Add any delivery notes..."
+                    />
+                  </div>
+                </div>
               </div>
-              <div className={styles.actionRow}>
+
+              <div style={{marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                <div style={{fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px'}}>
+                  <AlertTriangle size={14} color="#f59e0b" />
+                  <span>Edited values will be used in Delivery Challan & Invoice instead of master defaults.</span>
+                </div>
+                {products.map(p => {
+                  const edited = editedFields[p.id] || {};
+                  const isEdited = Object.keys(edited).length > 0;
+                  
+                  return (
+                    <div key={p.id} style={{padding: '16px', border: '1px solid', borderColor: isEdited ? '#3b82f6' : '#f3f4f6', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', backgroundColor: isEdited ? '#eff6ff' : '#fff'}}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '12px'}}>
+                        <span style={{fontWeight: '500'}}>{p.name} {isEdited && <span style={{fontSize: '12px', color: '#2563eb', marginLeft: '8px'}}>(Edited)</span>}</span>
+                        <span style={{fontFamily: 'monospace', backgroundColor: '#f3f4f6', padding: '4px 8px', borderRadius: '4px'}}>
+                          Req: <strong style={{color: '#2563eb'}}>{p.transferQty}</strong> / Avail: {p.currentStock}
+                        </span>
+                      </div>
+                      
+                      <div style={{display: 'flex', gap: '16px', flexWrap: 'wrap'}}>
+                        <div style={{flex: '1 1 150px'}}>
+                          <label style={{display: 'block', fontSize: '12px', marginBottom: '4px'}}>Selling Price (₹)</label>
+                          <input 
+                            type="number" 
+                            className={styles.inputField}
+                            value={edited.edited_selling_price !== undefined ? edited.edited_selling_price : (p.item_rate || 0)}
+                            onChange={e => setEditedFields(prev => ({...prev, [p.id]: {...prev[p.id], edited_selling_price: parseFloat(e.target.value)}}))}
+                          />
+                        </div>
+                        <div style={{flex: '1 1 150px'}}>
+                          <label style={{display: 'block', fontSize: '12px', marginBottom: '4px'}}>GST (%)</label>
+                          <input 
+                            type="number" 
+                            className={styles.inputField}
+                            value={edited.edited_gst_percent !== undefined ? edited.edited_gst_percent : (p.gst_rate || 18)}
+                            onChange={e => setEditedFields(prev => ({...prev, [p.id]: {...prev[p.id], edited_gst_percent: parseFloat(e.target.value)}}))}
+                          />
+                        </div>
+                        {isEdited && (
+                          <div style={{display: 'flex', alignItems: 'flex-end'}}>
+                            <button 
+                              onClick={() => {
+                                const next = {...editedFields};
+                                delete next[p.id];
+                                setEditedFields(next);
+                              }}
+                              style={{padding: '8px 12px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer'}}
+                            >
+                              Revert Edits
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className={styles.actionRow} style={{marginTop: '24px'}}>
                 <button className={styles.btnPrimary} onClick={() => setStep(4)} style={{marginRight: 'auto', backgroundColor: '#6b7280'}}>Back</button>
-                <button className={styles.btnPrimary} onClick={() => setStep(6)}>View Invoice Preview</button>
+                <button className={styles.btnPrimary} onClick={() => setStep(6)}>Apply & View Invoice Preview</button>
               </div>
             </div>
           )}
