@@ -33,7 +33,7 @@ def get_pos_company_id(company_id: int = Depends(get_current_company_id), db: Se
         raise HTTPException(status_code=403, detail="Company not found.")
 
     allowed_codes = {"BKR"}
-    if os.environ.get("ENABLE_POS_JSPL", "false").lower() == "true":
+    if os.environ.get("ENABLE_POS_JSPL", "true").lower() == "true":
         allowed_codes.add("JSPL")
 
     if company.code not in allowed_codes:
