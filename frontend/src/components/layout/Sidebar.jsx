@@ -18,6 +18,7 @@ const Sidebar = () => {
   const { currentCompany } = useCompanyStore();
   
   const isBkr = currentCompany?.code === 'BKR';
+  const isPosEnabledForCompany = isBkr || (currentCompany?.code === 'JSPL' && import.meta.env.VITE_ENABLE_POS_JSPL === 'true');
 
   const [openSections, setOpenSections] = useState(() => {
     const saved = localStorage.getItem('sidebar_sections');
@@ -43,7 +44,7 @@ const Sidebar = () => {
         { path: ROUTES.DOWNLOAD_CENTRE, label: 'Download Centre', icon: FiDownload },
       ]
     },
-    ...(isBkr ? [{
+    ...(isPosEnabledForCompany ? [{
       id: 'sales',
       label: 'Sales',
       icon: FiShoppingCart,
