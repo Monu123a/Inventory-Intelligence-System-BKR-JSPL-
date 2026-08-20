@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
 import { handleApiError } from '../../utils/errorHandler';
 import styles from './POSPage.module.css';
+import ReceiptModal from './ReceiptModal';
 import { FiX, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 
 // ---------------------------------------------------------------------------
