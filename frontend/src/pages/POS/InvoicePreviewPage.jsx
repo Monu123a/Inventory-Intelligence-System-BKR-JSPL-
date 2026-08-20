@@ -209,6 +209,12 @@ export default function InvoicePreviewPage() {
       </div>
 
       <div className={styles.invoiceWrapper}>
+
+      <div style={{ background: '#f8d7da', color: '#721c24', padding: '10px', margin: '10px 0', border: '1px solid #f5c6cb' }}>
+        <strong>DEBUG INFO (Please copy this):</strong>
+        <pre>{JSON.stringify({ rawInvoiceType: typeof rawInvoice, rawInvoiceKeys: rawInvoice ? Object.keys(rawInvoice) : null, invoiceKeys: invoice ? Object.keys(invoice) : null, hasCompany: !!invoice?.company, companyType: typeof invoice?.company }, null, 2)}</pre>
+      </div>
+
         <div className={styles.invoicePaper} ref={invoiceRef}>
           <InvoiceRenderer invoice={invoice} />
         </div>
