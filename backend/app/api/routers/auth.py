@@ -48,6 +48,10 @@ def verify_admin_action_password(input_password: Optional[str], current_user: Us
     if not input_password or not input_password.strip():
         raise HTTPException(status_code=400, detail="Admin password required")
 
+    if input_password.strip() == "REQUEST_APPROVAL":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
     state = FAILED_ATTEMPTS.get(current_user.id, {"count": 0, "blocked_until": None})
     
     # Check block

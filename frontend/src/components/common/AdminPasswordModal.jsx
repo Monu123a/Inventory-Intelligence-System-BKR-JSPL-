@@ -13,6 +13,11 @@ const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
     setPassword('');
   };
 
+  const handleRequestApproval = () => {
+    onSubmit("REQUEST_APPROVAL");
+    setPassword('');
+  };
+
   return (
     <div style={overlayStyle}>
       <div style={modalStyle}>
@@ -27,7 +32,7 @@ const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
         <form onSubmit={handleSubmit}>
           <div style={bodyStyle}>
             <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569' }}>
-              Please enter your admin password to {actionName}.
+              Please enter your admin password to {actionName}, or request an admin to approve this action.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: '600', color: '#0f172a', textTransform: 'uppercase' }}>
@@ -48,9 +53,14 @@ const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
             <button type="button" onClick={onClose} style={cancelBtnStyle}>
               Cancel
             </button>
-            <button type="submit" style={submitBtnStyle}>
-              Verify & Proceed
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={handleRequestApproval} style={requestApprovalBtnStyle}>
+                Request Approval
+              </button>
+              <button type="submit" style={submitBtnStyle}>
+                Verify & Proceed
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -75,7 +85,7 @@ const modalStyle = {
   backgroundColor: '#ffffff',
   borderRadius: '8px',
   width: '100%',
-  maxWidth: '400px',
+  maxWidth: '450px',
   boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
   overflow: 'hidden'
 };
@@ -117,8 +127,8 @@ const footerStyle = {
   padding: '16px 24px',
   borderTop: '1px solid #e2e8f0',
   display: 'flex',
-  justifyContent: 'flex-end',
-  gap: '12px',
+  justifyContent: 'space-between',
+  alignItems: 'center',
   backgroundColor: '#f8fafc'
 };
 
@@ -128,6 +138,17 @@ const cancelBtnStyle = {
   border: '1px solid #e2e8f0',
   background: '#ffffff',
   color: '#0f172a',
+  fontWeight: '500',
+  cursor: 'pointer',
+  fontSize: '14px'
+};
+
+const requestApprovalBtnStyle = {
+  padding: '8px 16px',
+  borderRadius: '4px',
+  border: '1px solid #f59e0b',
+  background: '#fffbeb',
+  color: '#d97706',
   fontWeight: '500',
   cursor: 'pointer',
   fontSize: '14px'
