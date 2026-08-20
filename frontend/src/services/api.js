@@ -52,6 +52,12 @@ api.interceptors.response.use(
              // Strip the dummy admin password so it doesn't show in the diff
              if (payload.admin_password) delete payload.admin_password;
 
+             // Inject company_id from the company store if missing
+             const companyId = useCompanyStore.getState().companyId;
+             if (!payload.company_id && companyId) {
+               payload.company_id = companyId;
+             }
+
              // Map URL/Method to Executor request types
              let reqType = "UNKNOWN_OPERATION";
              const url = config.url.toLowerCase();
@@ -68,7 +74,6 @@ api.interceptors.response.use(
              } else if (url.includes('/inventory/adjust')) {
                  reqType = "INVENTORY_ADJUSTMENT";
              }
-
              
              useApprovalStore.getState().openModal(reqType, payload);
              return Promise.reject(error); // Stop propagation so we don't show generic toast

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApprovalStore } from '../../stores/useApprovalStore';
 import api from '../../services/api';
 import { useNotificationStore } from '../../stores/notificationStore';
-import { FiAlertCircle, FiX } from 'react-icons/fi';
+import { FiSend, FiX, FiAlertCircle } from 'react-icons/fi';
 
 export default function OperatorApprovalModal() {
   const { isOpen, requestType, payload, closeModal } = useApprovalStore();
@@ -30,73 +30,62 @@ export default function OperatorApprovalModal() {
         title: 'Request Created',
         message: `Your escalation request has been submitted to Admins. (ID: ${res.data.request_id})`
       });
+      setComment('');
       closeModal();
     } catch (err) {
-      // Error handled by generic interceptor usually
+      // Error handled by generic interceptor
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg relative">
-        <button 
-          onClick={closeModal} 
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-        >
-          <FiX size={24} />
-        </button>
-        
-        <div className="flex items-center gap-3 mb-4 text-amber-600">
-          <FiAlertCircle size={24} />
-          <h3 className="text-xl font-bold text-gray-900">Admin Approval Required</h3>
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        <div style={headerStyle}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
+            <FiAlertCircle color="#d97706" /> Admin Approval Required
+          </h3>
+          <button type="button" onClick={closeModal} style={closeBtnStyle}>
+            <FiX size={20} />
+          </button>
         </div>
-        
-        <p className="text-sm text-gray-600 mb-4">
-          You do not have direct permission to perform this action. You can submit this change as a request for an Admin to review and execute.
-        </p>
 
-        <div className="mb-4">
-          <span className="text-xs font-semibold text-gray-500 uppercase">Operation Type</span>
-          <div className="font-mono text-sm bg-gray-50 p-2 rounded border border-gray-200 mt-1">
-            {requestType}
+        <div style={bodyStyle}>
+          <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569' }}>
+            You do not have direct permission to perform this action. Submit this change as a request for an Admin to review and execute.
+          </p>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>Operation Type</label>
+            <div style={codeBoxStyle}>{requestType}</div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={labelStyle}>Payload (Changes)</label>
+            <pre style={preStyle}>
+              {JSON.stringify(payload, null, 2)}
+            </pre>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={labelStyle}>Reason / Justification (Optional)</label>
+            <textarea
+              style={textareaStyle}
+              rows="3"
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              placeholder="Explain why this change is needed..."
+            />
           </div>
         </div>
 
-        <div className="mb-4">
-          <span className="text-xs font-semibold text-gray-500 uppercase">Payload (Changes)</span>
-          <pre className="text-xs font-mono bg-gray-50 p-3 rounded border border-gray-200 mt-1 max-h-40 overflow-y-auto">
-            {JSON.stringify(payload, null, 2)}
-          </pre>
-        </div>
-
-        <div className="mb-6">
-          <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">
-            Reason / Justification (Optional)
-          </label>
-          <textarea 
-            className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500" 
-            rows="3"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            placeholder="Explain why this change is needed..."
-          />
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button 
-            onClick={closeModal}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-medium"
-            disabled={loading}
-          >
+        <div style={footerStyle}>
+          <button type="button" onClick={closeModal} style={cancelBtnStyle} disabled={loading}>
             Cancel
           </button>
-          <button 
-            onClick={createRequest} 
-            disabled={loading}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium flex items-center justify-center min-w-[140px]"
-          >
+          <button onClick={createRequest} disabled={loading} style={submitBtnStyle}>
+            <FiSend size={14} style={{ marginRight: '6px' }} />
             {loading ? 'Submitting...' : 'Request Approval'}
           </button>
         </div>
@@ -104,3 +93,128 @@ export default function OperatorApprovalModal() {
     </div>
   );
 }
+
+const overlayStyle = {
+  position: 'fixed',
+  top: 0, left: 0, right: 0, bottom: 0,
+  backgroundColor: 'rgba(15, 23, 42, 0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 9999,
+  padding: '16px'
+};
+
+const modalStyle = {
+  backgroundColor: '#ffffff',
+  borderRadius: '8px',
+  width: '100%',
+  maxWidth: '500px',
+  maxHeight: '90vh',
+  overflowY: 'auto',
+  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+  overflow: 'hidden'
+};
+
+const headerStyle = {
+  padding: '16px 24px',
+  borderBottom: '1px solid #e2e8f0',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  backgroundColor: '#fffbeb'
+};
+
+const closeBtnStyle = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: '#9ca3af',
+  padding: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center'
+};
+
+const bodyStyle = {
+  padding: '24px'
+};
+
+const labelStyle = {
+  fontSize: '12px',
+  fontWeight: '600',
+  color: '#64748b',
+  textTransform: 'uppercase',
+  marginBottom: '4px',
+  display: 'block'
+};
+
+const codeBoxStyle = {
+  fontFamily: 'monospace',
+  fontSize: '13px',
+  backgroundColor: '#f8fafc',
+  padding: '8px 12px',
+  borderRadius: '4px',
+  border: '1px solid #e2e8f0',
+  marginTop: '4px',
+  color: '#0f172a'
+};
+
+const preStyle = {
+  fontFamily: 'monospace',
+  fontSize: '12px',
+  backgroundColor: '#f8fafc',
+  padding: '12px',
+  borderRadius: '4px',
+  border: '1px solid #e2e8f0',
+  marginTop: '4px',
+  maxHeight: '160px',
+  overflowY: 'auto',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  margin: '4px 0 0 0'
+};
+
+const textareaStyle = {
+  width: '100%',
+  padding: '8px 12px',
+  borderRadius: '4px',
+  border: '1px solid #cbd5e1',
+  fontSize: '14px',
+  boxSizing: 'border-box',
+  fontFamily: 'inherit',
+  resize: 'vertical'
+};
+
+const footerStyle = {
+  padding: '16px 24px',
+  borderTop: '1px solid #e2e8f0',
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: '12px',
+  backgroundColor: '#f8fafc'
+};
+
+const cancelBtnStyle = {
+  padding: '8px 16px',
+  borderRadius: '4px',
+  border: '1px solid #e2e8f0',
+  background: '#ffffff',
+  color: '#0f172a',
+  fontWeight: '500',
+  cursor: 'pointer',
+  fontSize: '14px'
+};
+
+const submitBtnStyle = {
+  padding: '8px 16px',
+  borderRadius: '4px',
+  border: 'none',
+  background: '#d97706',
+  color: '#ffffff',
+  fontWeight: '500',
+  cursor: 'pointer',
+  fontSize: '14px',
+  display: 'flex',
+  alignItems: 'center'
+};
