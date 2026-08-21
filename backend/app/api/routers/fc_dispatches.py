@@ -110,6 +110,7 @@ def get_dispatch_inventory(
                 "id": inv.product.id,
                 "sku": inv.product.sku,
                 "name": inv.product.name,
+                "hsn": inv.product.hsn,
                 "currentStock": inv.available_qty,
                 "item_rate": inv.product.item_rate or 0.0,
                 "gst_rate": inv.product.default_gst_rate or 0.0,
