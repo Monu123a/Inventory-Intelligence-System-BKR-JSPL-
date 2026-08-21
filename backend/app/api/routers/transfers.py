@@ -179,6 +179,8 @@ def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: 
             "product_sku": item.product.sku if item.product else "",
             "product_name": item.product.name if item.product else "",
             "product": item.product.name if item.product else "",
+            "hsn_sac": item.product.hsn if item.product else "",
+            "gst_rate": item.product.default_gst_rate if item.product else 18.0,
             "requested_qty": item.requested_qty,
             "unit_price": item.product.item_rate if item.product else 0,
             "available_qty": total_available

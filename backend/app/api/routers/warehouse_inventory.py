@@ -17,6 +17,7 @@ class WarehouseInventoryResponse(BaseModel):
     sku: str
     name: str
     category: Optional[str] = None
+    hsn: Optional[str] = None
     quantity: int
     reserved_qty: int
     available_qty: int

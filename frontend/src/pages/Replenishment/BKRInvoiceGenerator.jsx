@@ -29,7 +29,8 @@ const BKRInvoiceGenerator = () => {
           bkrStock: item.available_qty,
           approvedQty: item.requested_qty,
           rate: item.unit_price || 0,
-          gstRate: 18 // Default GST rate
+          hsn_sac: item.hsn_sac || '',
+          gstRate: item.gst_rate || 18
         }));
         setItems(fetchedItems);
         updateDummyInvoice(fetchedItems);
@@ -58,6 +59,7 @@ const BKRInvoiceGenerator = () => {
       return {
         product_name: item.product,
         sku: item.sku,
+        hsn_sac: item.hsn_sac,
         quantity: item.approvedQty,
         selling_price: item.rate,
         gst_rate: item.gstRate,
