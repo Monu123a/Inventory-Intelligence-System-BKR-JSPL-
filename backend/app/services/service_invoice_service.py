@@ -67,7 +67,7 @@ class ServiceInvoiceService:
                 ).first()
                 if product:
                     gst_rate = product.default_gst_rate if product.default_gst_rate is not None else 18.0
-                    hsn = product.hsn_code if product.hsn_code else "9987"
+                    hsn = product.hsn if product.hsn else "9987"
                 else:
                     raise HTTPException(status_code=400, detail=f"Invalid Product SKU: {item.product_sku}")
 

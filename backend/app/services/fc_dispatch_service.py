@@ -261,7 +261,7 @@ class FCDispatchService:
                         product_id=product.id,
                         sku=product.sku,
                         product_name=product.name,
-                        hsn_sac=product.hsn_code,
+                        hsn_sac=product.hsn,
                         unit=product.unit,
                         quantity=qty,
                         selling_price=unit_price,

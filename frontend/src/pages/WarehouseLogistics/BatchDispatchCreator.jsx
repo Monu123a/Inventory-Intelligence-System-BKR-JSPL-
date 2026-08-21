@@ -191,7 +191,7 @@ const BatchDispatchCreator = () => {
         // Fields for DeliveryChallanRenderer
         product_name_snapshot: p.name + (edited.edited_notes ? ` (${edited.edited_notes})` : ''),
         sku_snapshot: p.sku,
-        hsn_snapshot: '8467',
+        hsn_snapshot: p.hsn || '',
         unit_snapshot: 'PCS',
         quantity: p.transferQty,
         unit_price: unit_price,
@@ -202,7 +202,7 @@ const BatchDispatchCreator = () => {
         // Fields for InvoiceRenderer
         product_name: p.name + (edited.edited_notes ? ` (${edited.edited_notes})` : ''),
         sku: p.sku,
-        hsn_sac: '8467',
+        hsn_sac: p.hsn || '',
         unit: 'PCS',
         gst_rate: tax_rate,
         rate: unit_price,

@@ -29,7 +29,7 @@ class AccountingIntegrationEngine:
             lines.append(InvoiceLineDTO(
                 product_sku=item.sku,
                 product_name=item.product_name or item.product.name,
-                hsn_sac=item.hsn_sac or item.product.hsn_code,
+                hsn_sac=item.hsn_sac or item.product.hsn,
                 quantity=item.quantity,
                 unit=item.unit or item.product.unit,
                 rate=item.selling_price,

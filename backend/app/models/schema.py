@@ -69,7 +69,6 @@ class Product(Base):
     preferred_transfer_qty = Column(Integer, default=1)
     status = Column(String, default="Active")
     hsn = Column(String)
-    hsn_code = Column(String)
     default_gst_rate = Column(Float, nullable=True) # None triggers 0% warning in POS
     barcode = Column(String)
     unit = Column(String)

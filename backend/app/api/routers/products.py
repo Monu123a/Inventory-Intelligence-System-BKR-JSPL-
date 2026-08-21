@@ -25,7 +25,6 @@ class ProductCreate(BaseModel):
     min_stock_level: int = 0
     status: str = "Active"
     hsn: Optional[str] = None
-    hsn_code: Optional[str] = None
     barcode: Optional[str] = None
     unit: Optional[str] = None
     reorder_level: Optional[int] = None

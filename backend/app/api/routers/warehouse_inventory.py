@@ -44,6 +44,7 @@ def get_warehouse_inventory(
             "sku": item.product.sku if item.product else "UNKNOWN",
             "name": item.product.name if item.product else "Unknown Product",
             "category": item.product.category if item.product else "Uncategorized",
+            "hsn": item.product.hsn if item.product else None,
             "quantity": item.current_qty,
             "reserved_qty": item.reserved_qty,
             "available_qty": item.available_qty,
