@@ -6,7 +6,8 @@ import api from '../../../services/api';
 import { useNotifications } from '../../../contexts/NotificationContext';
 import { useNavigate } from 'react-router-dom';
 
-const TallyUploadModal = ({ isOpen, onClose }) => {
+const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
+  const [warehouseId, setWarehouseId] = useState('');
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [previewItems, setPreviewItems] = useState(null);
@@ -55,13 +56,38 @@ const TallyUploadModal = ({ isOpen, onClose }) => {
     onClose();
   };
   
-  const handleProceed = () => {
-    // In a real flow, we could save this to localStorage and redirect to POS
-    // Or we could create a draft offline_sale and sync it.
-    // Let's pass it via state to POS if they click proceed
-    addNotification({ type: 'success', message: 'Ready for POS integration!' });
-    navigate('/pos', { state: { tallyItems: previewItems } });
-    handleClose();
+  const handleProceed = async () => {
+    if (!warehouseId) {
+      addNotification({ type: 'error', message: 'Please select a destination warehouse' });
+      return;
+    }
+    
+    // Only upload the items that actually mapped to an SKU
+    const validItems = previewItems.filter(i => i.matched_sku);
+    if (validItems.length === 0) {
+      addNotification({ type: 'error', message: 'No valid items to upload' });
+      return;
+    }
+    
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('warehouse_id', warehouseId);
+    formData.append('items', JSON.stringify(validItems));
+    
+    try {
+      await api.post('/api/bulk-upload/tally-bill-confirm', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      addNotification({ type: 'success', message: 'Inventory updated successfully!' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      handleClose();
+    } catch (err) {
+      addNotification({ type: 'error', message: err.response?.data?.detail || 'Failed to update inventory' });
+      setUploading(false);
+    }
   };
 
   return (
@@ -69,6 +95,19 @@ const TallyUploadModal = ({ isOpen, onClose }) => {
       <div className={styles.uploadContainer}>
         {!previewItems ? (
           <div className={styles.dropZone}>
+            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>Destination Warehouse</label>
+              <select 
+                value={warehouseId} 
+                onChange={e => setWarehouseId(e.target.value)}
+                style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+              >
+                <option value="">-- Select Warehouse --</option>
+                {warehouses.map(wh => (
+                  <option key={wh.id} value={wh.id}>{wh.name}</option>
+                ))}
+              </select>
+            </div>
             <input 
               type="file" 
               id="tally-file-upload"
@@ -132,7 +171,7 @@ const TallyUploadModal = ({ isOpen, onClose }) => {
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <Button variant="secondary" onClick={handleClose}>Cancel</Button>
               <Button variant="primary" onClick={handleProceed}>
-                Proceed to Checkout
+                Update Inventory
               </Button>
             </div>
           </div>

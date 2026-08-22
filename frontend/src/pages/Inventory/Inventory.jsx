@@ -146,7 +146,7 @@ const Inventory = () => {
         )}
       </Card>
 
-      <TallyUploadModal isOpen={isTallyModalOpen} onClose={() => setIsTallyModalOpen(false)} />
+      <TallyUploadModal isOpen={isTallyModalOpen} onClose={() => setIsTallyModalOpen(false)} warehouses={warehouses || []} />
       <UploadModal 
         isOpen={isUploadModalOpen} 
         onClose={() => setIsUploadModalOpen(false)} 

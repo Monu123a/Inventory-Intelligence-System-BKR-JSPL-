@@ -76,9 +76,9 @@ async def tally_bill_preview(
                 break
                 
         if not matched_sku:
-            match = re.search(r'(LG|HM|CA)\d+', desc)
+            match = re.search(r'[a-zA-Z]{2}\d{4}', desc)
             if match:
-                candidate = match.group(0)
+                candidate = match.group(0).upper()
                 if candidate in sku_map:
                     matched_sku = candidate
                     matched_product = sku_map[candidate]
@@ -98,3 +98,76 @@ async def tally_bill_preview(
         })
 
     return {"items": items}
+
+import json
+from fastapi import Form
+from app.models.schema import Inventory, InventoryTransaction, User
+
+@router.post("/tally-bill-confirm")
+async def tally_bill_confirm(
+    file: UploadFile = File(...),
+    warehouse_id: int = Form(...),
+    items: str = Form(...),
+    db: Session = Depends(get_db),
+    company_id: int = Depends(get_current_company_id)
+):
+    try:
+        parsed_items = json.loads(items)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid items payload")
+        
+    if not parsed_items:
+        raise HTTPException(status_code=400, detail="No items to update")
+
+    # In a real app we'd save the file to S3. Here we just pretend or save locally.
+    # We will log the filename in the transaction reference
+    file_reference = f"Tally Upload: {file.filename}"
+
+    # Get admin user id for the transaction (mocking for now, or you can inject current user)
+    # Using the first active user for this company
+    operator = db.query(User).filter(User.company_id == company_id).first()
+    operator_id = operator.id if operator else 1
+
+    for item in parsed_items:
+        product_id = item.get("product_id")
+        qty = item.get("quantity", 0)
+        
+        if not product_id or qty <= 0:
+            continue
+            
+        # Get or create inventory record
+        inv = db.query(Inventory).filter(
+            Inventory.warehouse_id == warehouse_id,
+            Inventory.product_id == product_id
+        ).first()
+        
+        if not inv:
+            inv = Inventory(
+                warehouse_id=warehouse_id,
+                product_id=product_id,
+                quantity=qty
+            )
+            db.add(inv)
+        else:
+            inv.quantity += qty
+            
+        db.flush()
+        
+        # Create transaction
+        txn = InventoryTransaction(
+            inventory_id=inv.id,
+            transaction_type="IN",
+            quantity=qty,
+            operator_id=operator_id,
+            reference_document=file_reference,
+            remarks=f"Bulk upload from Tally - Rate: {item.get('rate')} GST: {item.get('gst_rate')}"
+        )
+        db.add(txn)
+        
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        
+    return {"status": "success", "message": "Inventory updated successfully"}
