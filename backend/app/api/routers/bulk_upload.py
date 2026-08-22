@@ -101,7 +101,7 @@ async def tally_bill_preview(
 
 import json
 from fastapi import Form
-from app.models.schema import Inventory, InventoryTransaction, User
+from app.models.schema import Inventory, InventoryMovement, User
 
 @router.post("/tally-bill-confirm")
 async def tally_bill_confirm(
@@ -141,26 +141,35 @@ async def tally_bill_confirm(
             Inventory.product_id == product_id
         ).first()
         
+        qty_before = 0
         if not inv:
             inv = Inventory(
+                company_id=company_id,
                 warehouse_id=warehouse_id,
                 product_id=product_id,
-                quantity=qty
+                current_qty=qty,
+                available_qty=qty
             )
             db.add(inv)
         else:
-            inv.quantity += qty
+            qty_before = inv.current_qty
+            inv.current_qty += qty
+            inv.available_qty += qty
             
         db.flush()
         
         # Create transaction
-        txn = InventoryTransaction(
-            inventory_id=inv.id,
-            transaction_type="IN",
-            quantity=qty,
-            operator_id=operator_id,
-            reference_document=file_reference,
-            remarks=f"Bulk upload from Tally - Rate: {item.get('rate')} GST: {item.get('gst_rate')}"
+        txn = InventoryMovement(
+            company_id=company_id,
+            product_id=product_id,
+            warehouse_id=warehouse_id,
+            qty_before=qty_before,
+            qty_changed=qty,
+            qty_after=qty_before + qty,
+            source="Tally Upload",
+            reference_id=file_reference,
+            user_id=operator_id,
+            metadata_payload={"rate": item.get('rate'), "gst": item.get('gst_rate')}
         )
         db.add(txn)
         
