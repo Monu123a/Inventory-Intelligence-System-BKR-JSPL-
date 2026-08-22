@@ -128,7 +128,7 @@ async def tally_bill_confirm(
     operator = db.query(User).filter(User.company_id == company_id).first()
     operator_id = operator.id if operator else 1
 
-    for item in parsed_items:
+    for i, item in enumerate(parsed_items):
         product_id = item.get("product_id")
         qty = item.get("quantity", 0)
         
@@ -168,6 +168,7 @@ async def tally_bill_confirm(
             qty_after=qty_before + qty,
             source="Tally Upload",
             reference_id=file_reference,
+            operation_id=f"tally_{file.filename}_{i}_{product_id}",
             user_id=operator_id,
             metadata_payload={"rate": item.get('rate'), "gst": item.get('gst_rate')}
         )
@@ -177,6 +178,8 @@ async def tally_bill_confirm(
         db.commit()
     except Exception as e:
         db.rollback()
+        if "duplicate key value violates unique constraint" in str(e).lower() or "unique constraint" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Duplicate Upload Detected: This Tally bill has already been uploaded.")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     return {"status": "success", "message": "Inventory updated successfully"}
