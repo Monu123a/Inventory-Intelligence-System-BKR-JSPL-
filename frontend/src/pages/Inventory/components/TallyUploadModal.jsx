@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import Modal from '../../../components/common/Modal';
-import Button from '../../../components/common/Button';
+import { Modal } from '../../../components/Modal/Modal';
+import Button from '../../../components/forms/Button';
 import styles from './UploadModal.module.css';
 import api from '../../../services/api';
-import { useNotifications } from '../../../contexts/NotificationContext';
+import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
@@ -11,7 +11,6 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [previewItems, setPreviewItems] = useState(null);
-  const { addNotification } = useNotifications();
   const navigate = useNavigate();
 
   const handleFileChange = (e) => {
@@ -23,7 +22,7 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
 
   const handlePreview = async () => {
     if (!file) {
-      addNotification({ type: 'error', message: 'Please select a file first' });
+      toast.error('Please select a file first');
       return;
     }
     
@@ -36,9 +35,9 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setPreviewItems(res.data.items);
-      addNotification({ type: 'success', message: 'Tally bill parsed successfully!' });
+      toast.success('Tally bill parsed successfully!');
     } catch (err) {
-      addNotification({ type: 'error', message: err.response?.data?.detail || 'Failed to parse Tally bill' });
+      toast.error(err.response?.data?.detail || 'Failed to parse Tally bill');
     } finally {
       setUploading(false);
     }
@@ -58,14 +57,14 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
   
   const handleProceed = async () => {
     if (!warehouseId) {
-      addNotification({ type: 'error', message: 'Please select a destination warehouse' });
+      toast.error('Please select a destination warehouse');
       return;
     }
     
     // Only upload the items that actually mapped to an SKU
     const validItems = previewItems.filter(i => i.matched_sku);
     if (validItems.length === 0) {
-      addNotification({ type: 'error', message: 'No valid items to upload' });
+      toast.error('No valid items to upload');
       return;
     }
     
@@ -79,13 +78,13 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
       await api.post('/api/bulk-upload/tally-bill-confirm', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      addNotification({ type: 'success', message: 'Inventory updated successfully!' });
+      toast.success('Inventory updated successfully!');
       setTimeout(() => {
         window.location.reload();
       }, 1500);
       handleClose();
     } catch (err) {
-      addNotification({ type: 'error', message: err.response?.data?.detail || 'Failed to update inventory' });
+      toast.error(err.response?.data?.detail || 'Failed to update inventory');
       setUploading(false);
     }
   };
