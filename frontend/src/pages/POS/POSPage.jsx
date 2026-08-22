@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
 import { handleApiError } from '../../utils/errorHandler';
@@ -68,6 +68,44 @@ const CollapsibleSection = ({ title, defaultOpen = false, children }) => {
 // ---------------------------------------------------------------------------
 const POSPage = () => {
   const navigate = useNavigate();
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.tallyItems && location.state.tallyItems.length > 0) {
+      const newItems = location.state.tallyItems.map((item, idx) => {
+        // Find existing index logic if needed, but we can just append
+        const rate = item.rate || 0;
+        const qty = item.quantity || 1;
+        const gst = item.gst_rate || 0;
+        const discount = 0;
+        const taxable = (rate * qty) - discount;
+        const tax = (taxable * gst) / 100;
+        
+        return {
+          id: item.product_id || `temp-${idx}`,
+          sku: item.matched_sku || '',
+          name: item.product_name || item.description,
+          hsn_sac: item.hsn_sac || '',
+          quantity: qty,
+          selling_price: rate,
+          discount: discount,
+          gst_rate: gst,
+          taxable_amount: taxable,
+          cgst: tax / 2,
+          sgst: tax / 2,
+          igst: 0,
+          product_name: item.product_name || item.description,
+          unit: 'PCS',
+          rate: rate
+        };
+      });
+      setCart(prev => [...prev, ...newItems]);
+      // clear state so it doesn't run again on reload
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state]);
+
   const currentCompany = useCompanyStore(state => state.currentCompany);
   const companyName = currentCompany?.name || 'POS';
   const companyCode = useCompanyStore(state => state.companyCode) || '';

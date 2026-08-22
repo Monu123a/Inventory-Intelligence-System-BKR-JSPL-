@@ -8,6 +8,8 @@ import useCompanyStore from '../../stores/useCompanyStore';
 import Button from '../../components/forms/Button';
 import { SearchBar } from '../../components/forms/SearchBar';
 import { UploadModal } from './components/UploadModal';
+import TallyUploadModal from "./components/TallyUploadModal";
+
 import { AdjustmentModal } from './components/AdjustmentModal';
 import { useInventory, useManualAdjustment } from '../../hooks/useInventory';
 import { ROUTES } from '../../constants/routes';
@@ -22,6 +24,7 @@ const Inventory = () => {
   const [statusFilter, setStatusFilter] = useState('');
   
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isTallyModalOpen, setIsTallyModalOpen] = useState(false);
   const [adjustingItem, setAdjustingItem] = useState(null);
   const { currentCompany } = useCompanyStore();
   const isBkr = currentCompany?.code === 'BKR';
@@ -99,6 +102,7 @@ const Inventory = () => {
           <Button variant="secondary" onClick={() => refetch()} isLoading={isPending}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
+          <Button variant="secondary" onClick={() => setIsTallyModalOpen(true)} style={{marginRight: "8px"}}><FiUploadCloud style={{ marginRight: "8px" }} /> Upload Tally Bill</Button>
           <Button variant="primary" onClick={() => setIsUploadModalOpen(true)}>
             <FiUploadCloud style={{ marginRight: '8px' }} /> Upload Inventory
           </Button>
@@ -142,6 +146,7 @@ const Inventory = () => {
         )}
       </Card>
 
+      <TallyUploadModal isOpen={isTallyModalOpen} onClose={() => setIsTallyModalOpen(false)} />
       <UploadModal 
         isOpen={isUploadModalOpen} 
         onClose={() => setIsUploadModalOpen(false)} 

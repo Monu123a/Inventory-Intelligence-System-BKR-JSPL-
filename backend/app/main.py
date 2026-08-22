@@ -50,6 +50,7 @@ from app.api.routers.bkr_services import router as bkr_services_router
 from app.api.routers.admin_approvals import router as admin_approvals_router
 from app.api.routers.service_reminders import router as service_reminders_router
 from app.api.routers.documents import router as documents_router
+from app.api.routers.bulk_upload import router as bulk_upload_router
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -466,6 +467,7 @@ async def reset():
     return {"status": "ok", "message": "All uploads and outputs cleared."}
 
 
+app.include_router(bulk_upload_router, prefix="/api")
 app.include_router(legacy_router)
 
 if __name__ == "__main__":
