@@ -31,9 +31,7 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     formData.append('file', file);
     
     try {
-      const res = await api.post('/api/bulk-upload/tally-bill-preview', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post('/api/bulk-upload/tally-bill-preview', formData);
       setPreviewItems(res.data.items);
       toast.success('Tally bill parsed successfully!');
     } catch (err) {
@@ -75,9 +73,7 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     formData.append('items', JSON.stringify(validItems));
     
     try {
-      await api.post('/api/bulk-upload/tally-bill-confirm', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post('/api/bulk-upload/tally-bill-confirm', formData);
       toast.success('Inventory updated successfully!');
       setTimeout(() => {
         window.location.reload();
