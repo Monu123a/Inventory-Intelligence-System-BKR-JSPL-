@@ -31,11 +31,22 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     formData.append('file', file);
     
     try {
-      const res = await api.post('/api/bulk-upload/tally-bill-preview', formData);
+      const res = await api.post('/api/bulk-upload/tally-bill-preview', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setPreviewItems(res.data.items);
       toast.success('Tally bill parsed successfully!');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to parse Tally bill');
+      
+    let errMsg = 'An error occurred';
+    if (err.response?.data?.detail) {
+      if (typeof err.response.data.detail === 'string') {
+        errMsg = err.response.data.detail;
+      } else if (Array.isArray(err.response.data.detail)) {
+        errMsg = err.response.data.detail[0]?.msg || 'Validation Error';
+      }
+    } else if (err.message) {
+      errMsg = err.message;
+    }
+    toast.error(errMsg);
     } finally {
       setUploading(false);
     }
@@ -73,14 +84,25 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     formData.append('items', JSON.stringify(validItems));
     
     try {
-      await api.post('/api/bulk-upload/tally-bill-confirm', formData);
+      await api.post('/api/bulk-upload/tally-bill-confirm', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       toast.success('Inventory updated successfully!');
       setTimeout(() => {
         window.location.reload();
       }, 1500);
       handleClose();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update inventory');
+      
+    let errMsg = 'An error occurred';
+    if (err.response?.data?.detail) {
+      if (typeof err.response.data.detail === 'string') {
+        errMsg = err.response.data.detail;
+      } else if (Array.isArray(err.response.data.detail)) {
+        errMsg = err.response.data.detail[0]?.msg || 'Validation Error';
+      }
+    } else if (err.message) {
+      errMsg = err.message;
+    }
+    toast.error(errMsg);
       setUploading(false);
     }
   };
