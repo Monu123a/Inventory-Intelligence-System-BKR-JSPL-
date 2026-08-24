@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiLock, FiX, FiSend } from 'react-icons/fi';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -8,6 +8,12 @@ const AdminPasswordModal = ({ isOpen, onClose, onSubmit, actionName }) => {
 
   // Only show "Request Approval" for non-Admin users
   const isAdmin = user?.role === 'Admin';
+
+  useEffect(() => {
+    const handleClose = () => onClose();
+    window.addEventListener('approval-modal-opened', handleClose);
+    return () => window.removeEventListener('approval-modal-opened', handleClose);
+  }, [onClose]);
 
   if (!isOpen) return null;
 

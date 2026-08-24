@@ -102,6 +102,7 @@ api.interceptors.response.use(
              }
              
              useApprovalStore.getState().openModal(reqType, payload);
+             window.dispatchEvent(new Event('approval-modal-opened'));
              return new Promise(() => {}); // Suspend promise chain so component's onError doesn't fire and show a toast
            } catch(e) {
              console.error("Failed to parse request for escalation", e);
