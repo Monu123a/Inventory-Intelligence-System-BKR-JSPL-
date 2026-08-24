@@ -199,7 +199,7 @@ async def tally_bill_confirm(
             source="Tally Upload",
             reference_id=file_reference,
             user_id=operator_id,
-            metadata_payload={"rate": item.get('rate'), "gst": item.get('gst_rate'), "line_id": str(item.get('sl_no', i))},
+            metadata_payload={"rate": item.get('rate'), "gst": item.get('gst_rate'), "line_id": str(item.get('sl_no') or i)},
             allow_negative_stock=False
         )
         
