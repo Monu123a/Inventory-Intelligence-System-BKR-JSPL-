@@ -78,7 +78,49 @@ const InventoryHistory = () => {
       )
     },
     { key: 'qty_after', label: 'Qty After', render: (val) => <span className={styles.qtyText}>{val}</span> },
-    { key: 'reference_id', label: 'Ref ID' },
+        { 
+      key: 'reference_id', 
+      label: 'Ref ID',
+      render: (val, row) => {
+        if (row.source === 'Tally Upload' && val?.startsWith('Tally Upload: ')) {
+          const filename = val.replace('Tally Upload: ', '');
+          const token = useAuthStore.getState().token;
+          const url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/bulk-upload/download-tally-bill/${encodeURIComponent(filename)}`;
+          
+          const handleDownload = async (e) => {
+            e.preventDefault();
+            try {
+              const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+              if (!res.ok) throw new Error('File not found');
+              const blob = await res.blob();
+              const downloadUrl = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = downloadUrl;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(downloadUrl);
+            } catch (err) {
+              alert('Failed to download file: ' + err.message);
+            }
+          };
+          
+          return (
+            <div>
+              <span style={{ display: 'block', marginBottom: '4px' }}>{val}</span>
+              <button 
+                onClick={handleDownload}
+                style={{ fontSize: '0.8rem', padding: '2px 8px', background: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer', color: '#0f172a' }}
+              >
+                ⬇ Download Bill
+              </button>
+            </div>
+          );
+        }
+        return val;
+      }
+    },
     {
       key: 'actions',
       label: 'Actions',

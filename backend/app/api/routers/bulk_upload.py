@@ -176,9 +176,19 @@ async def tally_bill_confirm(
     if not parsed_items:
         raise HTTPException(status_code=400, detail="No items to update")
 
-    # In a real app we'd save the file to S3. Here we just pretend or save locally.
-    # We will log the filename in the transaction reference
-    file_reference = f"Tally Upload: {file.filename}"
+
+    # Save the file permanently
+    os.makedirs("uploads/tally_bills", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%md_%H%M%S")
+    safe_filename = f"{timestamp}_{uuid.uuid4().hex[:6]}_{file.filename}"
+    file_path = os.path.join("uploads", "tally_bills", safe_filename)
+    
+    content_bytes = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content_bytes)
+
+    file_reference = f"Tally Upload: {safe_filename}"
+
 
     operator_id = current_user.id
 
@@ -212,3 +222,12 @@ async def tally_bill_confirm(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         
     return {"status": "success", "message": "Inventory updated successfully"}
+
+from fastapi.responses import FileResponse
+
+@router.get("/download-tally-bill/{filename}")
+def download_tally_bill(filename: str, current_user: User = Depends(get_current_user)):
+    file_path = os.path.join("uploads", "tally_bills", filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path=file_path, filename=filename)
