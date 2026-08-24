@@ -19,7 +19,7 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
   
   // Fetch products for manual mapping
   const { data: productsData } = useProducts({ limit: 10000 });
-  const products = productsData?.data || [];
+  const products = Array.isArray(productsData) ? productsData : [];
 
 
   const handleFileChange = (e) => {
