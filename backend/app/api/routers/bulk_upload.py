@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from app.models.db import get_db
 from app.models.schema import Product
-from app.api.dependencies import get_current_company_id
+from app.api.dependencies import get_current_company_id, get_current_user
 
 router = APIRouter(prefix="/bulk-upload", tags=["Bulk Upload"])
 
@@ -176,10 +176,7 @@ async def tally_bill_confirm(
     # We will log the filename in the transaction reference
     file_reference = f"Tally Upload: {file.filename}"
 
-    # Get admin user id for the transaction (mocking for now, or you can inject current user)
-    # Using the first active user for this company
-    operator = db.query(User).filter(User.company_id == company_id).first()
-    operator_id = operator.id if operator else 1
+    operator_id = current_user.id
 
     for i, item in enumerate(parsed_items):
         product_id = item.get("product_id")
