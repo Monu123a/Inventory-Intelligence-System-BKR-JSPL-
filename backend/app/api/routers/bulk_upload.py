@@ -151,10 +151,10 @@ def catch_exceptions(func):
 @router.post("/tally-bill-confirm")
 @catch_exceptions
 async def tally_bill_confirm(
-
     request: Request,
     db: Session = Depends(get_db),
-    company_id: int = Depends(get_current_company_id)
+    company_id: int = Depends(get_current_company_id),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         form = await request.form()
