@@ -130,6 +130,7 @@ async def tally_bill_preview(
 import json
 from fastapi import Form
 from app.models.schema import Inventory, InventoryMovement, User
+from app.services.inventory_event_engine import InventoryEventEngine
 
 
 import traceback
@@ -179,50 +180,25 @@ async def tally_bill_confirm(
     operator_id = current_user.id
 
     for i, item in enumerate(parsed_items):
-        product_id = item.get("product_id")
+        product_sku = item.get("matched_sku")
         qty = item.get("quantity", 0)
         
-        if not product_id or qty <= 0:
+        if not product_sku or qty <= 0:
             continue
             
-        # Get or create inventory record
-        inv = db.query(Inventory).filter(
-            Inventory.warehouse_id == warehouse_id,
-            Inventory.product_id == product_id
-        ).first()
-        
-        qty_before = 0
-        if not inv:
-            inv = Inventory(
-                company_id=company_id,
-                warehouse_id=warehouse_id,
-                product_id=product_id,
-                current_qty=qty,
-                available_qty=qty
-            )
-            db.add(inv)
-        else:
-            qty_before = inv.current_qty
-            inv.current_qty += qty
-            inv.available_qty += qty
-            
-        db.flush()
-        
-        # Create transaction
-        txn = InventoryMovement(
+        InventoryEventEngine.process_event(
+            db=db,
             company_id=company_id,
-            product_id=product_id,
+            product_sku=product_sku,
             warehouse_id=warehouse_id,
-            qty_before=qty_before,
-            qty_changed=qty,
-            qty_after=qty_before + qty,
+            quantity=qty,
+            event_type="ADD",
             source="Tally Upload",
             reference_id=file_reference,
-            operation_id=f"tally_{file.filename}_{i}_{product_id}",
             user_id=operator_id,
-            metadata_payload={"rate": item.get('rate'), "gst": item.get('gst_rate')}
+            metadata_payload={"rate": item.get('rate'), "gst": item.get('gst_rate'), "line_id": str(i)},
+            allow_negative_stock=False
         )
-        db.add(txn)
         
     try:
         db.commit()
