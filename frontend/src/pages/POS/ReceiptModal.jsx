@@ -15,9 +15,10 @@ const ReceiptModal = ({ receipt, onClose }) => {
       <div className={styles.modal}>
         <div className={styles.receiptContent} id="printable-receipt">
           <div className={styles.header}>
-            <h2>BKR Offline Store</h2>
-            <p>123 Main Street, Retail City</p>
-            <p>GSTIN: 27AAAAA0000A1Z5</p>
+            <h2>{receipt.company?.name || 'Store'}</h2>
+            <p>{receipt.company?.address || ''}</p>
+            {receipt.company?.gstin && <p>GSTIN: {receipt.company.gstin}</p>}
+            {receipt.company?.phone && <p>Ph: {receipt.company.phone}</p>}
           </div>
 
           <div className={styles.divider}></div>
