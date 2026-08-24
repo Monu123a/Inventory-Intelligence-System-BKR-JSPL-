@@ -131,8 +131,27 @@ import json
 from fastapi import Form
 from app.models.schema import Inventory, InventoryMovement, User
 
+
+import traceback
+from functools import wraps
+from fastapi import HTTPException
+
+def catch_exceptions(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except HTTPException:
+            raise
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=400, detail=f"Confirm Error: {str(e)}")
+    return wrapper
+
 @router.post("/tally-bill-confirm")
+@catch_exceptions
 async def tally_bill_confirm(
+
     request: Request,
     db: Session = Depends(get_db),
     company_id: int = Depends(get_current_company_id)
