@@ -111,22 +111,28 @@ const ApprovalModal = ({ show, onHide, requestId, onActionComplete }) => {
             </>
           ) : null}
 
-          <div style={{ marginTop: 'var(--spacing-4)' }}>
-            <label className={styles.sectionLabel}>Admin Comment (Optional)</label>
-            <textarea 
-              className={styles.commentArea}
-              rows="2"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Add a note..."
-            />
-          </div>
+          {preview?.status === 'PENDING' && (
+            <div style={{ marginTop: 'var(--spacing-4)' }}>
+              <label className={styles.sectionLabel}>Admin Comment (Optional)</label>
+              <textarea 
+                className={styles.commentArea}
+                rows="2"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Add a note..."
+              />
+            </div>
+          )}
         </div>
 
         <div className={styles.modalFooter}>
           <button onClick={onHide} className={styles.btnCancel}>Close</button>
-          <button onClick={handleReject} className={styles.btnReject} disabled={loading}>Reject</button>
-          <button onClick={handleApprove} className={styles.btnApprove} disabled={loading || error}>Approve & Execute</button>
+          {preview?.status === 'PENDING' && (
+            <>
+              <button onClick={handleReject} className={styles.btnReject} disabled={loading}>Reject</button>
+              <button onClick={handleApprove} className={styles.btnApprove} disabled={loading || error}>Approve & Execute</button>
+            </>
+          )}
         </div>
       </div>
     </div>

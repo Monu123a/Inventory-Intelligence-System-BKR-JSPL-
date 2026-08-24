@@ -200,6 +200,7 @@ def preview_request(
         
         return {
             "request_id": req.id, 
+            "status": req.status,
             "preview": preview_data,
             "original_snapshot": req.before_snapshot,
             "current_snapshot": executor.before_snapshot(db, req.payload),
