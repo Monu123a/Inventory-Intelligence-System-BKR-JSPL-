@@ -1,3 +1,5 @@
+import { useAuthStore } from '../../../stores/authStore';
+import useCompanyStore from '../../../stores/useCompanyStore';
 import React, { useState } from 'react';
 import { Modal } from '../../../components/Modal/Modal';
 import Button from '../../../components/forms/Button';
@@ -31,8 +33,21 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     formData.append('file', file);
     
     try {
-      const res = await api.post('/api/bulk-upload/tally-bill-preview', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setPreviewItems(res.data.items);
+      const token = useAuthStore.getState().token;
+      const companyId = useCompanyStore.getState().companyId;
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/bulk-upload/tally-bill-preview`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Company-Id': companyId?.toString() || ''
+        },
+        body: formData
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw { response: { data } };
+      }
+      setPreviewItems(data.items);
       toast.success('Tally bill parsed successfully!');
     } catch (err) {
       
@@ -84,7 +99,20 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     formData.append('items', JSON.stringify(validItems));
     
     try {
-      await api.post('/api/bulk-upload/tally-bill-confirm', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const token = useAuthStore.getState().token;
+      const companyId = useCompanyStore.getState().companyId;
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/bulk-upload/tally-bill-confirm`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Company-Id': companyId?.toString() || ''
+        },
+        body: formData
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw { response: { data } };
+      }
       toast.success('Inventory updated successfully!');
       setTimeout(() => {
         window.location.reload();
