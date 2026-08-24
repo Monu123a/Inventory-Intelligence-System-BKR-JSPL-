@@ -69,11 +69,19 @@ async def tally_bill_preview(
                 rate = df.iloc[idx, 10] if max_col >= 10 else 0
                 gst = df.iloc[idx, 8] if max_col >= 8 else 0
                 
+                import math
                 try:
-                    qty = int(qty)
+                    qty = int(float(qty))
                     rate = float(rate)
                     gst = float(gst)
+                    
+                    if math.isnan(qty): qty = 0
+                    if math.isnan(rate): rate = 0.0
+                    if math.isnan(gst): gst = 0.0
                 except:
+                    continue
+                    
+                if qty <= 0:
                     continue
 
                 matched_sku = None
