@@ -26,7 +26,33 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+    (response) => {
+    // Automatically convert backend naive datetimes to UTC so browsers render local time (e.g., IST)
+    const appendZ = (obj) => {
+      if (obj === null || obj === undefined) return obj;
+      if (typeof obj === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(obj)) {
+          return obj + 'Z';
+        }
+        return obj;
+      }
+      if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) {
+          obj[i] = appendZ(obj[i]);
+        }
+      } else if (typeof obj === 'object') {
+        for (const key of Object.keys(obj)) {
+          obj[key] = appendZ(obj[key]);
+        }
+      }
+      return obj;
+    };
+    
+    if (response.data) {
+      appendZ(response.data);
+    }
+    return response;
+  },
   (error) => {
     if (!error.response) {
       useNotificationStore.getState().addNotification({
