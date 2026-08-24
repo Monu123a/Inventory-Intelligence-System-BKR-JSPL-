@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_current_company_id
 from app.models.db import get_db
 from app.models.schema import User, AdminApprovalRequest
 from app.services.admin_approvals.service import AdminApprovalService
@@ -171,9 +171,10 @@ def list_requests(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    company_id: int = Depends(get_current_company_id)
 ):
-    query = db.query(AdminApprovalRequest)
+    query = db.query(AdminApprovalRequest).filter(AdminApprovalRequest.company_id == company_id)
     if current_user.role != "Admin":
         query = query.filter(AdminApprovalRequest.requested_by == current_user.id)
     if status:
