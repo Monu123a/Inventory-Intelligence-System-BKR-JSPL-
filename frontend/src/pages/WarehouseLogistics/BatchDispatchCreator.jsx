@@ -147,11 +147,11 @@ const BatchDispatchCreator = () => {
     const mockDate = new Date().toISOString();
     
     const seller = {
-      name: isBkr ? 'BKR Main Warehouse' : 'Central Warehouse (VSHB)',
-      gstin: '07AABCU9603R1ZM',
-      address: 'Industrial Area, Phase 1',
-      state: 'Haryana',
-      state_code: '06'
+      name: currentCompany?.legal_name || (isBkr ? 'BKR Main Warehouse' : 'Central Warehouse (VSHB)'),
+      gstin: currentCompany?.gstin || (isBkr ? '04AABCU9603R1ZM' : '04AAFCJ8215N1ZC'),
+      address: currentCompany?.address || 'Industrial Area, Phase 1, Chandigarh',
+      state: currentCompany?.state || 'Chandigarh',
+      state_code: currentCompany?.state_code || '04'
     };
     
     const buyer = {
