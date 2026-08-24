@@ -76,7 +76,7 @@ api.interceptors.response.use(
              }
              
              useApprovalStore.getState().openModal(reqType, payload);
-             return Promise.reject(error); // Stop propagation so we don't show generic toast
+             return new Promise(() => {}); // Suspend promise chain so component's onError doesn't fire and show a toast
            } catch(e) {
              console.error("Failed to parse request for escalation", e);
            }
