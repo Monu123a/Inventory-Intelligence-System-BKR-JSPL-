@@ -88,7 +88,7 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
 
   const handleMapSku = (idx, skuValue) => {
     const newItems = [...previewItems];
-    const matchedProduct = products.find(p => p.sku === skuValue);
+    const matchedProduct = products.find(p => p.sku?.trim().toLowerCase() === skuValue?.trim().toLowerCase());
     
     if (matchedProduct) {
       newItems[idx].matched_sku = matchedProduct.sku;
@@ -114,6 +114,14 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     if (validItems.length === 0) {
       toast.error('No valid items to upload');
       return;
+    }
+    
+    // Warn if skipping items
+    const unmappedCount = previewItems.filter(i => !i.description?.toLowerCase().includes('total') && !String(i.sl_no).toLowerCase().includes('total')).length - validItems.length;
+    if (unmappedCount > 0) {
+      if (!window.confirm(`${unmappedCount} items are currently unmapped (red border). They will be skipped and NOT updated in inventory. Do you want to proceed anyway?`)) {
+        return;
+      }
     }
     
     setUploading(true);
