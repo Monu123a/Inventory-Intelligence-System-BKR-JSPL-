@@ -11,11 +11,15 @@ router = APIRouter(prefix="/bulk-upload", tags=["Bulk Upload"])
 
 @router.post("/tally-bill-preview")
 async def tally_bill_preview(
-    file: UploadFile = File(...),
+    request: Request,
     db: Session = Depends(get_db),
     company_id: int = Depends(get_current_company_id)
 ):
     try:
+        form = await request.form()
+        file = form.get("file")
+        if not file:
+            raise Exception("File is missing from form data")
         content = await file.read()
         df = pd.read_excel(io.BytesIO(content), sheet_name=0)
     except Exception as e:
@@ -121,13 +125,19 @@ from app.models.schema import Inventory, InventoryMovement, User
 
 @router.post("/tally-bill-confirm")
 async def tally_bill_confirm(
-    file: UploadFile = File(...),
-    warehouse_id: int = Form(...),
-    items: str = Form(...),
+    request: Request,
     db: Session = Depends(get_db),
     company_id: int = Depends(get_current_company_id)
 ):
     try:
+        form = await request.form()
+        file = form.get("file")
+        warehouse_id_str = form.get("warehouse_id")
+        items = form.get("items")
+        if not file or not warehouse_id_str or not items:
+            raise HTTPException(status_code=400, detail="Missing required form fields")
+        warehouse_id = int(warehouse_id_str)
+
         parsed_items = json.loads(items)
     except:
         raise HTTPException(status_code=400, detail="Invalid items payload")
