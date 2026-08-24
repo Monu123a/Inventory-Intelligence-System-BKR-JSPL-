@@ -55,7 +55,7 @@ class InventoryEventEngine:
                         
                     # Ensure product exists for this company
                     # Globally enforce the 6-character SKU rule
-                    product_sku = product_sku.strip().upper()[:6]
+                    product_sku = product_sku.strip().upper()
                     product = db.query(Product).filter(Product.sku == product_sku, Product.company_id == company_id).first()
                     if not product:
                         raise ValueError(f"Product SKU {product_sku} not found for company {company_id}.")
