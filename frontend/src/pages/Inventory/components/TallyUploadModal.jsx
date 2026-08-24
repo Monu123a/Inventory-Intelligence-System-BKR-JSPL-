@@ -1,6 +1,8 @@
 import { useAuthStore } from '../../../stores/authStore';
 import useCompanyStore from '../../../stores/useCompanyStore';
 import React, { useState } from 'react';
+import { useProducts } from '../../../hooks/useProducts';
+
 import { Modal } from '../../../components/Modal/Modal';
 import Button from '../../../components/forms/Button';
 import styles from './UploadModal.module.css';
@@ -14,6 +16,11 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
   const [uploading, setUploading] = useState(false);
   const [previewItems, setPreviewItems] = useState(null);
   const navigate = useNavigate();
+  
+  // Fetch products for manual mapping
+  const { data: productsData } = useProducts({ limit: 10000 });
+  const products = productsData?.data || [];
+
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -78,6 +85,23 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
     handleReset();
     onClose();
   };
+
+  const handleMapSku = (idx, skuValue) => {
+    const newItems = [...previewItems];
+    const matchedProduct = products.find(p => p.sku === skuValue);
+    
+    if (matchedProduct) {
+      newItems[idx].matched_sku = matchedProduct.sku;
+      newItems[idx].product_id = matchedProduct.id;
+      newItems[idx].product_name = matchedProduct.name;
+      newItems[idx].hsn_sac = matchedProduct.hsn;
+    } else {
+      newItems[idx].matched_sku = null;
+      newItems[idx].product_id = null;
+    }
+    setPreviewItems(newItems);
+  };
+
   
   const handleProceed = async () => {
     if (!warehouseId) {
@@ -186,7 +210,7 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
                   <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
                     <th style={{ padding: '10px' }}>Sl</th>
                     <th style={{ padding: '10px' }}>Description</th>
-                    <th style={{ padding: '10px' }}>Matched SKU</th>
+                    <th style={{ padding: '10px' }}>Mapped SKU</th>
                     <th style={{ padding: '10px' }}>Qty</th>
                     <th style={{ padding: '10px' }}>Rate</th>
                   </tr>
@@ -196,8 +220,26 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
                     <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '10px' }}>{item.sl_no}</td>
                       <td style={{ padding: '10px' }}>{item.description}</td>
-                      <td style={{ padding: '10px', color: item.matched_sku ? '#059669' : '#dc2626', fontWeight: 'bold' }}>
-                        {item.matched_sku || 'Unmatched'}
+                      <td style={{ padding: '10px' }}>
+                        {(item.description?.toLowerCase().includes('total') || String(item.sl_no).toLowerCase().includes('total')) ? (
+                           <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Ignored (Total Row)</span>
+                        ) : (
+                          <input
+                            type="text"
+                            list="products-list"
+                            placeholder={item.matched_sku ? "Mapped to " + item.matched_sku : "Type to map SKU..."}
+                            defaultValue={item.matched_sku || ''}
+                            onChange={(e) => handleMapSku(idx, e.target.value)}
+                            style={{ 
+                              padding: '6px', 
+                              width: '180px', 
+                              border: item.matched_sku ? '2px solid #059669' : '2px solid #dc2626', 
+                              borderRadius: '4px',
+                              backgroundColor: item.matched_sku ? '#ecfdf5' : '#fef2f2',
+                              color: '#0f172a'
+                            }}
+                          />
+                        )}
                       </td>
                       <td style={{ padding: '10px' }}>{item.quantity}</td>
                       <td style={{ padding: '10px' }}>{item.rate}</td>
@@ -207,9 +249,15 @@ const TallyUploadModal = ({ isOpen, onClose, warehouses }) => {
               </table>
             </div>
             
-            {previewItems.some(i => !i.matched_sku) && (
+            <datalist id="products-list">
+              {products.map(p => (
+                <option key={p.id} value={p.sku}>{p.name} - {p.sku}</option>
+              ))}
+            </datalist>
+
+            {previewItems.some(i => !i.matched_sku && !(i.description?.toLowerCase().includes('total') || String(i.sl_no).toLowerCase().includes('total'))) && (
               <div style={{ color: '#b91c1c', marginTop: '15px', padding: '10px', backgroundColor: '#fee2e2', borderRadius: '4px', fontSize: '0.9rem' }}>
-                <strong>Warning:</strong> Some items could not be automatically matched to an existing SKU. You will need to map them manually in the POS.
+                <strong>Warning:</strong> You have items highlighted in red that are unmatched. Please use the dropdown to map them to an existing SKU, otherwise they will be skipped during upload.
               </div>
             )}
             
