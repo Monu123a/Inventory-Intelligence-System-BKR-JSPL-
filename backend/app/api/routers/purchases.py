@@ -37,7 +37,7 @@ def create_purchase_draft(
     except Exception as e:
         db.rollback()
         logger.exception("Error creating purchase draft")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.post("/{purchase_id}/receive", summary="Receive Purchase Stock")
 def receive_purchase(
@@ -56,7 +56,7 @@ def receive_purchase(
     except Exception as e:
         db.rollback()
         logger.exception("Error receiving purchase")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 class OfflinePurchaseRequest(PurchaseDraftRequest):
     pass # Inherits structure
