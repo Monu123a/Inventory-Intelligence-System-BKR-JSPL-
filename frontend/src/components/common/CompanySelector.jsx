@@ -1,7 +1,7 @@
 import React from 'react';
 import { useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { FiBox } from 'react-icons/fi';
 import { companyService } from '../../services/companies';
 import useCompanyStore from '../../stores/useCompanyStore';
@@ -15,6 +15,7 @@ const FALLBACK_COMPANIES = [
 
 const CompanySelector = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { companyId, companyCode, currentCompany, setCompany } = useCompanyStore();
   
   const { data: companies, isLoading, error } = useQuery({
@@ -45,6 +46,7 @@ const CompanySelector = () => {
     const selected = availableCompanies.find((company) => company.id === newId);
     setCompany(newId, selected?.code || '', selected?.name || selected?.code || '', selected);
     queryClient.invalidateQueries();
+    navigate('/');
   };
   
   let badgeClass = styles.badgeDefault;
