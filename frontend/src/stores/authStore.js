@@ -1,6 +1,9 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create(
+  persist(
+    (set) => ({
   user: null,
   token: (localStorage.getItem('token') && localStorage.getItem('token') !== 'null' && localStorage.getItem('token') !== 'undefined') ? localStorage.getItem('token') : null,
   isAuthenticated: !!(localStorage.getItem('token') && localStorage.getItem('token') !== 'null' && localStorage.getItem('token') !== 'undefined'),
@@ -18,4 +21,9 @@ export const useAuthStore = create((set) => ({
     localStorage.removeItem('company-storage');
     set({ user: null, token: null, isAuthenticated: false });
   },
-}));
+    }),
+    {
+      name: 'auth-storage',
+    }
+  )
+);
