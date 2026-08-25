@@ -107,6 +107,9 @@ class FCDispatchService:
                 if not request.warehouse_ids:
                     return existing_dispatches
 
+            company = db.query(Company).filter(Company.id == company_id).first()
+            company_code = company.code if company else "GST"
+
             # 1. Resolve Source Warehouse
             source_warehouse = db.query(Warehouse).filter(Warehouse.id == request.source_warehouse_id).first()
             if not source_warehouse:
@@ -118,15 +121,8 @@ class FCDispatchService:
                     raise HTTPException(status_code=400, detail="EMERGENCY dispatches must originate from VSHB")
             else:
                 # Standard dispatch
-                if source_warehouse.code not in ["BKR", "VSHB"]:
-                    # Wait, BKR central warehouse might have code "BKR" or something. 
-                    # Let's ensure we are relaxed enough if it's not VSHB or BKR by code, but we should strictly check it.
-                    # The user said: "STANDARD BKR or VSHB".
-                    if source_warehouse.code != "VSHB" and "BKR" not in (source_warehouse.code or ""):
-                        # Fallback for name check just in case BKR doesn't have code="BKR", but we prefer code.
-                        if "BKR" not in source_warehouse.name.upper():
-                            raise HTTPException(status_code=400, detail="STANDARD dispatches must originate from BKR or VSHB")
-                            
+                if source_warehouse.warehouse_type.name != "CENTRAL":
+                    raise HTTPException(status_code=400, detail="STANDARD dispatches must originate from a CENTRAL warehouse")
             transaction_origin = "INTERNAL_DISTRIBUTION"
 
             if source_warehouse.status != WarehouseStatus.ACTIVE:
@@ -282,7 +278,7 @@ class FCDispatchService:
                     customer_state=hub.state,
                     customer_state_code=hub.state_code,
                     invoice_type="B2B",
-                    invoice_prefix="BKR",
+                    invoice_prefix=company_code,
                     payment_method="CASH", # Default
                     total_taxable_amount=taxable_total,
                     total_tax=tax_total,

@@ -101,24 +101,23 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
     pos_products_sold_today = 0
     
     company = db.query(Company).filter(Company.id == company_id).first()
-    if company and company.code == "BKR":
-        pos_revenue_today = db.query(func.sum(Sale.grand_total)).filter(
-            Sale.company_id == company_id,
-            Sale.status == "Completed",
-            Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
-        ).scalar() or 0
-        
-        pos_sales_count_today = db.query(Sale).filter(
-            Sale.company_id == company_id,
-            Sale.status == "Completed",
-            Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
-        ).count()
-        
-        pos_products_sold_today = db.query(func.sum(SaleItem.quantity)).join(Sale).filter(
-            Sale.company_id == company_id,
-            Sale.status == "Completed",
-            Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
-        ).scalar() or 0
+    pos_revenue_today = db.query(func.sum(Sale.grand_total)).filter(
+        Sale.company_id == company_id,
+        Sale.status == "Completed",
+        Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
+    ).scalar() or 0
+    
+    pos_sales_count_today = db.query(Sale).filter(
+        Sale.company_id == company_id,
+        Sale.status == "Completed",
+        Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
+    ).count()
+    
+    pos_products_sold_today = db.query(func.sum(SaleItem.quantity)).join(Sale).filter(
+        Sale.company_id == company_id,
+        Sale.status == "Completed",
+        Sale.sale_date >= today_start, Sale.sale_date <= tomorrow_start
+    ).scalar() or 0
 
     sales_returns_today = db.query(SalesReturn).filter(
         SalesReturn.company_id == company_id,
@@ -155,7 +154,7 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
     pending_accounting_exports = db.query(AccountingExportBatch).filter(
         AccountingExportBatch.company_id == company_id,
         AccountingExportBatch.status == 'Queued'
-    ).count() if (company and company.code == "BKR") else 0
+    ).count()
 
     return {
         "kpis": {

@@ -54,18 +54,7 @@ const FCReturnsView = () => {
         ]
       };
 
-      let headers = {};
-      const { currentCompany } = useCompanyStore.getState();
-      const isBkr = currentCompany?.name?.toLowerCase().includes('bkr') || currentCompany?.code === 'BKR';
-      if (isBkr) {
-        const compRes = await api.get('/api/companies');
-        const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
-        if (jsplCompany) {
-          headers = { 'X-Company-Id': jsplCompany.id };
-        }
-      }
-
-      await api.post('/api/fc-returns', payload, { headers });
+      await api.post('/api/fc-returns', payload);
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['fc-returns'] });
       setShowModal(false);

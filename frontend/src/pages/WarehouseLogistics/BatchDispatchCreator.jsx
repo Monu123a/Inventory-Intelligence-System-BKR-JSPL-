@@ -79,14 +79,10 @@ const BatchDispatchCreator = () => {
           // Determine correct source warehouse ID based on selection or fallback
           let resolvedSourceId = sourceWarehouseId;
           if (!resolvedSourceId) {
-             let fallbackWh;
-             if (isBkr) {
-               fallbackWh = warehouses.find(w => w.code === 'BKR') || warehouses.find(w => w.company_id === currentCompany?.id);
-             } else {
-               fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
-                 || warehouses.find(w => w.warehouse_type === 'CENTRAL');
-             }
-             fallbackWh = fallbackWh || warehouses[0];
+             let fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
+                 || warehouses.find(w => w.warehouse_type === 'CENTRAL')
+                 || warehouses.find(w => w.company_id === currentCompany?.id)
+                 || warehouses[0];
              resolvedSourceId = fallbackWh?.id;
           }
           if (!resolvedSourceId) return;
@@ -242,14 +238,10 @@ const BatchDispatchCreator = () => {
       // Resolve source warehouse
       let resolvedSourceId = sourceWarehouseId;
       if (!resolvedSourceId) {
-         let fallbackWh;
-         if (isBkr) {
-           fallbackWh = warehouses.find(w => w.code === 'BKR') || warehouses.find(w => w.company_id === currentCompany?.id);
-         } else {
-           fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
-             || warehouses.find(w => w.warehouse_type === 'CENTRAL');
-         }
-         fallbackWh = fallbackWh || warehouses[0];
+         let fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
+             || warehouses.find(w => w.warehouse_type === 'CENTRAL')
+             || warehouses.find(w => w.company_id === currentCompany?.id)
+             || warehouses[0];
          resolvedSourceId = fallbackWh?.id;
       }
       
@@ -335,74 +327,36 @@ const BatchDispatchCreator = () => {
               <p className={styles.stepSubtitle}>Where is the stock coming from?</p>
               
               <div className={styles.sourceGrid}>
-                {/* BKR Card - Only show for BKR Company */}
-                {isBkr && (
-                  <div 
-                    className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardBkrActive : ''}`}
-                    onClick={() => {
-                        if (dispatchType === 'EMERGENCY') {
-                            alert("EMERGENCY dispatches must originate from Central");
-                            return;
-                        }
-                        const bkrWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
-                        if (bkrWh) setSourceWarehouseId(bkrWh.id);
-                    }}
-                    style={{ opacity: dispatchType === 'EMERGENCY' ? 0.5 : 1, cursor: dispatchType === 'EMERGENCY' ? 'not-allowed' : 'pointer' }}
-                  >
-                    <div className={styles.sourceHeader}>
-                      <div className={styles.sourceTitleGroup}>
-                        <div className={`${styles.sourceIconBox} ${!sourceWarehouseId ? styles.sourceIconBoxBkrActive : ''}`}>
-                          <Building2 />
-                        </div>
-                        <div>
-                          <h3 className={`${styles.sourceTitle} ${!sourceWarehouseId ? styles.sourceTitleBkrActive : ''}`}>BKR Main Warehouse</h3>
-                          <p className={styles.sourceSubtitle}>External Replenishment</p>
-                        </div>
+                {/* Dynamic Central Card */}
+                <div 
+                  className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardBkrActive : ''}`}
+                  onClick={() => {
+                      const centralWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id) || warehouses[0];
+                      if (centralWh) setSourceWarehouseId(centralWh.id);
+                  }}
+                  style={{ opacity: dispatchType === 'EMERGENCY' ? 0.5 : 1, cursor: dispatchType === 'EMERGENCY' ? 'not-allowed' : 'pointer' }}
+                >
+                  <div className={styles.sourceHeader}>
+                    <div className={styles.sourceTitleGroup}>
+                      <div className={`${styles.sourceIconBox} ${!sourceWarehouseId ? styles.sourceIconBoxBkrActive : ''}`}>
+                        <Building2 />
                       </div>
-                      {!sourceWarehouseId && (
-                        <div className={`${styles.sourceCheck} ${styles.sourceCheckBkr}`}>
-                          <Check size={16} strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className={styles.sourceDesc}>
-                      Use this option to dispatch fresh stock from the BKR main manufacturing hub directly to regional fulfillment centers.
-                    </div>
-                  </div>
-                )}
-
-                {/* Central Card - Only show for JSPL Company */}
-                {!isBkr && (
-                  <div 
-                    className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardCentralActive : ''}`}
-                    onClick={() => {
-                        const centralWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
-                        if (centralWh) setSourceWarehouseId(centralWh.id);
-                    }}
-                  >
-                    <div className={styles.sourceHeader}>
-                      <div className={styles.sourceTitleGroup}>
-                        <div className={`${styles.sourceIconBox} ${!sourceWarehouseId ? styles.sourceIconBoxCentralActive : ''}`}>
-                          <Truck />
-                        </div>
-                        <div>
-                          <h3 className={`${styles.sourceTitle} ${!sourceWarehouseId ? styles.sourceTitleCentralActive : ''}`}>Central Warehouse</h3>
-                          <p className={styles.sourceSubtitle}>Internal Distribution</p>
-                        </div>
+                      <div>
+                        <h3 className={`${styles.sourceTitle} ${!sourceWarehouseId ? styles.sourceTitleBkrActive : ''}`}>{currentCompany?.name || 'Main'} Central Warehouse</h3>
+                        <p className={styles.sourceSubtitle}>Primary Distribution Hub</p>
                       </div>
-                      {!sourceWarehouseId && (
-                        <div className={`${styles.sourceCheck} ${styles.sourceCheckCentral}`}>
-                          <Check size={16} strokeWidth={3} />
-                        </div>
-                      )}
                     </div>
-                    
-                    <div className={styles.sourceDesc}>
-                      Use this option for regular intra-company distribution from the VSHB Central Hub to smaller regional FCs.
-                    </div>
+                    {!sourceWarehouseId && (
+                      <div className={`${styles.sourceCheck} ${styles.sourceCheckBkr}`}>
+                        <Check size={16} strokeWidth={3} />
+                      </div>
+                    )}
                   </div>
-                )}
+                  
+                  <div className={styles.sourceDesc}>
+                    Use this option to dispatch fresh stock from your primary central hub to regional fulfillment centers.
+                  </div>
+                </div>
               </div>
               
               <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
