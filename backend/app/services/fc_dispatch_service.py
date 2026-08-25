@@ -270,6 +270,15 @@ class FCDispatchService:
                     ))
 
                 
+                # Ensure empty strings are treated as None for dates/numbers
+                custom_inv_date = None
+                if request.edited_invoice_date and str(request.edited_invoice_date).strip():
+                    custom_inv_date = request.edited_invoice_date
+
+                custom_inv_number = None
+                if request.edited_invoice_number and str(request.edited_invoice_number).strip():
+                    custom_inv_number = request.edited_invoice_number
+
                 # Use edited top-level fields if provided
                 pos_request = PosCheckoutRequest(
                     customer_name=hub.hub_name,
@@ -286,8 +295,8 @@ class FCDispatchService:
                     origin_warehouse_id=source_warehouse.id,
                     skip_inventory_update=True,
                     items=pos_items,
-                    custom_invoice_number=request.edited_invoice_number,
-                    custom_invoice_date=request.edited_invoice_date,
+                    custom_invoice_number=custom_inv_number,
+                    custom_invoice_date=custom_inv_date,
                     delivery_note=request.edited_notes
                 )
                 

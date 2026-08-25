@@ -30,8 +30,10 @@ def create_batch_dispatch(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         db.rollback()
-        import logging
+        import logging, traceback
         logging.getLogger(__name__).error(str(e), exc_info=True)
+        with open("dispatch_error.log", "a") as f:
+            f.write(traceback.format_exc() + "\n")
         raise HTTPException(status_code=500, detail="An internal error occurred while creating the dispatch.")
 
 @router.get("/")
