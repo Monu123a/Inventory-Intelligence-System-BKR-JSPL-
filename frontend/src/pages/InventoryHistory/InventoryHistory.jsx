@@ -9,6 +9,7 @@ import { HistoryFilters } from './components/HistoryFilters';
 import { HistoryDetailsModal } from './components/HistoryDetailsModal';
 import { useInventoryHistory, useInventoryHistoryExport } from '../../hooks/useInventoryHistory';
 import { FiEye } from 'react-icons/fi';
+import useAuthStore from '../../stores/authStore';
 import styles from './InventoryHistory.module.css';
 
 const EventBadge = ({ source }) => {
