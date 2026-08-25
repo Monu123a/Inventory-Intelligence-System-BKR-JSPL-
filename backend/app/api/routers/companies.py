@@ -26,9 +26,11 @@ class CompanyResponse(BaseModel):
 def get_companies(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.models.schema import CompanySettings
     
+    from sqlalchemy import func
+    
     companies = db.query(Company).join(CompanyUser).filter(
         CompanyUser.user_id == current_user.id,
-        Company.status == "Active"
+        func.lower(Company.status) == "active"
     ).all()
     
     result = []
