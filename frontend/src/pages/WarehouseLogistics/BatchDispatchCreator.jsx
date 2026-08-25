@@ -412,6 +412,20 @@ const BatchDispatchCreator = () => {
                 )}
               </div>
               
+              <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                <h3 className={styles.stepTitle} style={{fontSize: '16px', marginBottom: '10px', color: '#374151'}}>Or select a specific source warehouse:</h3>
+                <select 
+                  className={styles.inputField}
+                  value={sourceWarehouseId || ''}
+                  onChange={(e) => setSourceWarehouseId(parseInt(e.target.value, 10))}
+                  style={{ width: '100%', maxWidth: '400px' }}
+                >
+                  <option value="">-- Let system decide based on above --</option>
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                  ))}
+                </select>
+              </div>
               <div style={{marginTop: '20px', marginBottom: '20px'}}>
                   <h3 className={styles.stepTitle} style={{fontSize: '16px', marginBottom: '10px'}}>Dispatch Type</h3>
                   <select 
