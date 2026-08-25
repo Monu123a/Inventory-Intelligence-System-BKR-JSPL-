@@ -36,11 +36,12 @@ const CompanySelector = () => {
       selectedCompany &&
       (currentCompany?.id !== selectedCompany.id ||
         currentCompany?.code !== selectedCompany.code ||
-        currentCompany?.name !== selectedCompany.name)
+        currentCompany?.name !== selectedCompany.name ||
+        !currentCompany?.legal_name)
     ) {
       setCompany(selectedCompany.id, selectedCompany.code, selectedCompany.name, selectedCompany);
     }
-  }, [currentCompany?.code, currentCompany?.id, currentCompany?.name, selectedCompany, setCompany]);
+  }, [currentCompany?.code, currentCompany?.id, currentCompany?.name, currentCompany?.legal_name, selectedCompany, setCompany]);
 
   const handleChange = (e) => {
     const newId = parseInt(e.target.value, 10);
