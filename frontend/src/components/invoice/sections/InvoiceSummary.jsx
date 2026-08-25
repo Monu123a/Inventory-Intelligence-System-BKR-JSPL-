@@ -14,20 +14,23 @@ const InvoiceSummary = ({ company, items, totals }) => {
 
   const gstSummary = items?.reduce((acc, item) => {
     const rate = item.gst_rate || 0;
-    if (!acc[rate]) {
-      acc[rate] = { taxable_value: 0, cgst: 0, sgst: 0, igst: 0, total_tax: 0, hsn: item.hsn_sac };
+    const hsn = item.hsn_sac || '';
+    const key = `${hsn}-${rate}`;
+
+    if (!acc[key]) {
+      acc[key] = { taxable_value: 0, cgst: 0, sgst: 0, igst: 0, total_tax: 0, hsn: hsn, rate: rate };
     }
-    acc[rate].taxable_value += parseFloat(item.taxable_value || 0);
-    acc[rate].cgst += parseFloat(item.cgst || 0);
-    acc[rate].sgst += parseFloat(item.sgst || 0);
-    acc[rate].igst += parseFloat(item.igst || 0);
-    acc[rate].total_tax += parseFloat(item.cgst || 0) + parseFloat(item.sgst || 0) + parseFloat(item.igst || 0);
+    acc[key].taxable_value += parseFloat(item.taxable_value || 0);
+    acc[key].cgst += parseFloat(item.cgst || 0);
+    acc[key].sgst += parseFloat(item.sgst || 0);
+    acc[key].igst += parseFloat(item.igst || 0);
+    acc[key].total_tax += parseFloat(item.cgst || 0) + parseFloat(item.sgst || 0) + parseFloat(item.igst || 0);
     return acc;
   }, {});
 
-  const gstSummaryEntries = Object.entries(gstSummary || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+  const gstSummaryEntries = Object.values(gstSummary || {}).sort((a, b) => (a.hsn || '').localeCompare(b.hsn || ''));
 
-  const totalTaxAmount = gstSummaryEntries.reduce((sum, [_, vals]) => sum + vals.total_tax, 0);
+  const totalTaxAmount = gstSummaryEntries.reduce((sum, vals) => sum + vals.total_tax, 0);
 
   return (
     <div className={styles.summaryContainer}>
@@ -74,20 +77,20 @@ const InvoiceSummary = ({ company, items, totals }) => {
             </tr>
           </thead>
           <tbody>
-            {gstSummaryEntries.map(([rate, vals], idx) => (
+            {gstSummaryEntries.map((vals, idx) => (
               <tr key={idx}>
                 <td className={styles.textCenter}>{vals.hsn}</td>
                 <td className={styles.textRight}>{formatCurrency(vals.taxable_value)}</td>
                 {hasIGST ? (
                   <>
-                    <td className={styles.textCenter}>{rate}%</td>
+                    <td className={styles.textCenter}>{vals.rate}%</td>
                     <td className={styles.textRight}>{formatCurrency(vals.igst)}</td>
                   </>
                 ) : (
                   <>
-                    <td className={styles.textCenter}>{Number(rate)/2}%</td>
+                    <td className={styles.textCenter}>{Number(vals.rate)/2}%</td>
                     <td className={styles.textRight}>{formatCurrency(vals.cgst)}</td>
-                    <td className={styles.textCenter}>{Number(rate)/2}%</td>
+                    <td className={styles.textCenter}>{Number(vals.rate)/2}%</td>
                     <td className={styles.textRight}>{formatCurrency(vals.sgst)}</td>
                   </>
                 )}
