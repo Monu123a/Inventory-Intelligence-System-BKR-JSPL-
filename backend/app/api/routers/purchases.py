@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/purchases", tags=["Purchases"])
 
-def require_admin_or_manager(user: User = Depends(get_current_user
-from app.api.dependencies import get_current_company_id)):
+def require_admin_or_manager(user: User = Depends(get_current_user)):
     if not user.role or user.role.upper() not in ["ADMIN", "MANAGER"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
@@ -27,8 +26,7 @@ from app.api.dependencies import get_current_company_id)):
 def create_purchase_draft(
     request: PurchaseDraftRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user
-from app.api.dependencies import get_current_company_id)
+    user: User = Depends(get_current_user)
 ):
     try:
         res = PurchaseService.create_draft(db, request, user.id)
@@ -68,8 +66,7 @@ class OfflinePurchaseRequest(PurchaseDraftRequest):
 def submit_offline_purchase(
     request: OfflinePurchaseRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user
-from app.api.dependencies import get_current_company_id)
+    user: User = Depends(get_current_user)
 ):
     try:
         existing = db.query(OfflinePurchase).filter_by(company_id=request.company_id, idempotency_key=request.idempotency_key).first()
@@ -116,8 +113,7 @@ def sync_offline_purchases(
     return {"synced": len(results), "details": results}
 
 @router.get("/vendors/payables", summary="Get Vendor Payables")
-def get_vendor_payables(company_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user
-from app.api.dependencies import get_current_company_id)):
+def get_vendor_payables(company_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     vendors = db.query(Vendor).filter_by(company_id=company_id).all()
     return [{"id": v.id, "name": v.name, "payable_balance": v.payable_balance} for v in vendors]
 
