@@ -24,12 +24,12 @@ export const PurchaseService = {
     if (!navigator.onLine) {
       return PurchaseService.queueOfflineSubmit(data, data.idempotency_key);
     }
-    const response = await api.post('/purchases/', data);
+    const response = await api.post('/api/purchases/', data);
     return response.data;
   },
 
   receivePurchase: async (purchaseId, data) => {
-    const response = await api.post(`/purchases/${purchaseId}/receive`, data);
+    const response = await api.post(`/api/purchases/${purchaseId}/receive`, data);
     return response.data;
   },
 
@@ -40,7 +40,7 @@ export const PurchaseService = {
     // Push them to the backend offline queue first
     for (let item of queue) {
       try {
-        await api.post('/purchases/offline/submit', {
+        await api.post('/api/purchases/offline/submit', {
           idempotency_key: item.idempotencyKey,
           ...item.payload
         });
@@ -51,12 +51,12 @@ export const PurchaseService = {
     PurchaseService.clearOfflineQueue();
 
     // Now trigger the server sync job
-    const response = await api.post(`/purchases/offline/sync?company_id=${companyId}`);
+    const response = await api.post(`/api/purchases/offline/sync?company_id=${companyId}`);
     return response.data;
   },
 
   getPayables: async (companyId) => {
-    const response = await api.get(`/purchases/vendors/payables?company_id=${companyId}`);
+    const response = await api.get(`/api/purchases/vendors/payables?company_id=${companyId}`);
     return response.data;
   }
 };
