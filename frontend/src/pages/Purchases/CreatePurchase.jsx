@@ -73,7 +73,7 @@ export default function CreatePurchase() {
         idempotency_key: draftIdempotency,
         company_id: activeCompanyId, // fallback
         vendor_name: vendorName,
-        invoice_number: invoiceNumber,
+        invoice_number: invoiceNumber || null,
         items: items.map(i => ({
           ...i,
           qty: parseFloat(i.qty),

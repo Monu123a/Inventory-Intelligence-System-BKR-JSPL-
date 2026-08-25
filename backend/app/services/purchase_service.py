@@ -90,7 +90,7 @@ class PurchaseService:
             company_id=request.company_id,
             operator_id=operator_id,
             status="DRAFT",
-            invoice_number=request.invoice_number,
+            invoice_number=request.invoice_number if request.invoice_number else None,
             idempotency_key=request.idempotency_key,
             notes=request.notes
         )
