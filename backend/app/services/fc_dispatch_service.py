@@ -41,7 +41,7 @@ class FCDispatchBatchRequest(BaseModel):
 
 class FCDispatchService:
     @staticmethod
-    def _generate_dispatch_number(db: Session, company_id: int, hub_code: str) -> str:
+    def _generate_dispatch_number(db: Session, company_id: int, hub_code: str, company_code: str = "CO") -> str:
         # We need a robust sequence that is concurrency-safe.
         from datetime import date
         d = date.today()
@@ -54,7 +54,7 @@ class FCDispatchService:
             company_id=company_id,
             document_type=DocumentTypeEnum.DISPATCH,
             fiscal_year=fy,
-            prefix_override=f"WHT/{hub_code}"
+            prefix_override=f"{company_code}/WHT/{hub_code}"
         )
 
     @staticmethod
@@ -322,10 +322,9 @@ class FCDispatchService:
                 }
                 
                 # Create FCDispatch Orchestrator
-                dispatch_num = FCDispatchService._generate_dispatch_number(db, company_id, hub.hub_code)
+                dispatch_num = FCDispatchService._generate_dispatch_number(db, company_id, hub.hub_code, company_code)
                 dispatch = FCDispatch(
                     company_id=company_id,
-                    source_warehouse_id=source_warehouse.id,
                     warehouse_id=dest_warehouse.id,
                     dispatch_number=dispatch_num,
                     idempotency_key=f"{request.idempotency_key}_{dest_warehouse.id}" if request.idempotency_key else None,
@@ -481,7 +480,7 @@ class FCDispatchService:
             for dispatch in dispatches:
                 logger.info("Dispatch created", extra={
                     "dispatch_id": dispatch.id,
-                    "source": dispatch.source_warehouse_id,
+                    "source": request.source_warehouse_id,
                     "destination": dispatch.warehouse_id,
                     "user": user_id
                 })
