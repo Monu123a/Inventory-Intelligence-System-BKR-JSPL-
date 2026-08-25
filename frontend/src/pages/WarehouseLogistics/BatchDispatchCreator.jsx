@@ -86,9 +86,8 @@ const BatchDispatchCreator = () => {
           // Determine correct source warehouse ID based on selection or fallback
           let resolvedSourceId = sourceWarehouseId;
           if (!resolvedSourceId) {
-             const bkrWh = warehouses.find(w => w.name?.toLowerCase().includes('bkr') || w.code === 'BKR');
-             const centralWh = warehouses.find(w => w.code === 'VSHB' || w.warehouse_type === 'CENTRAL');
-             resolvedSourceId = isBkr ? bkrWh?.id : centralWh?.id;
+             const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
+             resolvedSourceId = fallbackWh?.id;
           }
           if (!resolvedSourceId) return;
 
@@ -250,9 +249,8 @@ const BatchDispatchCreator = () => {
       // Resolve source warehouse
       let resolvedSourceId = sourceWarehouseId;
       if (!resolvedSourceId) {
-         const bkrWh = warehouses.find(w => w.name?.toLowerCase().includes('bkr') || w.code === 'BKR');
-         const centralWh = warehouses.find(w => w.code === 'VSHB' || w.warehouse_type === 'CENTRAL');
-         resolvedSourceId = isBkr ? bkrWh?.id : centralWh?.id;
+         const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
+         resolvedSourceId = fallbackWh?.id;
       }
       
       let headers = {};
@@ -350,10 +348,10 @@ const BatchDispatchCreator = () => {
                     className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardBkrActive : ''}`}
                     onClick={() => {
                         if (dispatchType === 'EMERGENCY') {
-                            alert("EMERGENCY dispatches must originate from VSHB");
+                            alert("EMERGENCY dispatches must originate from Central");
                             return;
                         }
-                        const bkrWh = warehouses.find(w => w.name?.toLowerCase().includes('bkr') || w.code === 'BKR');
+                        const bkrWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
                         if (bkrWh) setSourceWarehouseId(bkrWh.id);
                     }}
                     style={{ opacity: dispatchType === 'EMERGENCY' ? 0.5 : 1, cursor: dispatchType === 'EMERGENCY' ? 'not-allowed' : 'pointer' }}
@@ -386,7 +384,7 @@ const BatchDispatchCreator = () => {
                   <div 
                     className={`${styles.sourceCard} ${!sourceWarehouseId ? styles.sourceCardCentralActive : ''}`}
                     onClick={() => {
-                        const centralWh = warehouses.find(w => w.code === 'VSHB' || w.warehouse_type === 'CENTRAL');
+                        const centralWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
                         if (centralWh) setSourceWarehouseId(centralWh.id);
                     }}
                   >
