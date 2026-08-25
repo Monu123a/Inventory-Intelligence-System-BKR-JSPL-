@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.models.schema import (
     Company, User, Product, Warehouse, Inventory, InventoryMovement,
-    Vendor, Purchase, PurchaseItem, OfflinePurchase, CompanySettings
+    Vendor, Purchase, PurchaseItem, OfflinePurchase, CompanySettings, VendorTransaction
 )
 from app.services.document_number_service import DocumentNumberService, DocumentTypeEnum
 from app.services.inventory_event_engine import InventoryEventEngine
@@ -56,6 +56,13 @@ class PurchaseDraftRequest(BaseModel):
 class PurchaseReceiveRequest(BaseModel):
     idempotency_key: str
     warehouse_id: Optional[int] = None
+
+
+class PurchasePaymentRequest(BaseModel):
+    amount: float = Field(..., gt=0)
+    method: str
+    txn_ref: Optional[str] = None
+    notes: Optional[str] = None
 
 class PurchaseService:
     @staticmethod
@@ -197,9 +204,18 @@ class PurchaseService:
             )
             movements.append(mov)
 
-        # Update Payables
+        # Update Payables and Ledger
         vendor = purchase.vendor
-        vendor.payable_balance = float(vendor.payable_balance or 0) + purchase.total_amount
+        vendor.payable_balance = float(vendor.payable_balance or 0) + float(purchase.total_amount)
+        
+        vt = VendorTransaction(
+            vendor_id=vendor.id,
+            transaction_type='INVOICE',
+            amount=purchase.total_amount,
+            ref_purchase_id=purchase.id,
+            notes=f"Invoice {purchase.invoice_number or purchase.id}"
+        )
+        db.add(vt)
 
         purchase.status = "RECEIVED"
         purchase.received_at = datetime.utcnow()
@@ -208,3 +224,50 @@ class PurchaseService:
         db.flush()
         return {"synced": True, "movements": len(movements), "purchase_id": purchase.id}
 
+
+    @staticmethod
+    def record_payment(db: Session, purchase_id: int, request: PurchasePaymentRequest, operator_id: int) -> dict:
+        purchase = db.query(Purchase).filter_by(id=purchase_id).first()
+        if not purchase:
+            raise ValueError("Purchase not found")
+        
+        if purchase.status != "RECEIVED":
+            raise ValueError("Can only pay for RECEIVED purchases")
+            
+        amount_val = float(request.amount)
+        
+        # Update purchase
+        current_paid = float(purchase.amount_paid or 0)
+        purchase.amount_paid = current_paid + amount_val
+        purchase.payment_method = request.method
+        
+        # Status logic
+        if purchase.amount_paid >= purchase.total_amount:
+            purchase.payment_status = "PAID"
+        elif purchase.amount_paid > 0:
+            purchase.payment_status = "PARTIAL"
+        else:
+            purchase.payment_status = "UNPAID"
+            
+        # Ledger entry
+        vt = VendorTransaction(
+            vendor_id=purchase.vendor_id,
+            transaction_type='PAYMENT',
+            amount=amount_val,
+            ref_purchase_id=purchase.id,
+            txn_ref=request.txn_ref,
+            notes=request.notes
+        )
+        db.add(vt)
+        
+        # Deduct from vendor payable balance
+        vendor = purchase.vendor
+        vendor.payable_balance = float(vendor.payable_balance or 0) - amount_val
+        
+        db.flush()
+        return {
+            "purchase_id": purchase.id,
+            "amount_paid": purchase.amount_paid,
+            "payment_status": purchase.payment_status,
+            "payable_balance": vendor.payable_balance
+        }

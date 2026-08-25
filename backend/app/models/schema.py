@@ -6,6 +6,22 @@ import enum
 from datetime import datetime
 from app.models.db import Base
 
+
+class VendorTransaction(Base):
+    __tablename__ = 'vendor_transactions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=False)
+    transaction_type = Column(String(50), nullable=False) # 'INVOICE' or 'PAYMENT'
+    amount = Column(Numeric(15, 2), nullable=False)
+    ref_purchase_id = Column(Integer, ForeignKey('purchases.id'), nullable=True)
+    txn_ref = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    vendor = relationship("Vendor", backref="transactions")
+    purchase = relationship("Purchase")
+
 class Company(Base):
     __tablename__ = "companies"
 
@@ -630,6 +646,10 @@ class AmazonReturn(Base):
     
     requested_at = Column(DateTime, nullable=True)
     received_at = Column(DateTime, nullable=True)
+    payment_status = Column(String(50), default="UNPAID")
+    amount_paid = Column(Numeric(15, 2), default=0.0)
+    payment_method = Column(String(50), nullable=True)
+
     last_synced_at = Column(DateTime, default=datetime.utcnow)
     
     created_at = Column(DateTime, default=datetime.utcnow)

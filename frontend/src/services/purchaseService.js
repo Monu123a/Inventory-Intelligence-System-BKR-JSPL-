@@ -55,6 +55,22 @@ export const PurchaseService = {
     return response.data;
   },
 
+  
+  getPurchases: async () => {
+    const response = await api.get('/api/purchases');
+    return response.data;
+  },
+
+  getPurchaseById: async (purchaseId) => {
+    const response = await api.get(`/api/purchases/${purchaseId}`);
+    return response.data;
+  },
+
+  recordPayment: async (purchaseId, data) => {
+    const response = await api.post(`/api/purchases/${purchaseId}/pay`, data);
+    return response.data;
+  },
+
   getPayables: async (companyId) => {
     const response = await api.get(`/api/purchases/vendors/payables?company_id=${companyId}`);
     return response.data;

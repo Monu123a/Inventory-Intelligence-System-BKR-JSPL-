@@ -5,7 +5,8 @@ from typing import List, Dict, Any, Optional
 from app.models.db import get_db
 from app.models.schema import User, Purchase, OfflinePurchase, Vendor
 from app.api.routers.auth import get_current_user
-from app.services.purchase_service import PurchaseService, PurchaseDraftRequest, PurchaseReceiveRequest
+from app.api.dependencies import get_current_company_id
+from app.services.purchase_service import PurchaseService, PurchaseDraftRequest, PurchaseReceiveRequest, PurchasePaymentRequest
 import json
 import logging
 
@@ -13,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/purchases", tags=["Purchases"])
 
-def require_admin_or_manager(user: User = Depends(get_current_user)):
+def require_admin_or_manager(user: User = Depends(get_current_user
+from app.api.dependencies import get_current_company_id)):
     if not user.role or user.role.upper() not in ["ADMIN", "MANAGER"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
@@ -25,7 +27,8 @@ def require_admin_or_manager(user: User = Depends(get_current_user)):
 def create_purchase_draft(
     request: PurchaseDraftRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user
+from app.api.dependencies import get_current_company_id)
 ):
     try:
         res = PurchaseService.create_draft(db, request, user.id)
@@ -42,7 +45,7 @@ def create_purchase_draft(
 @router.post("/{purchase_id}/receive", summary="Receive Purchase Stock")
 def receive_purchase(
     purchase_id: int,
-    request: PurchaseReceiveRequest,
+    request: PurchaseReceiveRequest, PurchasePaymentRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin_or_manager) # ENFORCED
 ):
@@ -65,7 +68,8 @@ class OfflinePurchaseRequest(PurchaseDraftRequest):
 def submit_offline_purchase(
     request: OfflinePurchaseRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user
+from app.api.dependencies import get_current_company_id)
 ):
     try:
         existing = db.query(OfflinePurchase).filter_by(company_id=request.company_id, idempotency_key=request.idempotency_key).first()
@@ -112,6 +116,85 @@ def sync_offline_purchases(
     return {"synced": len(results), "details": results}
 
 @router.get("/vendors/payables", summary="Get Vendor Payables")
-def get_vendor_payables(company_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_vendor_payables(company_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user
+from app.api.dependencies import get_current_company_id)):
     vendors = db.query(Vendor).filter_by(company_id=company_id).all()
     return [{"id": v.id, "name": v.name, "payable_balance": v.payable_balance} for v in vendors]
+
+@router.get("/", summary="List Purchases")
+def list_purchases(
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    purchases = db.query(Purchase).filter_by(company_id=company_id).order_by(Purchase.id.desc()).all()
+    res = []
+    for p in purchases:
+        res.append({
+            "id": p.id,
+            "vendor_name": p.vendor.name if p.vendor else None,
+            "invoice_number": p.invoice_number,
+            "status": p.status,
+            "total_amount": p.total_amount,
+            "amount_paid": p.amount_paid,
+            "payment_status": p.payment_status,
+            "payment_method": p.payment_method,
+            "created_at": p.created_at
+        })
+    return res
+
+@router.get("/{purchase_id}", summary="Get Purchase Details")
+def get_purchase(
+    purchase_id: int,
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    p = db.query(Purchase).filter_by(id=purchase_id, company_id=company_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Purchase not found")
+        
+    items = []
+    for item in p.items:
+        items.append({
+            "id": item.id,
+            "product_sku": item.product_sku,
+            "description": item.description,
+            "qty": item.qty,
+            "unit_cost": item.unit_cost,
+            "gst_pct": item.gst_pct,
+            "line_total": item.line_total
+        })
+        
+    return {
+        "id": p.id,
+        "vendor_name": p.vendor.name if p.vendor else None,
+        "invoice_number": p.invoice_number,
+        "status": p.status,
+        "total_amount": p.total_amount,
+        "amount_paid": p.amount_paid,
+        "payment_status": p.payment_status,
+        "payment_method": p.payment_method,
+        "created_at": p.created_at,
+        "notes": p.notes,
+        "items": items
+    }
+
+@router.post("/{purchase_id}/pay", summary="Record Payment")
+def record_payment(
+    purchase_id: int,
+    request: PurchasePaymentRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin_or_manager)
+):
+    try:
+        res = PurchaseService.record_payment(db, purchase_id, request, user.id)
+        db.commit()
+        return res
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error recording payment")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
