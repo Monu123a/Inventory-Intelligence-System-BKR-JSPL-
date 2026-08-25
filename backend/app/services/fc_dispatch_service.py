@@ -197,7 +197,7 @@ class FCDispatchService:
                 if not hub:
                     raise HTTPException(status_code=400, detail=f"Fulfillment Center {dest_warehouse.name} is missing a valid State Hub")
                     
-                if hub.status != "Active":
+                if (hub.status or "").upper() != "ACTIVE":
                     raise HTTPException(status_code=400, detail=f"State Hub {hub.hub_name} is not Active")
                     
                 # 3. Prepare POS Request & Validate Inventory
@@ -322,7 +322,6 @@ class FCDispatchService:
                     idempotency_key=f"{request.idempotency_key}_{dest_warehouse.id}" if request.idempotency_key else None,
                     dispatch_type=request.dispatch_type,
                     dispatch_status="Processing",
-                    payload=edited_payload,
                     created_by=user_id
                 )
                 db.add(dispatch)

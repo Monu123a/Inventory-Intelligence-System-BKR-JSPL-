@@ -413,7 +413,6 @@ class Sale(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
-    execution_idempotency_key = Column(String, unique=True, index=True)
     bill_number = Column(String, index=True, nullable=False)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     customer_name = Column(String, nullable=True)
@@ -556,7 +555,6 @@ class StockTransfer(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
-    execution_idempotency_key = Column(String, unique=True, index=True)
     transfer_number = Column(String, index=True, unique=True, nullable=False)
     from_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     to_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
@@ -703,7 +701,6 @@ class SalesReturn(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
-    execution_idempotency_key = Column(String, unique=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
     return_number = Column(String, index=True, nullable=False, unique=True)
@@ -919,7 +916,6 @@ class FCDispatch(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
-    execution_idempotency_key = Column(String, unique=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
@@ -929,7 +925,6 @@ class FCDispatch(Base):
     dispatch_number = Column(String, index=True, nullable=False, unique=True)
     dispatch_type = Column(String, nullable=False, default="STANDARD") # STANDARD, EMERGENCY
     dispatch_status = Column(String, default="Draft") # Draft, Invoice Generated, Challan Generated, Inventory Updated, Completed, Completed with Errors, XML Pending, Cancelled
-    payload = Column(JSON, nullable=True) # Used for storing edited preview fields (invoice_number, notes, etc)
     
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -990,7 +985,6 @@ class FCReturn(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
-    execution_idempotency_key = Column(String, unique=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     dispatch_id = Column(Integer, ForeignKey("fc_dispatches.id"), nullable=True)
@@ -1189,9 +1183,7 @@ class AdminApprovalRequest(Base):
     admin_comment = Column(String)
     before_snapshot = Column(JSONB)
     after_snapshot = Column(JSONB)
-    revert_payload = Column(JSONB)
     idempotency_key = Column(String, unique=True, index=True)
-    execution_idempotency_key = Column(String, unique=True, index=True)
     priority = Column(Integer, default=10)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
