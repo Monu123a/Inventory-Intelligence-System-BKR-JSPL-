@@ -21,7 +21,7 @@ export default function PurchasesList() {
   const columns = [
     { name: 'ID', selector: row => row.id, sortable: true },
     { name: 'Vendor Name', selector: row => row.name, sortable: true },
-    { name: 'Total Payable Balance (₹)', selector: row => row.payable_balance.toFixed(2), sortable: true },
+    { name: 'Total Payable Balance (₹)', selector: row => Number(row.payable_balance || 0).toFixed(2), sortable: true },
   ];
 
   return (
