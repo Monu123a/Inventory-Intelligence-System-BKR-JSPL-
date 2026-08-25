@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/purchases", tags=["Purchases"])
 
 def require_admin_or_manager(user: User = Depends(get_current_user)):
-    if user.role not in ["ADMIN", "MANAGER"]:
+    if not user.role or user.role.upper() not in ["ADMIN", "MANAGER"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Requires ADMIN or MANAGER role to execute Stock In / Receive"

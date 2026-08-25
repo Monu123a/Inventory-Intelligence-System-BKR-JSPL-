@@ -102,7 +102,8 @@ export default function CreatePurchase() {
       alert("Please save draft first.");
       return;
     }
-    if (user?.role !== 'ADMIN' && user?.role !== 'MANAGER') {
+    const uRole = user?.role?.toUpperCase() || '';
+    if (uRole !== 'ADMIN' && uRole !== 'MANAGER') {
       alert("You do not have permission to receive stock.");
       return;
     }
