@@ -395,8 +395,6 @@ class FCDispatchService:
                         transfer_number=f"TR-ST-{uuid.uuid4().hex[:6].upper()}",
                         from_company_id=company_id,
                         to_company_id=dest_warehouse.company_id,
-                        source_warehouse_id=source_warehouse.id,
-                        destination_warehouse_id=dest_warehouse.id,
                         status="Completed",
                         invoice_id=sale_id
                     )

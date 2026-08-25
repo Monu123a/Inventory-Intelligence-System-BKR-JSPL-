@@ -558,8 +558,6 @@ class StockTransfer(Base):
     transfer_number = Column(String, index=True, unique=True, nullable=False)
     from_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     to_company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
-    destination_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     
     # Draft, Pending Approval, Approved, Invoice Generated, Dispatched, Received, Completed, Cancelled
     status = Column(String, default="Draft")
@@ -580,8 +578,6 @@ class StockTransfer(Base):
     creator = relationship("User", foreign_keys=[created_by])
     approver = relationship("User", foreign_keys=[approved_by])
     invoice = relationship("Sale", foreign_keys=[invoice_id])
-    source_warehouse = relationship("Warehouse", foreign_keys=[source_warehouse_id])
-    destination_warehouse = relationship("Warehouse", foreign_keys=[destination_warehouse_id])
     items = relationship("StockTransferItem", back_populates="transfer", cascade="all, delete-orphan")
 
 
@@ -917,7 +913,6 @@ class FCDispatch(Base):
     id = Column(Integer, primary_key=True, index=True)
     idempotency_key = Column(String, nullable=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     invoice_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
     delivery_challan_id = Column(Integer, ForeignKey("delivery_challans.id"), nullable=True)
@@ -932,7 +927,6 @@ class FCDispatch(Base):
     
     # Relationships
     company = relationship("Company")
-    source_warehouse = relationship("Warehouse", foreign_keys=[source_warehouse_id])
     warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
     invoice = relationship("Sale")
     delivery_challan = relationship("DeliveryChallan")
