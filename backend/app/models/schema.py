@@ -1,7 +1,7 @@
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.ext.hybrid import hybrid_property
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, Enum as SQLEnum, Text, UniqueConstraint, JSON, text
+from sqlalchemy import Column, Numeric, Integer, String, Float, Boolean, ForeignKey, DateTime, Enum as SQLEnum, Text, UniqueConstraint, JSON, text
 import enum
 from datetime import datetime
 from app.models.db import Base
