@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import styles from './SettingsPage.module.css';
 import { FiSave, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { useQueryClient } from '@tanstack/react-query';
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState({
@@ -25,6 +26,7 @@ const SettingsPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     fetchSettings();
@@ -76,6 +78,7 @@ const SettingsPage = () => {
     try {
       setSaving(true);
       await api.put('/api/settings/', settings);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       showMessage('Settings saved successfully', 'success');
     } catch (error) {
       console.error('Error saving settings:', error);

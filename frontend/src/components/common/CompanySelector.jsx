@@ -34,14 +34,11 @@ const CompanySelector = () => {
   useEffect(() => {
     if (
       selectedCompany &&
-      (currentCompany?.id !== selectedCompany.id ||
-        currentCompany?.code !== selectedCompany.code ||
-        currentCompany?.name !== selectedCompany.name ||
-        !currentCompany?.legal_name)
+      JSON.stringify(currentCompany) !== JSON.stringify(selectedCompany)
     ) {
       setCompany(selectedCompany.id, selectedCompany.code, selectedCompany.name, selectedCompany);
     }
-  }, [currentCompany?.code, currentCompany?.id, currentCompany?.name, currentCompany?.legal_name, selectedCompany, setCompany]);
+  }, [currentCompany, selectedCompany, setCompany]);
 
   const handleChange = (e) => {
     const newId = parseInt(e.target.value, 10);
