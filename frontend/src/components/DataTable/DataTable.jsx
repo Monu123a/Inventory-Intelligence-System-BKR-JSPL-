@@ -22,9 +22,11 @@ export const DataTable = ({
   if (children) {
     return (
       <div className={`${styles.wrapper} ${className}`}>
-        <table className={styles.table}>
-          {children}
-        </table>
+        <div className={styles.tableResponsive}>
+          <table className={styles.table}>
+            {children}
+          </table>
+        </div>
       </div>
     );
   }
