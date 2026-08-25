@@ -138,8 +138,7 @@ class FCDispatchService:
                 export_to_accounting = company_settings.export_internal_distribution_to_accounting
 
             for dest_warehouse_id in request.warehouse_ids:
-                if dest_warehouse_id == source_warehouse.id:
-                    raise HTTPException(status_code=400, detail="Source and destination warehouses cannot be the same")
+                # User requested ability to dispatch to the same warehouse for dummy bills/adjustments
 
                 # 2. Fetch Dest FC Details
                 dest_warehouse = db.query(Warehouse).filter(Warehouse.id == dest_warehouse_id).first()
