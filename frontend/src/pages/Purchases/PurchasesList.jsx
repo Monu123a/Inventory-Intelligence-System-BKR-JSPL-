@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import useCompanyStore from '../../stores/useCompanyStore';
 import { PurchaseService } from '../../services/purchaseService';
 import { DataTable } from '../../components/DataTable/DataTable';
 
 export default function PurchasesList() {
   const { user } = useAuthStore();
+  const { currentCompany } = useCompanyStore();
+  const activeCompanyId = currentCompany?.id || 2;
   const [payables, setPayables] = useState([]);
 
   useEffect(() => {
-    if (user?.company_id) {
-      PurchaseService.getPayables(user.company_id)
+    if (activeCompanyId) {
+      PurchaseService.getPayables(activeCompanyId)
         .then(setPayables)
         .catch(e => console.error("Failed to load payables", e));
     }

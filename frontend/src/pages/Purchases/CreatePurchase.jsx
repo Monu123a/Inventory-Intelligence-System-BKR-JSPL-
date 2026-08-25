@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import useCompanyStore from '../../stores/useCompanyStore';
 import { PurchaseService } from '../../services/purchaseService';
 import { productService } from '../../services/products';
 
@@ -8,6 +9,8 @@ import { productService } from '../../services/products';
 // Using inline styles for simplicity since this is an MVP
 export default function CreatePurchase() {
   const { user } = useAuthStore();
+  const { currentCompany } = useCompanyStore();
+  const activeCompanyId = currentCompany?.id || 2;
   const [vendorName, setVendorName] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [items, setItems] = useState([{ product_sku: '', description: '', qty: 1, unit_cost: 0, gst_pct: 0, hsn: '' }]);
@@ -68,7 +71,7 @@ export default function CreatePurchase() {
       setLoading(true);
       const payload = {
         idempotency_key: draftIdempotency,
-        company_id: user?.company_id || 1, // fallback
+        company_id: activeCompanyId, // fallback
         vendor_name: vendorName,
         invoice_number: invoiceNumber,
         items: items.map(i => ({
@@ -126,7 +129,7 @@ export default function CreatePurchase() {
     if (isOffline) return alert("You are offline!");
     setLoading(true);
     try {
-      const res = await PurchaseService.syncOffline(user?.company_id || 1);
+      const res = await PurchaseService.syncOffline(activeCompanyId);
       alert(`Synced ${res.synced} offline records!`);
     } catch (e) {
       alert("Sync failed: " + e.message);
