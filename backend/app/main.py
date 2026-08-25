@@ -27,6 +27,7 @@ from app.plugins.plugin_registry import PluginRegistry
 
 # New routers
 from app.api.routers.products import router as products_router
+from app.api.routers import purchases
 from app.api.routers import reports, replenishment, transfers, accounting, amazon_returns, defective_inventory, returns_reports
 from app.api.routers.sales_returns import router as sales_returns_router
 from app.api.routers.delivery_challans import router as delivery_challans_router

@@ -69,6 +69,10 @@ const ReturnRecommendations = lazy(() => import('./pages/WarehouseLogistics/Retu
 
 const UserManualPage = lazy(() => import('./pages/Help/UserManualPage'));
 
+const CreatePurchase = lazy(() => import('./pages/Purchases/CreatePurchase'));
+const PurchasesList = lazy(() => import('./pages/Purchases/PurchasesList'));
+
+
 const App = () => {
   return (
     <ErrorBoundary>
@@ -91,6 +95,8 @@ const App = () => {
                 <Route path={ROUTES.INVENTORY_HISTORY} element={<InventoryHistory />} />
                 <Route path={ROUTES.REPORTS} element={<Reports />} />
                 <Route path={ROUTES.DOWNLOAD_CENTRE} element={<DownloadCentre />} />
+                <Route path="/purchases/create" element={<CreatePurchase />} />
+                <Route path="/purchases/list" element={<PurchasesList />} />
                 <Route path={ROUTES.SETTINGS} element={<Settings />} />
                 <Route path={ROUTES.HELP} element={<UserManualPage />} />
                 <Route path={ROUTES.ADMIN_APPROVALS} element={<ApprovalDashboard />} />

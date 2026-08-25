@@ -1195,3 +1195,78 @@ class AdminApprovalEvent(Base):
     actor_id = Column(Integer, ForeignKey("users.id"))
     data = Column(JSONB)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Vendor(Base):
+    __tablename__ = "vendors"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    contact = Column(String, nullable=True)
+    payable_balance = Column(Float, default=0.0)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    company = relationship("Company")
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'invoice_number', name='uix_company_invoice_number'),
+        UniqueConstraint('company_id', 'idempotency_key', name='uix_company_idempotency_key'),
+    )
+    
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String, default="DRAFT", nullable=False, index=True)
+    invoice_number = Column(String, nullable=True)
+    total_amount = Column(Float, default=0.0)
+    idempotency_key = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    received_at = Column(DateTime, nullable=True)
+    
+    vendor = relationship("Vendor")
+    company = relationship("Company")
+    operator = relationship("User")
+    items = relationship("PurchaseItem", back_populates="purchase", cascade="all, delete-orphan")
+
+class PurchaseItem(Base):
+    __tablename__ = "purchase_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    purchase_id = Column(Integer, ForeignKey("purchases.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    product_sku = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    qty = Column(Float, nullable=False, default=1.0)
+    unit_cost = Column(Float, nullable=False, default=0.0)
+    gst_pct = Column(Float, default=0.0)
+    hsn = Column(String, nullable=True)
+    line_total = Column(Float, nullable=False, default=0.0)
+    
+    purchase = relationship("Purchase", back_populates="items")
+    product = relationship("Product")
+
+class OfflinePurchase(Base):
+    __tablename__ = "offline_purchases"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'idempotency_key', name='uix_offline_company_idempotency'),
+    )
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    payload = Column(JSONB, nullable=False)
+    status = Column(String, default="PENDING", nullable=False, index=True)
+    idempotency_key = Column(String, nullable=False)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, nullable=True)
+    purchase_id = Column(Integer, ForeignKey("purchases.id"), nullable=True)
+    
+    company = relationship("Company")
+    operator = relationship("User")
+    purchase = relationship("Purchase")
