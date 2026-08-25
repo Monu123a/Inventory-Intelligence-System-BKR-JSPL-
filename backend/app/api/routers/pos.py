@@ -283,6 +283,7 @@ def complete_sale(
             customer_state_code=payload.customer_state_code,
             customer_phone=payload.customer_phone,
             created_at=payload.custom_invoice_date or datetime.utcnow(),
+            sale_date=payload.custom_invoice_date or datetime.utcnow(),
             customer_email=payload.customer_email,
             place_of_supply=payload.place_of_supply,
             idempotency_key=payload.idempotency_key,
