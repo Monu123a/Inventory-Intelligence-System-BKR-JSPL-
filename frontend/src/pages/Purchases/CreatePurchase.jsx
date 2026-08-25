@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { PurchaseService } from '../../services/purchaseService';
+import { productService } from '../../services/products';
 
 
 
@@ -17,8 +18,20 @@ export default function CreatePurchase() {
   
   // Use a stable idempotency key for this session
   const [draftIdempotency] = useState(crypto.randomUUID());
+  const [allProducts, setAllProducts] = useState([]);
+  
   
   useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const prods = await productService.getProducts();
+        setAllProducts(prods);
+      } catch (e) {
+        console.error("Failed to load products", e);
+      }
+    };
+    fetchProducts();
+
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     window.addEventListener('online', handleOnline);
@@ -36,6 +49,17 @@ export default function CreatePurchase() {
   const updateItem = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
+    
+    // Auto-fill if SKU is entered
+    if (field === 'product_sku') {
+      const match = allProducts.find(p => p.sku.toLowerCase() === value.toLowerCase());
+      if (match) {
+        newItems[index].description = match.name || '';
+        newItems[index].hsn = match.hsn || '';
+        newItems[index].unit_cost = match.item_rate || 0;
+      }
+    }
+    
     setItems(newItems);
   };
 
@@ -142,9 +166,17 @@ export default function CreatePurchase() {
         </div>
 
         <h4>Items</h4>
+        
+        <datalist id="sku-list">
+          {allProducts.map(p => (
+            <option key={p.sku} value={p.sku}>{p.name}</option>
+          ))}
+        </datalist>
+        
         {items.map((item, index) => (
+
           <div key={index} style={{ display: 'flex', gap: '10px', background: '#f9f9f9', padding: '10px', borderRadius: '4px' }}>
-            <input placeholder="SKU" value={item.product_sku} onChange={e => updateItem(index, 'product_sku', e.target.value)} style={{ flex: 1 }} />
+            <input placeholder="SKU" list="sku-list" value={item.product_sku} onChange={e => updateItem(index, 'product_sku', e.target.value)} style={{ flex: 1 }} />
             <input placeholder="Description (Auto-creates product if new)" value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} style={{ flex: 2 }} />
             <input placeholder="Qty" type="number" value={item.qty} onChange={e => updateItem(index, 'qty', e.target.value)} style={{ width: '60px' }} />
             <input placeholder="Cost" type="number" value={item.unit_cost} onChange={e => updateItem(index, 'unit_cost', e.target.value)} style={{ width: '80px' }} />
