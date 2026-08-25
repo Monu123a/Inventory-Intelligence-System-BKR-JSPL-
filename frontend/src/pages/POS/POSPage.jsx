@@ -148,10 +148,17 @@ const POSPage = () => {
 
   // New: Invoice Info
   const [invoiceInfo, setInvoiceInfo] = useState({
-    payment_terms: '', delivery_note: '', delivery_note_date: '',
-    dispatch_document_number: '', dispatch_through: '',
-    destination: '', vehicle_number: '', lr_rr_number: '',
+    payment_terms: '',
+    delivery_note: '',
+    delivery_note_date: '',
+    dispatch_document_number: '',
+    dispatch_through: '',
+    destination: '',
+    vehicle_number: '',
+    lr_rr_number: '',
     terms_of_delivery: '',
+    custom_invoice_number: '',
+    custom_invoice_date: ''
   });
 
   // GSTIN validation state
@@ -341,7 +348,7 @@ const POSPage = () => {
       // Reset form
       setCart([]);
       setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
-      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '' });
+      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', custom_invoice_number: '', custom_invoice_date: '' });
       setPaymentReference('');
       setSearchTerm('');
       
@@ -402,6 +409,9 @@ const POSPage = () => {
       place_of_supply: customerInfo.place_of_supply || null,
       customer_email: customerInfo.email || null,
       customer_phone: customerInfo.phone || null,
+
+      custom_invoice_number: invoiceInfo.custom_invoice_number || null,
+      custom_invoice_date: invoiceInfo.custom_invoice_date || null,
 
       payment_terms: invoiceInfo.payment_terms || null,
       delivery_note: invoiceInfo.delivery_note || null,
@@ -811,6 +821,30 @@ const POSPage = () => {
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
               Next bill will automatically be: <strong>{invoicePrefix}-...</strong>
             </div>
+          </div>
+          
+          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+             <label>Manual Bill Number (Optional)</label>
+             <input
+               type="text"
+               value={invoiceInfo.custom_invoice_number}
+               onChange={e => updateInvoice('custom_invoice_number', e.target.value)}
+               placeholder="Override auto-generated No."
+               className={styles.inputField}
+             />
+             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+               Leave blank for auto-generation
+             </div>
+          </div>
+
+          <div className={styles.formGroup} style={{ marginTop: '12px' }}>
+             <label>Manual Bill Date (Optional)</label>
+             <input
+               type="date"
+               value={invoiceInfo.custom_invoice_date}
+               onChange={e => updateInvoice('custom_invoice_date', e.target.value)}
+               className={styles.inputField}
+             />
           </div>
           {invoiceType === 'B2B' && (
             <div className={styles.b2bNotice}>
