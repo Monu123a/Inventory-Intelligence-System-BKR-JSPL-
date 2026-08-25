@@ -53,13 +53,6 @@ const BatchDispatchCreator = () => {
     const fetchData = async () => {
       try {
         let headers = {};
-        if (allowOtherCompanies && isBkr) {
-          const compRes = await api.get('/api/companies');
-          const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
-          if (jsplCompany) {
-            headers = { 'X-Company-Id': jsplCompany.id };
-          }
-        }
 
         const [hubsRes, whRes] = await Promise.all([
           api.get(`/api/state-hubs?all_companies=${allowOtherCompanies}`, { headers }),
@@ -86,22 +79,19 @@ const BatchDispatchCreator = () => {
           // Determine correct source warehouse ID based on selection or fallback
           let resolvedSourceId = sourceWarehouseId;
           if (!resolvedSourceId) {
-             const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id) 
-               || warehouses.find(w => w.warehouse_type === 'CENTRAL') 
-               || warehouses.find(w => w.company_id === currentCompany?.id)
-               || warehouses[0];
+             let fallbackWh;
+             if (isBkr) {
+               fallbackWh = warehouses.find(w => w.code === 'BKR') || warehouses.find(w => w.company_id === currentCompany?.id);
+             } else {
+               fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
+                 || warehouses.find(w => w.warehouse_type === 'CENTRAL');
+             }
+             fallbackWh = fallbackWh || warehouses[0];
              resolvedSourceId = fallbackWh?.id;
           }
           if (!resolvedSourceId) return;
 
           let headers = {};
-          if (allowOtherCompanies && isBkr) {
-            const compRes = await api.get('/api/companies');
-            const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
-            if (jsplCompany) {
-              headers = { 'X-Company-Id': jsplCompany.id };
-            }
-          }
 
           const res = await api.get(`/api/fc-dispatches/inventory?source_warehouse_id=${resolvedSourceId}`, { headers });
           const loadedInv = res.data.map(item => {
@@ -252,21 +242,18 @@ const BatchDispatchCreator = () => {
       // Resolve source warehouse
       let resolvedSourceId = sourceWarehouseId;
       if (!resolvedSourceId) {
-         const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
-           || warehouses.find(w => w.warehouse_type === 'CENTRAL')
-           || warehouses.find(w => w.company_id === currentCompany?.id)
-           || warehouses[0];
+         let fallbackWh;
+         if (isBkr) {
+           fallbackWh = warehouses.find(w => w.code === 'BKR') || warehouses.find(w => w.company_id === currentCompany?.id);
+         } else {
+           fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
+             || warehouses.find(w => w.warehouse_type === 'CENTRAL');
+         }
+         fallbackWh = fallbackWh || warehouses[0];
          resolvedSourceId = fallbackWh?.id;
       }
       
       let headers = {};
-      if (allowOtherCompanies && isBkr) {
-        const compRes = await api.get('/api/companies');
-        const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
-        if (jsplCompany) {
-          headers = { 'X-Company-Id': jsplCompany.id };
-        }
-      }
 
       await api.post('/api/fc-dispatches', {
         idempotency_key: idempotencyKeyRef.current,
@@ -459,7 +446,7 @@ const BatchDispatchCreator = () => {
           {/* Step 2: Hub */}
           {step === 2 && (
             <div>
-              <h2 className={styles.stepTitle}><Truck color="#2563eb" /> Select State Hub</h2>
+              <h2 className={styles.stepTitle}><Truck color="#2563eb" /> Select Destination State Hub</h2>
               {isCrossCompanyEnabled && (
                 <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <input type="checkbox" id="crossCompanyToggle" checked={allowOtherCompanies} onChange={(e) => setAllowOtherCompanies(e.target.checked)} />
@@ -509,7 +496,7 @@ const BatchDispatchCreator = () => {
           {/* Step 3: Warehouse / FC */}
           {step === 3 && (
             <div>
-              <h2 className={styles.stepTitle}><Package color="#2563eb" /> Select Warehouse / FC</h2>
+              <h2 className={styles.stepTitle}><Package color="#2563eb" /> Select Destination Warehouse / FC</h2>
               <div className={styles.grid}>
                 {warehouses.filter(w => w.hub_id === selectedHub && w.status?.toUpperCase() === 'ACTIVE').map(fc => (
                   <div 
