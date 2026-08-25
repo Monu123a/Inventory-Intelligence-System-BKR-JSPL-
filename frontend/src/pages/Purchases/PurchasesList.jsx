@@ -19,9 +19,9 @@ export default function PurchasesList() {
   }, [user]);
 
   const columns = [
-    { name: 'ID', selector: row => row.id, sortable: true },
-    { name: 'Vendor Name', selector: row => row.name, sortable: true },
-    { name: 'Total Payable Balance (₹)', selector: row => Number(row.payable_balance || 0).toFixed(2), sortable: true },
+    { name: 'ID', key: 'id' },
+    { name: 'Vendor Name', key: 'name' },
+    { name: 'Total Payable Balance (₹)', key: 'payable_balance', render: (_, row) => Number(row.payable_balance || 0).toFixed(2) },
   ];
 
   return (
