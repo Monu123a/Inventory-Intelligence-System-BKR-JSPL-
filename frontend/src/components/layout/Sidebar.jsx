@@ -56,6 +56,15 @@ const Sidebar = () => {
       ]
     }] : []),
     {
+      id: 'purchases',
+      label: 'Purchases',
+      icon: FiShoppingCart,
+      items: [
+        { path: '/purchases/create', label: 'Create Purchase', icon: FiShoppingCart },
+        { path: '/purchases/list', label: 'Vendor Payables', icon: FiDollarSign },
+      ]
+    },,
+    {
       id: 'inventory',
       label: 'Inventory',
       icon: FiList,
