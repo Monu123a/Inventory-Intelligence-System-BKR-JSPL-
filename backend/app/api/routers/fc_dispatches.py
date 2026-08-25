@@ -146,3 +146,13 @@ def get_45_day_recommendations(
         import logging
         logging.getLogger(__name__).error(str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred.")
+
+from fastapi.responses import PlainTextResponse
+import os
+@router.get("/debug-log", response_class=PlainTextResponse)
+def get_debug_log():
+    try:
+        with open("dispatch_error.log", "r") as f:
+            return f.read()
+    except Exception as e:
+        return f"Could not read log: {e}"
