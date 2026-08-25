@@ -8,7 +8,7 @@ from fastapi import HTTPException
 import logging
 from app.models.schema import (
     FCDispatch, FCDispatchItem, StateHub, Warehouse, Product, Sale, 
-    CompanySettings, DispatchTimeline, WarehouseStatus, Inventory, AuditLog, WarehouseExternalMapping, User
+    CompanySettings, DispatchTimeline, WarehouseStatus, Inventory, AuditLog, WarehouseExternalMapping, User, Company
 )
 from app.api.routers.pos import complete_sale, PosCheckoutRequest, PosCartItem
 import uuid
