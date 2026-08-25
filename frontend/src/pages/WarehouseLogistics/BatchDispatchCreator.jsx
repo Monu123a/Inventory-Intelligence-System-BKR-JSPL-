@@ -53,7 +53,7 @@ const BatchDispatchCreator = () => {
     const fetchData = async () => {
       try {
         let headers = {};
-        if (isBkr) {
+        if (allowOtherCompanies && isBkr) {
           const compRes = await api.get('/api/companies');
           const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
           if (jsplCompany) {
@@ -92,7 +92,7 @@ const BatchDispatchCreator = () => {
           if (!resolvedSourceId) return;
 
           let headers = {};
-          if (isBkr) {
+          if (allowOtherCompanies && isBkr) {
             const compRes = await api.get('/api/companies');
             const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
             if (jsplCompany) {
@@ -254,7 +254,7 @@ const BatchDispatchCreator = () => {
       }
       
       let headers = {};
-      if (isBkr) {
+      if (allowOtherCompanies && isBkr) {
         const compRes = await api.get('/api/companies');
         const jsplCompany = compRes.data.find(c => c.code === 'JSPL');
         if (jsplCompany) {
