@@ -17,7 +17,7 @@ export default function SalesReturnsPage() {
   const [viewReturn, setViewReturn] = useState(null);
 
   const { data: returns = [], isLoading: loading, error: returnsError } = useQuery({
-    queryKey: ['salesReturns'],
+    queryKey: ['salesReturns', currentCompany?.id],
     queryFn: () => salesReturnsService.getReturns(),
     enabled: !!currentCompany?.id
   });

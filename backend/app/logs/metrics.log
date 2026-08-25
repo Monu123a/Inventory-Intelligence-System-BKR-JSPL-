@@ -335,3 +335,8 @@
 {"timestamp": 1787159602065, "metric": "sale_completed", "value": 1, "company_id": 2}
 {"timestamp": 1787159832909, "metric": "sale_completed", "value": 1, "company_id": 2}
 {"timestamp": 1787214404131, "metric": "api_failure", "value": 1, "route": "/api/admin-approvals/", "method": "POST"}
+{"timestamp": 1787220392818, "metric": "sale_completed", "value": 1, "company_id": 3}
+{"timestamp": 1787220472630, "metric": "sale_completed", "value": 1, "company_id": 3}
+{"timestamp": 1787220534389, "metric": "sale_completed", "value": 1, "company_id": 3}
+{"timestamp": 1787552221037, "metric": "api_failure", "value": 1, "route": "/api/bulk-upload/tally-bill-preview", "method": "POST"}
+{"timestamp": 1787552390603, "metric": "api_failure", "value": 1, "route": "/api/bulk-upload/tally-bill-preview", "method": "POST"}

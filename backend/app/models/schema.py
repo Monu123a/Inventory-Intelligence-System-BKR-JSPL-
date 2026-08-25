@@ -1181,7 +1181,7 @@ class AdminApprovalRequest(Base):
     expires_at = Column(DateTime)
 
     requested_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    company_id = Column(Integer, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), index=True)
     related_entity = Column(Integer)
     status = Column(String, nullable=False, default="PENDING", index=True)
     approver_id = Column(Integer, ForeignKey("users.id"), index=True)

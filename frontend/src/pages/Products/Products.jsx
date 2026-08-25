@@ -31,7 +31,7 @@ const Products = () => {
   const { user: currentUser } = useAuthStore();
   const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
 
-  const { data: products, totalPages, isPending, refetch } = useProducts({
+  const { data: products, totalPages, isPending, refetch, allProducts } = useProducts({
     search, category: categoryFilter, brand: brandFilter, status: statusFilter, page, limit: 15
   });
 
@@ -97,15 +97,15 @@ const Products = () => {
 
   const executeActionWithPassword = (adminPassword) => {
     if (confirmDialog.type === 'bulk_activate') {
-      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Active' }, products: products, adminPassword }, {
+      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Active' }, products: allProducts, adminPassword }, {
         onSuccess: () => { setSelectedSkus(new Set()); setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
       });
     } else if (confirmDialog.type === 'bulk_deactivate') {
-      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Inactive' }, products: products, adminPassword }, {
+      bulkMutation.mutate({ skus: Array.from(selectedSkus), data: { status: 'Inactive' }, products: allProducts, adminPassword }, {
         onSuccess: () => { setSelectedSkus(new Set()); setConfirmDialog({ isOpen: false }); setPasswordModalOpen(false); }
       });
     } else if (confirmDialog.type === 'status_toggle') {
-      const prod = products.find(p => p.sku === confirmDialog.sku);
+      const prod = (allProducts || []).find(p => p.sku === confirmDialog.sku);
       if (prod) {
         const newStatus = prod.status === 'Active' ? 'Inactive' : 'Active';
         const updatedData = { ...prod, status: newStatus };
@@ -129,7 +129,7 @@ const Products = () => {
   const columns = [
     {
       key: 'select',
-      label: <input type="checkbox" onChange={handleSelectAll} checked={products?.length > 0 && selectedSkus.size === products?.length} />,
+      label: <input type="checkbox" onChange={handleSelectAll} checked={products?.length > 0 && products.every(p => selectedSkus.has(p.sku))} />,
       render: (_, row) => (
         <input 
           type="checkbox" 

@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def generate_45_day_return_recommendations():
+def generate_45_day_return_recommendations(company_id: int = None):
     """
     Scans FC inventory to find products that have been sitting for > 45 days
     without any movement (sales or transfers), and flags them for return recommendations.
@@ -15,7 +15,10 @@ def generate_45_day_return_recommendations():
     db: Session = SessionLocal()
     try:
         # Find all FC Warehouses (warehouses that have a hub_id)
-        fc_warehouses = db.query(Warehouse).filter(Warehouse.hub_id.isnot(None)).all()
+        query = db.query(Warehouse).filter(Warehouse.hub_id.isnot(None))
+        if company_id:
+            query = query.filter(Warehouse.company_id == company_id)
+        fc_warehouses = query.all()
         fc_warehouse_ids = [w.id for w in fc_warehouses]
         
         if not fc_warehouse_ids:

@@ -129,11 +129,12 @@ def get_dispatch_inventory(
 
 @router.get("/recommendations")
 def get_45_day_recommendations(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    company_id: int = Depends(get_current_company_id)
 ):
     try:
         """Get the 45-day return recommendations computed dynamically (or from cache in future)"""
-        recs = generate_45_day_return_recommendations()
+        recs = generate_45_day_return_recommendations(company_id=company_id)
         return recs or []
     except HTTPException:
         raise

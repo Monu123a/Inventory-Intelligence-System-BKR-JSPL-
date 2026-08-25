@@ -60,7 +60,8 @@ export const useProducts = ({ search = '', category = '', brand = '', status = '
 
   return {
     ...query,
-    ...processedData
+    ...processedData,
+    allProducts: products,
   };
 };
 
@@ -114,6 +115,7 @@ export const useUpdateProduct = () => {
     },
     onError: (err, variables, context) => {
       queryClient.setQueryData(['products', companyId], context.previousProducts);
+      if (err.isApprovalEscalation) return; // Silently handled by approval modal
       const detail = err.response?.data?.detail;
       const msg = Array.isArray(detail) ? detail.map(d => d.msg).join(', ') : (detail || 'An error occurred');
       addNotification({ type: 'error', title: 'Update Failed', message: msg });

@@ -103,7 +103,11 @@ api.interceptors.response.use(
              
              useApprovalStore.getState().openModal(reqType, payload);
              window.dispatchEvent(new Event('approval-modal-opened'));
-             return new Promise(() => {}); // Suspend promise chain so component's onError doesn't fire and show a toast
+             // Reject with a flagged error so React Query settles (onSettled fires, buttons unfreeze)
+             // but components can check this flag to avoid showing duplicate error toasts
+             const escalatedError = new Error('Escalated to admin approval');
+             escalatedError.isApprovalEscalation = true;
+             return Promise.reject(escalatedError);
            } catch(e) {
              console.error("Failed to parse request for escalation", e);
            }

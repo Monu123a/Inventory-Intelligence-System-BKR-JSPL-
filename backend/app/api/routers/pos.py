@@ -358,11 +358,10 @@ def complete_sale(
             # 5. Inventory Deduction via Event Engine
             # Use the verified DB product SKU, not the client-supplied SKU
             # Deduct from Inventory using Event Engine (if not skipped)
-            if not payload.skip_inventory_update:
-                verified_sku = product.sku if product else item.sku
+            if not payload.skip_inventory_update and product:
                 InventoryEventEngine.process_event(
                     db=db,
-                    company_id=company_id,product_sku=verified_sku,
+                    company_id=company_id,product_sku=product.sku,
                     warehouse_id=default_warehouse.id,
                     quantity=item.quantity,
                     event_type="SALE",

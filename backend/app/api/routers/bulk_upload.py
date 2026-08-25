@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 import io
 import re
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from app.models.db import get_db

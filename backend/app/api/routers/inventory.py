@@ -249,7 +249,10 @@ def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get
     if adjustment.adjustment_type not in ["INCREASE", "DECREASE"]:
         raise HTTPException(status_code=400, detail="adjustment_type must be INCREASE or DECREASE")
     
-    qty = adjustment.quantity if adjustment.adjustment_type == "INCREASE" else -abs(adjustment.quantity)
+    if adjustment.quantity <= 0:
+        raise HTTPException(status_code=400, detail="quantity must be a positive number")
+    
+    qty = abs(adjustment.quantity) if adjustment.adjustment_type == "INCREASE" else -abs(adjustment.quantity)
     
     ref = adjustment.reference_id or f"MANUAL-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     

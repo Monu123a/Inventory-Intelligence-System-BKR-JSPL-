@@ -1,0 +1,184 @@
+/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/pydantic/_internal/_config.py:386: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [11277]
+INFO:     Waiting for application startup.
+2026-08-24 13:30:39,991 INFO [-] [- -] amazon_logic_transformer: Starting up Amazon Logic Transformer...
+2026-08-24 13:30:39,992 INFO [-] [- -] app.services.scheduler_service: Scheduler startup skipped because another process already owns the scheduler lock.
+INFO:     Application startup complete.
+ERROR:    [Errno 48] error while attempting to bind on address ('127.0.0.1', 8000): address already in use
+INFO:     Waiting for application shutdown.
+2026-08-24 13:30:39,993 INFO [-] [- -] amazon_logic_transformer: Shutting down Amazon Logic Transformer...
+ERROR:    Traceback (most recent call last):
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/starlette/routing.py", line 638, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/venv/lib/python3.14/site-packages/fastapi/routing.py", line 238, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "/Users/harshahlawat/Documents/transformation engine/backend/app/main.py", line 128, in lifespan
+    shutdown_scheduler()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/harshahlawat/Documents/transformation engine/backend/app/services/scheduler_service.py", line 250, in shutdown_scheduler
+    _release_scheduler_lock()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/harshahlawat/Documents/transformation engine/backend/app/services/scheduler_service.py", line 51, in _release_scheduler_lock
+    fcntl.flock(_scheduler_lock_handle.fileno(), fcntl.LOCK_UN)
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+ValueError: I/O operation on closed file
+
+ERROR:    Application shutdown failed. Exiting.
