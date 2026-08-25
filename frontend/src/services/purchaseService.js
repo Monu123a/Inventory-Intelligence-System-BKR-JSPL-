@@ -24,7 +24,7 @@ export const PurchaseService = {
     if (!navigator.onLine) {
       return PurchaseService.queueOfflineSubmit(data, data.idempotency_key);
     }
-    const response = await api.post('/api/purchases/', data);
+    const response = await api.post('/api/purchases', data);
     return response.data;
   },
 
