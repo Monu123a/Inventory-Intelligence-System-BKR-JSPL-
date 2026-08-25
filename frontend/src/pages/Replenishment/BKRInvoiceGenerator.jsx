@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes';
 import { useNotificationStore } from '../../stores/notificationStore';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
+import useCompanyStore from '../../stores/useCompanyStore';
 import styles from './BKRInvoiceGenerator.module.css';
 import api from '../../services/api';
 
@@ -10,6 +11,7 @@ const BKRInvoiceGenerator = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useNotificationStore(state => state.addNotification);
+  const { currentCompany } = useCompanyStore();
   
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -82,9 +84,12 @@ const BKRInvoiceGenerator = () => {
         gstin: '29ABCDE1234F2Z5'
       },
       company: {
-        name: 'BKR',
-        gstin: '29BKRDE1234F2Z5',
-        phone: '0000000000'
+        name: currentCompany?.legal_name || 'BKR Solutions Pvt Ltd',
+        gstin: currentCompany?.gstin || '04AABCU9603R1ZM',
+        address: currentCompany?.address || 'Chandigarh',
+        state: currentCompany?.state || 'Chandigarh',
+        state_code: currentCompany?.state_code || '04',
+        phone: currentCompany?.phone || '0000000000'
       },
       items: invoiceItems,
       totals: {

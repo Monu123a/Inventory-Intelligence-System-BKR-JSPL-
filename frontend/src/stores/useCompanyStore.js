@@ -14,11 +14,11 @@ const useCompanyStore = create(
       companyId: DEFAULT_COMPANY.id,
       companyCode: DEFAULT_COMPANY.code,
       currentCompany: DEFAULT_COMPANY,
-      setCompany: (id, code, name) =>
+      setCompany: (id, code, name, fullObj = null) =>
         set({
           companyId: id,
           companyCode: code,
-          currentCompany: {
+          currentCompany: fullObj || {
             id,
             code,
             name: name || code || `Company ${id}`,

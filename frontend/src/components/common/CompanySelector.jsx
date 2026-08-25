@@ -38,14 +38,14 @@ const CompanySelector = () => {
         currentCompany?.code !== selectedCompany.code ||
         currentCompany?.name !== selectedCompany.name)
     ) {
-      setCompany(selectedCompany.id, selectedCompany.code, selectedCompany.name);
+      setCompany(selectedCompany.id, selectedCompany.code, selectedCompany.name, selectedCompany);
     }
   }, [currentCompany?.code, currentCompany?.id, currentCompany?.name, selectedCompany, setCompany]);
 
   const handleChange = (e) => {
     const newId = parseInt(e.target.value, 10);
     const selected = availableCompanies.find((company) => company.id === newId);
-    setCompany(newId, selected?.code || '', selected?.name || selected?.code || '');
+    setCompany(newId, selected?.code || '', selected?.name || selected?.code || '', selected);
     queryClient.invalidateQueries();
   };
   
