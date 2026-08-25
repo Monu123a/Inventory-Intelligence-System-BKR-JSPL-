@@ -86,7 +86,10 @@ const BatchDispatchCreator = () => {
           // Determine correct source warehouse ID based on selection or fallback
           let resolvedSourceId = sourceWarehouseId;
           if (!resolvedSourceId) {
-             const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
+             const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id) 
+               || warehouses.find(w => w.warehouse_type === 'CENTRAL') 
+               || warehouses.find(w => w.company_id === currentCompany?.id)
+               || warehouses[0];
              resolvedSourceId = fallbackWh?.id;
           }
           if (!resolvedSourceId) return;
@@ -249,7 +252,10 @@ const BatchDispatchCreator = () => {
       // Resolve source warehouse
       let resolvedSourceId = sourceWarehouseId;
       if (!resolvedSourceId) {
-         const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL') || warehouses[0];
+         const fallbackWh = warehouses.find(w => w.warehouse_type === 'CENTRAL' && w.company_id === currentCompany?.id)
+           || warehouses.find(w => w.warehouse_type === 'CENTRAL')
+           || warehouses.find(w => w.company_id === currentCompany?.id)
+           || warehouses[0];
          resolvedSourceId = fallbackWh?.id;
       }
       
