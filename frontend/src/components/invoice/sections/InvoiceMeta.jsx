@@ -21,7 +21,7 @@ const InvoiceMeta = ({ invoice }) => {
         </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Invoice Date</span>
-          <span className={styles.metaValue}>{formatDate(invoice.sale_date)}</span>
+          <span className={styles.metaValue}>{formatDate(invoice.date || invoice.sale_date)}</span>
         </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Payment Terms</span>
