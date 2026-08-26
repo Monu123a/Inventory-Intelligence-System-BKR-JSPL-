@@ -57,7 +57,12 @@ export default function PurchasesList() {
         loadData();
       }
     } catch(e) {
-      alert(e.response?.data?.detail || e.message);
+      const detail = e.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        alert(detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join('\n'));
+      } else {
+        alert(detail || e.message || "An error occurred");
+      }
     }
   };
 
