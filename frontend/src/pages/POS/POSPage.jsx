@@ -459,6 +459,14 @@ const POSPage = () => {
       setError("Please confirm the 0% GST rate for highlighted items.");
       return;
     }
+    if (customerInfo.mobile && customerInfo.mobile.length !== 10) {
+      setError("Mobile number must be exactly 10 digits.");
+      return;
+    }
+    if (customerInfo.phone && customerInfo.phone.length !== 10) {
+      setError("Phone number must be exactly 10 digits.");
+      return;
+    }
 
     // B2B validation: GSTIN is required
     if (invoiceType === 'B2B') {
@@ -628,7 +636,16 @@ const POSPage = () => {
               </div>
               <div className={styles.inputGroup}>
                 <label>Mobile Number</label>
-                <input value={customerInfo.mobile} onChange={e => updateCustomer('mobile', e.target.value)} placeholder="Enter mobile" />
+                <input 
+                  value={customerInfo.mobile} 
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    updateCustomer('mobile', val);
+                  }} 
+                  placeholder="10 digit mobile" 
+                  pattern="\d{10}"
+                  maxLength={10}
+                />
               </div>
               <div className={styles.inputGroup}>
                 <label>GSTIN {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>
@@ -673,7 +690,16 @@ const POSPage = () => {
               </div>
               <div className={styles.inputGroup}>
                 <label>Phone</label>
-                <input value={customerInfo.phone} onChange={e => updateCustomer('phone', e.target.value)} placeholder="Phone number" />
+                <input 
+                  value={customerInfo.phone} 
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    updateCustomer('phone', val);
+                  }} 
+                  placeholder="10 digit phone" 
+                  pattern="\d{10}"
+                  maxLength={10}
+                />
               </div>
             </div>
           </div>

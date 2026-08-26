@@ -37,6 +37,12 @@ const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) =>
               <span>{receipt.customer?.name}</span>
             </div>
           )}
+          {(receipt.customer?.phone || receipt.customer?.mobile) && (
+            <div className={styles.row}>
+              <span>Phone:</span>
+              <span>{receipt.customer.phone || receipt.customer.mobile}</span>
+            </div>
+          )}
 
           <div className={styles.divider}></div>
 
