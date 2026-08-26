@@ -9,7 +9,8 @@ import {
   FiAlertCircle,
   FiFileText,
   FiCopy,
-  FiEye
+  FiEye,
+  FiXCircle
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
