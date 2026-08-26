@@ -135,10 +135,15 @@ const POSPage = () => {
   const getSavedState = () => {
     try {
       const saved = localStorage.getItem(POS_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : {};
+      if (!saved) return {};
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+      return {};
     } catch(e) { return {}; }
   };
-  const savedState = getSavedState();
+  const savedState = getSavedState() || {};
 
 
   // Load pending offline count on mount
