@@ -4,8 +4,8 @@ export const API_ROUTES = {
     ME: '/api/auth/me',
   },
   DASHBOARD: {
-    METRICS: '/api/dashboard/metrics',
-    ACTIVITY: '/api/dashboard/activity',
+    METRICS: '/api/dashboard/stats',
+    ACTIVITY: '/api/dashboard/feed',
     ALERTS: '/api/dashboard/alerts',
   },
   COMPANIES: '/api/companies',

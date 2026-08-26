@@ -22,7 +22,7 @@ def get_alert_severity(alert_type: str) -> str:
         return "WARNING"
     return "INFO"
 
-@router.get("/metrics")
+@router.get("/stats")
 def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     """
     Returns KPI metrics and System Health for the Overview Dashboard.
@@ -185,7 +185,7 @@ def get_dashboard_metrics(company_id: int = Depends(get_current_company_id), db:
         }
     }
 
-@router.get("/activity")
+@router.get("/feed")
 def get_recent_activity(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     """
     Returns latest activities for the dashboard activity feed across multiple operational tables.
