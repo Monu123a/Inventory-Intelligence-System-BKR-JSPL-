@@ -43,7 +43,7 @@ def create_purchase_draft(
 @router.post("/{purchase_id}/receive", summary="Receive Purchase Stock")
 def receive_purchase(
     purchase_id: int,
-    request: PurchaseReceiveRequest, PurchasePaymentRequest,
+    request: PurchaseReceiveRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin_or_manager) # ENFORCED
 ):
