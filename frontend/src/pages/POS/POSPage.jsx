@@ -114,7 +114,7 @@ const POSPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState(savedState.invoicePrefix || companyCode || 'GST');
   const [searchResults, setSearchResults] = useState([]);
-  const [cart, setCart] = useState(savedState.cart || []);
+  const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart : []);
   const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
   const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
   const [error, setError] = useState('');
@@ -151,14 +151,14 @@ const POSPage = () => {
   const [invoiceType, setInvoiceType] = useState(savedState.invoiceType || 'B2C');
 
   // New: Extended Customer Info
-  const [customerInfo, setCustomerInfo] = useState(savedState.customerInfo || {
+  const [customerInfo, setCustomerInfo] = useState((savedState.customerInfo && typeof savedState.customerInfo === 'object') ? savedState.customerInfo : {
     name: '', mobile: '', gstin: '', address: '',
     state: '', state_code: '', place_of_supply: '',
     email: '', phone: '',
   });
 
   // New: Invoice Info
-  const [invoiceInfo, setInvoiceInfo] = useState(savedState.invoiceInfo || {
+  const [invoiceInfo, setInvoiceInfo] = useState((savedState.invoiceInfo && typeof savedState.invoiceInfo === 'object') ? savedState.invoiceInfo : {
     payment_terms: '',
     delivery_note: '',
     delivery_note_date: '',
@@ -780,16 +780,16 @@ const POSPage = () => {
                         step="0.1"
                       />
                     </td>
-                    <td>₹{item.taxable_amount.toFixed(2)}</td>
+                    <td>₹{(item.taxable_amount || 0).toFixed(2)}</td>
                     {isInterState ? (
-                      <td>₹{item.igst.toFixed(2)}</td>
+                      <td>₹{(item.igst || 0).toFixed(2)}</td>
                     ) : (
                       <>
-                        <td>₹{item.cgst.toFixed(2)}</td>
-                        <td>₹{item.sgst.toFixed(2)}</td>
+                        <td>₹{(item.cgst || 0).toFixed(2)}</td>
+                        <td>₹{(item.sgst || 0).toFixed(2)}</td>
                       </>
                     )}
-                    <td className={styles.lineTotalCell}>₹{item.line_total.toFixed(2)}</td>
+                    <td className={styles.lineTotalCell}>₹{(item.line_total || 0).toFixed(2)}</td>
                     <td>
                       <button className={styles.removeBtn} onClick={() => removeFromCart(index)}>
                         <FiX />
