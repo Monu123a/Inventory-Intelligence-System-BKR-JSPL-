@@ -1248,6 +1248,11 @@ class Purchase(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     received_at = Column(DateTime, nullable=True)
     
+    # Financial tracking added for Vendor Ledgers
+    payment_status = Column(String(50), default='UNPAID')
+    amount_paid = Column(Numeric(15, 2), default=0.0)
+    payment_method = Column(String(50), nullable=True)
+    
     vendor = relationship("Vendor")
     company = relationship("Company")
     operator = relationship("User")
