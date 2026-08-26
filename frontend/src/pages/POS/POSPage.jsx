@@ -5,6 +5,7 @@ import { posService } from '../../services/pos';
 import { handleApiError } from '../../utils/errorHandler';
 import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
+import InvoicePreviewModal from './InvoicePreviewModal';
 import useCompanyStore from '../../stores/useCompanyStore';
 import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw } from 'react-icons/fi';
 
@@ -387,19 +388,41 @@ const POSPage = () => {
 
   
   const handlePreview = () => {
-    // Generate a mock receipt object
-    const mockReceipt = {
+    // Generate a mock invoice object matching InvoiceRenderer structure
+    const mockInvoice = {
       company: currentCompany || { name: 'BKR', gstin: 'TEST' },
-      bill_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
-      sale_date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
-      customer: customerInfo ? { name: customerInfo.name || customerInfo.phone || customerInfo.mobile } : null,
+      invoice_type: invoiceType || 'B2C',
+      invoice_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
+      date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
+      customer: customerInfo ? { 
+        name: customerInfo.name || customerInfo.phone || customerInfo.mobile || 'Cash Customer',
+        address: customerInfo.address,
+        gstin: customerInfo.gstin,
+        state: customerInfo.state,
+        state_code: customerInfo.state_code
+      } : null,
+      payment_terms: invoiceInfo.payment_terms,
+      delivery_note: invoiceInfo.delivery_note,
+      delivery_note_date: invoiceInfo.delivery_note_date,
+      dispatch_document_number: invoiceInfo.dispatch_document_number,
+      dispatch_through: invoiceInfo.dispatch_through,
+      destination: invoiceInfo.destination,
+      vehicle_number: invoiceInfo.vehicle_number,
+      lr_rr_number: invoiceInfo.lr_rr_number,
+      terms_of_delivery: invoiceInfo.terms_of_delivery,
       items: cart.map(i => ({
-        sku: i.product_sku || i.name,
+        sku: i.product_sku || i.sku || i.name,
+        product_name: i.product_name || i.name,
         hsn_sac: i.hsn_sac,
         quantity: i.quantity,
         rate: i.selling_price,
-        line_total: i.line_total,
-        gst_rate: i.gst_rate
+        discount: i.discount || 0,
+        taxable_value: i.taxable_amount,
+        gst_rate: i.gst_rate,
+        cgst: i.cgst,
+        sgst: i.sgst,
+        igst: i.igst,
+        unit: i.unit || 'PCS'
       })),
       totals: {
         taxable_amount: totals.taxable,
@@ -408,7 +431,7 @@ const POSPage = () => {
       },
       payment_method: paymentMethod
     };
-    setPreviewReceiptData(mockReceipt);
+    setPreviewReceiptData(mockInvoice);
   };
 
   const handleCheckout = () => {
@@ -955,10 +978,9 @@ const POSPage = () => {
         </div>
       </div>
       {previewReceiptData && (
-        <ReceiptModal 
-          receipt={previewReceiptData} 
+        <InvoicePreviewModal 
+          invoice={previewReceiptData} 
           onClose={() => setPreviewReceiptData(null)}
-          isPreview={true}
           isPending={checkoutMutation.isPending}
           onComplete={() => {
             handleCheckout();
