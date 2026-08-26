@@ -22,14 +22,28 @@ export const RecordPaymentModal = ({ isOpen, onClose, purchase, onSuccess }) => 
       });
       onSuccess();
     } catch (err) {
-      alert("Error recording payment");
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        alert(detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join('\n'));
+      } else {
+        alert(detail || err.message || "Error recording payment");
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const getRefLabel = () => {
+    if (method === 'UPI') return "UTR Number";
+    if (method === 'CHECK') return "Check Number";
+    if (method === 'BANK_TRANSFER') return "Transaction ID";
+    if (method === 'CREDIT') return "Credit Agreement Ref";
+    if (method === 'EMI') return "EMI Loan ID";
+    return "Reference Note";
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Record Payment">
+    <Modal isOpen={isOpen} onClose={onClose} title={`Record Payment for ${purchase.invoice_number || purchase.id}`}>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '15px' }}>
           <label>Payment Method</label>
@@ -50,15 +64,18 @@ export const RecordPaymentModal = ({ isOpen, onClose, purchase, onSuccess }) => 
           onChange={e => setAmount(e.target.value)} 
           required
         />
-        <Input 
-          label="Transaction Ref / Check No (Optional)" 
-          value={txnRef} 
-          onChange={e => setTxnRef(e.target.value)} 
-        />
+        
+        {method !== 'CASH' && (
+          <Input 
+            label={`${getRefLabel()} (Optional)`} 
+            value={txnRef} 
+            onChange={e => setTxnRef(e.target.value)} 
+          />
+        )}
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-          <button type="button" onClick={onClose} style={{ padding: '8px 16px' }}>Cancel</button>
-          <button type="submit" disabled={loading} style={{ padding: '8px 16px', background: 'blue', color: 'white' }}>
+          <button type="button" onClick={onClose} style={{ padding: '8px 16px', background: '#ccc', border: 'none', borderRadius: '4px' }}>Cancel</button>
+          <button type="submit" disabled={loading} style={{ padding: '8px 16px', background: 'blue', color: 'white', border: 'none', borderRadius: '4px' }}>
             {loading ? 'Saving...' : 'Record Payment'}
           </button>
         </div>
