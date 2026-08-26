@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './ReceiptModal.module.css';
 
-const ReceiptModal = ({ receipt, onClose }) => {
+const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) => {
   const handlePrint = () => {
     window.print();
   };
@@ -93,11 +93,23 @@ const ReceiptModal = ({ receipt, onClose }) => {
         
         <div className={styles.actions}>
           <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>
-            Close
+            {isPreview ? 'Back to Edit' : 'Close'}
           </button>
-          <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handlePrint}>
-            Print Receipt
-          </button>
+          {!isPreview && (
+            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handlePrint}>
+              Print Receipt
+            </button>
+          )}
+          {isPreview && (
+            <button 
+              className={`${styles.btn} ${styles.btnPrimary}`} 
+              onClick={onComplete}
+              disabled={isPending}
+              style={{ background: '#28a745' }}
+            >
+              {isPending ? 'Processing...' : 'Confirm & Complete Sale'}
+            </button>
+          )}
         </div>
       </div>
     </div>

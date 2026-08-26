@@ -119,6 +119,7 @@ const POSPage = () => {
   const [paymentReference, setPaymentReference] = useState('');
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
+  const [previewReceiptData, setPreviewReceiptData] = useState(null);
 
   // Offline queue state
   const [pendingCount, setPendingCount] = useState(0);
@@ -365,6 +366,31 @@ const POSPage = () => {
       handleApiError(err, "Checkout failed");
     }
   });
+
+  
+  const handlePreview = () => {
+    // Generate a mock receipt object
+    const mockReceipt = {
+      company: currentCompany || { name: 'BKR', gstin: 'TEST' },
+      bill_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
+      sale_date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
+      customer: customer ? { name: customer.name || customer.phone } : null,
+      items: cart.map(i => ({
+        sku: i.product_sku || i.name,
+        quantity: i.quantity,
+        rate: i.selling_price,
+        line_total: i.line_total,
+        gst_rate: i.gst_rate
+      })),
+      totals: {
+        taxable_amount: totals.taxable,
+        total_tax: isInterState ? totals.igst : (totals.cgst + totals.sgst),
+        grand_total: totals.grand
+      },
+      payment_method: paymentMethod
+    };
+    setPreviewReceiptData(mockReceipt);
+  };
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
@@ -852,15 +878,38 @@ const POSPage = () => {
             </div>
           )}
 
-          <button
-            className={styles.checkoutBtn}
-            disabled={cart.length === 0 || hasUnconfirmedGst || checkoutMutation.isPending}
-            onClick={handleCheckout}
-          >
-            {checkoutMutation.isPending ? 'Processing…' : hasUnconfirmedGst ? "Confirm GST Rates" : `Complete Sale — ₹${totals.grand.toFixed(2)}`}
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              className={styles.checkoutBtn}
+              style={{ flex: 1, background: '#17a2b8' }}
+              disabled={cart.length === 0 || hasUnconfirmedGst}
+              onClick={handlePreview}
+            >
+              Preview Bill
+            </button>
+            <button
+              className={styles.checkoutBtn}
+              style={{ flex: 1 }}
+              disabled={cart.length === 0 || hasUnconfirmedGst || checkoutMutation.isPending}
+              onClick={handleCheckout}
+            >
+              {checkoutMutation.isPending ? 'Processing…' : hasUnconfirmedGst ? "Confirm GST Rates" : `Complete Sale`}
+            </button>
+          </div>
         </div>
       </div>
+      {previewReceiptData && (
+        <ReceiptModal 
+          receipt={previewReceiptData} 
+          onClose={() => setPreviewReceiptData(null)}
+          isPreview={true}
+          isPending={checkoutMutation.isPending}
+          onComplete={() => {
+            handleCheckout();
+            setPreviewReceiptData(null);
+          }}
+        />
+      )}
       {completedReceipt && (
         <ReceiptModal 
           receipt={completedReceipt} 
