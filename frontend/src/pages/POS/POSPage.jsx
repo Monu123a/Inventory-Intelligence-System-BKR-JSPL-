@@ -67,6 +67,19 @@ const CollapsibleSection = ({ title, defaultOpen = false, children }) => {
 // POSPage Component
 // ---------------------------------------------------------------------------
 const POSPage = () => {
+  const POS_STORAGE_KEY = 'pos_draft_state_v1';
+  const getSavedState = () => {
+    try {
+      const saved = localStorage.getItem(POS_STORAGE_KEY);
+      if (!saved) return {};
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+      return {};
+    } catch(e) { return {}; }
+  };
+  const savedState = getSavedState() || {};
   const navigate = useNavigate();
 
   const location = useLocation();
@@ -131,19 +144,7 @@ const POSPage = () => {
 
   const queryClient = useQueryClient();
 
-  const POS_STORAGE_KEY = 'pos_draft_state_v1';
-  const getSavedState = () => {
-    try {
-      const saved = localStorage.getItem(POS_STORAGE_KEY);
-      if (!saved) return {};
-      const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed;
-      }
-      return {};
-    } catch(e) { return {}; }
-  };
-  const savedState = getSavedState() || {};
+
 
 
   // Load pending offline count on mount
