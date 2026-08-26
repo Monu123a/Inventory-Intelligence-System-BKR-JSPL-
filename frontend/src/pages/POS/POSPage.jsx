@@ -278,6 +278,7 @@ const POSPage = () => {
       item.gst_rate = parseFloat(value) || 0;
       item.gst_needs_confirmation = false;
     }
+    if (field === 'hsn_sac') item.hsn_sac = value;
 
     // Validate stock
     if (field === 'quantity' && item.quantity > item.available_stock) {
@@ -377,6 +378,7 @@ const POSPage = () => {
       customer: customer ? { name: customer.name || customer.phone } : null,
       items: cart.map(i => ({
         sku: i.product_sku || i.name,
+        hsn_sac: i.hsn_sac,
         quantity: i.quantity,
         rate: i.selling_price,
         line_total: i.line_total,
