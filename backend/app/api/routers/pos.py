@@ -282,6 +282,7 @@ def complete_sale(
             customer_state=payload.customer_state,
             customer_state_code=payload.customer_state_code,
             customer_phone=payload.customer_phone,
+            customer_mobile=payload.customer_mobile,
             created_at=payload.custom_invoice_date or datetime.utcnow(),
             sale_date=payload.custom_invoice_date or datetime.utcnow(),
             customer_email=payload.customer_email,
@@ -703,6 +704,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
             "place_of_supply": sale.place_of_supply,
             "email": sale.customer_email,
             "phone": sale.customer_phone,
+            "mobile": sale.customer_mobile,
         },
         "totals": {
             "taxable_amount": sale.total_taxable_amount,

@@ -25,7 +25,7 @@ const InvoiceMeta = ({ invoice }) => {
         </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Payment Terms</span>
-          <span className={styles.metaValue}>{invoice.payment_terms || '-'}</span>
+          <span className={styles.metaValue}>{invoice.payment_terms ? invoice.payment_terms : (invoice.payment_method ? `${invoice.payment_method}${invoice.payment_reference ? ` (${invoice.payment_reference})` : ''}` : '-')}</span>
         </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Delivery Note</span>
