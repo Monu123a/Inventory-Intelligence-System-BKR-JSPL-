@@ -913,7 +913,7 @@ def sync_offline_sales(
 def cancel_sale(
     sale_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == current_user.company_id).first()
     if not sale:
