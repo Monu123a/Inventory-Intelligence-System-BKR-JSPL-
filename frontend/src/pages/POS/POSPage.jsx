@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
 import { handleApiError } from '../../utils/errorHandler';
+import api from '../../services/api';
 import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
 import InvoicePreviewModal from './InvoicePreviewModal';
@@ -144,6 +145,14 @@ const POSPage = () => {
   const idempotencyKeyRef = useRef(window.crypto.randomUUID());
 
   const queryClient = useQueryClient();
+  const { data: companySettings } = useQuery({
+    queryKey: ['companySettings'],
+    queryFn: async () => {
+      const res = await api.get('/api/settings/');
+      return res.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
 
 
@@ -390,7 +399,17 @@ const POSPage = () => {
   const handlePreview = () => {
     // Generate a mock invoice object matching InvoiceRenderer structure
     const mockInvoice = {
-      company: currentCompany || { name: 'BKR', gstin: 'TEST' },
+      company: companySettings ? {
+        name: companySettings.legal_name || currentCompany?.name || 'BKR',
+        gstin: companySettings.gstin,
+        address: companySettings.address,
+        state: companySettings.state,
+        state_code: companySettings.state_code,
+        email: companySettings.email,
+        phone: companySettings.phone,
+        logo_url: companySettings.logo_url,
+        bank_details: companySettings.bank_details,
+      } : (currentCompany || { name: 'BKR', gstin: 'TEST' }),
       invoice_type: invoiceType || 'B2C',
       invoice_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
       date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
