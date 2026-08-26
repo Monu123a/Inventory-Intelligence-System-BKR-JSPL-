@@ -114,7 +114,7 @@ const POSPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState(savedState.invoicePrefix || companyCode || 'GST');
   const [searchResults, setSearchResults] = useState([]);
-  const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart : []);
+  const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart.filter(i => i && typeof i === 'object') : []);
   const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
   const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
   const [error, setError] = useState('');
