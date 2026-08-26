@@ -224,8 +224,8 @@ const POSPage = () => {
   }, [searchTerm]);
 
   const { data: searchData } = useQuery({
-    queryKey: ['posSearch', debouncedSearchTerm],
-    queryFn: () => posService.searchProducts(debouncedSearchTerm),
+    queryKey: ['posSearch', debouncedSearchTerm, selectedWarehouseId],
+    queryFn: () => posService.searchProducts(debouncedSearchTerm, selectedWarehouseId),
     enabled: debouncedSearchTerm.length >= 2,
   });
 
