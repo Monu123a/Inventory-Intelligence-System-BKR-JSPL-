@@ -19,7 +19,7 @@ const StateHubsPage = () => {
   const [editingHub, setEditingHub] = useState(null);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [hubFormData, setHubFormData] = useState({ hub_code: '', hub_name: '', state: '', gstin: '', address: '', city: '', state_code: '', contact_person: '', phone: '', email: '' });
-  const [warehouseFormData, setWarehouseFormData] = useState({ name: '', code: '', hub_id: '', warehouse_type: 'FC', status: 'Active', external_mappings: [] });
+  const [warehouseFormData, setWarehouseFormData] = useState({ name: '', code: '', hub_id: '', warehouse_type: 'FULFILLMENT_CENTER', status: 'ACTIVE', external_mappings: [] });
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedUnassignedWhId, setSelectedUnassignedWhId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -116,10 +116,10 @@ const StateHubsPage = () => {
     setSelectedUnassignedWhId('');
     if (wh) {
       setEditingWarehouse(wh);
-      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wh.warehouse_type || 'FC', status: wh.status || 'Active', external_mappings: wh.external_mappings || [] });
+      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wh.warehouse_type || 'FULFILLMENT_CENTER', status: wh.status || 'ACTIVE', external_mappings: wh.external_mappings || [] });
     } else {
       setEditingWarehouse(null);
-      setWarehouseFormData({ name: '', code: '', hub_id: hubId || '', warehouse_type: 'FC', status: 'Active', external_mappings: [] });
+      setWarehouseFormData({ name: '', code: '', hub_id: hubId || '', warehouse_type: 'FULFILLMENT_CENTER', status: 'ACTIVE', external_mappings: [] });
     }
     setIsWarehouseModalOpen(true);
   };
@@ -187,7 +187,9 @@ const StateHubsPage = () => {
       setPendingAction(null);
       setPendingActionType('');
     } catch (err) {
-      alert('Action failed: ' + (err.response?.data?.detail || err.message));
+      const detail = err.response?.data?.detail;
+      const msg = Array.isArray(detail) ? detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ') : (detail || err.message);
+      alert('Action failed: ' + msg);
     }
   };
 
