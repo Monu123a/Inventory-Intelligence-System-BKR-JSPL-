@@ -386,7 +386,7 @@ const POSPage = () => {
       company: currentCompany || { name: 'BKR', gstin: 'TEST' },
       bill_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
       sale_date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
-      customer: customer ? { name: customer.name || customer.phone } : null,
+      customer: customerInfo ? { name: customerInfo.name || customerInfo.phone || customerInfo.mobile } : null,
       items: cart.map(i => ({
         sku: i.product_sku || i.name,
         hsn_sac: i.hsn_sac,
