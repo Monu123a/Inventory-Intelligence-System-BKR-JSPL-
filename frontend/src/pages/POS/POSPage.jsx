@@ -159,14 +159,16 @@ const POSPage = () => {
 
   // Default warehouse selection logic
   useEffect(() => {
-    if (!selectedWarehouseId && activeWarehouses.length > 0) {
-      // Try to find a default
-      const defaultWh = activeWarehouses.find(w => 
-        (w.code || '').toUpperCase().includes('DEFAULT') || 
-        (w.code || '').toUpperCase().includes('MAIN') ||
-        (w.code || '').toUpperCase().includes('POS')
-      ) || activeWarehouses[0];
-      setSelectedWarehouseId(defaultWh.id);
+    if (activeWarehouses.length > 0) {
+      const isValid = activeWarehouses.find(w => String(w.id) === String(selectedWarehouseId));
+      if (!isValid) {
+        const defaultWh = activeWarehouses.find(w => 
+          (w.code || '').toUpperCase().includes('DEFAULT') || 
+          (w.code || '').toUpperCase().includes('MAIN') ||
+          (w.code || '').toUpperCase().includes('POS')
+        ) || activeWarehouses[0];
+        setSelectedWarehouseId(defaultWh.id);
+      }
     }
   }, [activeWarehouses, selectedWarehouseId]);
 
@@ -646,6 +648,21 @@ const POSPage = () => {
             </button>
           </div>
         </div>
+
+        {activeWarehouses.length > 0 && (
+          <div className={styles.invoiceTypeSelector} style={{ marginLeft: '1rem', flex: 1 }}>
+            <label>Billing Warehouse</label>
+            <select 
+              value={selectedWarehouseId} 
+              onChange={e => setSelectedWarehouseId(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', marginTop: '0.25rem' }}
+            >
+              {activeWarehouses.map(w => (
+                <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {error && <div className={styles.errorMsg}>{error}</div>}
