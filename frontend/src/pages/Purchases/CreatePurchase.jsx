@@ -20,6 +20,7 @@ export default function CreatePurchase() {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [txnRef, setTxnRef] = useState('');
 
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [draftIdempotency] = useState(crypto.randomUUID());
@@ -65,6 +66,15 @@ export default function CreatePurchase() {
     return items.reduce((sum, item) => sum + (parseFloat(item.qty || 0) * parseFloat(item.unit_cost || 0) * (1 + parseFloat(item.gst_pct || 0)/100)), 0);
   };
 
+  const handleError = (e) => {
+    const detail = e.response?.data?.detail;
+    if (Array.isArray(detail)) {
+      alert(detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join('\n'));
+    } else {
+      alert(detail || e.message || "An error occurred");
+    }
+  };
+
   const handleSaveDraft = async () => {
     try {
       setLoading(true);
@@ -90,7 +100,7 @@ export default function CreatePurchase() {
         alert(`Draft created successfully! Bill ID: ${res.id}`);
       }
     } catch (e) {
-      alert(e.response?.data?.detail || e.message || "An error occurred");
+      handleError(e);
     } finally {
       setLoading(false);
     }
@@ -113,22 +123,33 @@ export default function CreatePurchase() {
       let msg = `Stock received! Added ${recvRes.movements} inventory records.`;
       
       // Step 2: Pay if amount entered
-      if (parseFloat(amountPaid) > 0) {
+      const payAmount = parseFloat(amountPaid);
+      if (!isNaN(payAmount) && payAmount > 0) {
          await PurchaseService.recordPayment(draftId, {
-             amount: parseFloat(amountPaid),
+             amount: payAmount,
              method: paymentMethod,
+             txn_ref: txnRef,
              notes: paymentNotes
          });
-         msg += ` Payment of ₹${amountPaid} recorded.`;
+         msg += ` Payment of ₹${payAmount} recorded.`;
       }
 
       alert(msg);
-      window.location.href = '/purchases'; // Redirect to list instead of crashing component state!
+      window.location.href = '/purchases'; // Redirect to list safely
     } catch (e) {
-      alert(e.response?.data?.detail || e.message || "An error occurred during receive/pay.");
+      handleError(e);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getRefLabel = () => {
+    if (paymentMethod === 'UPI') return "UTR Number";
+    if (paymentMethod === 'Check') return "Check Number";
+    if (paymentMethod === 'Bank Transfer') return "Transaction ID";
+    if (paymentMethod === 'Credit') return "Credit Agreement Ref";
+    if (paymentMethod === 'EMI') return "EMI Loan ID";
+    return "Reference Note";
   };
 
   return (
@@ -171,21 +192,28 @@ export default function CreatePurchase() {
           
           <div style={{ background: '#f0f8ff', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
             <h4 style={{ marginTop: 0 }}>Payment Details (Optional)</h4>
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+              <div>
                 <label style={{ display: 'block', fontSize: '12px' }}>Amount to Pay Now</label>
                 <input type="number" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} placeholder={`e.g. ${calculateTotal().toFixed(2)}`} style={{ width: '100%', padding: '8px' }} />
               </div>
-              <div style={{ flex: 1 }}>
+              <div>
                 <label style={{ display: 'block', fontSize: '12px' }}>Payment Method</label>
                 <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} style={{ width: '100%', padding: '8px' }}>
                   <option value="Cash">Cash</option>
                   <option value="Credit">Credit</option>
+                  <option value="EMI">EMI</option>
                   <option value="Bank Transfer">Bank Transfer</option>
                   <option value="UPI">UPI</option>
                   <option value="Check">Check</option>
                 </select>
               </div>
+              {paymentMethod !== 'Cash' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#0056b3' }}>{getRefLabel()}</label>
+                  <input type="text" value={txnRef} onChange={e => setTxnRef(e.target.value)} placeholder={getRefLabel()} style={{ width: '100%', padding: '8px', border: '1px solid #0056b3' }} />
+                </div>
+              )}
             </div>
           </div>
 
