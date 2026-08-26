@@ -646,9 +646,6 @@ class AmazonReturn(Base):
     
     requested_at = Column(DateTime, nullable=True)
     received_at = Column(DateTime, nullable=True)
-    payment_status = Column(String(50), default="UNPAID")
-    amount_paid = Column(Numeric(15, 2), default=0.0)
-    payment_method = Column(String(50), nullable=True)
 
     last_synced_at = Column(DateTime, default=datetime.utcnow)
     
