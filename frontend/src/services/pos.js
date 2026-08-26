@@ -2,6 +2,11 @@ import api from './api';
 import { normalizeResponse } from '../utils/normalizeResponse';
 
 export const posService = {
+  cancelSale: async (saleId) => {
+    const response = await api.post(`/pos/sales/${saleId}/cancel`);
+    return response.data;
+  },
+
   searchProducts: async (query) => {
     if (!query || query.length < 2) return [];
     const res = await api.get(`/api/pos/products/search?q=${encodeURIComponent(query)}`);

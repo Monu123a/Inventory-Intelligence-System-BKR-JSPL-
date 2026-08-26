@@ -666,6 +666,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
 
     return {
         "id": sale.id,
+        "status": sale.status,
         "bill_number": sale.bill_number,
         "invoice_number": sale.invoice_number,
         "invoice_type": sale.invoice_type,
@@ -905,3 +906,66 @@ def sync_offline_sales(
 
     logger.info(f"Offline sync complete: company={company_id} synced={synced} failed={failed}")
     return {"synced": synced, "failed": failed, "details": details}
+
+@router.post("/sales/{sale_id}/cancel")
+def cancel_sale(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == current_user.company_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+        
+    if sale.status == 'Cancelled':
+        raise HTTPException(status_code=400, detail="Sale is already cancelled")
+        
+    if sale.return_status and sale.return_status != 'None':
+        raise HTTPException(status_code=400, detail="Cannot cancel a sale that has returns. Please process a full return instead.")
+
+    # Find associated inventory movements
+    movements = db.query(InventoryMovement).filter(
+        InventoryMovement.reference_id == sale.bill_number,
+        InventoryMovement.source == 'OFFLINE_POS'
+    ).all()
+    
+    for mov in movements:
+        # Revert inventory
+        inv = db.query(Inventory).filter_by(
+            product_id=mov.product_id,
+            warehouse_id=mov.warehouse_id
+        ).first()
+        
+        if inv:
+            inv._allow_mutation = True
+            inv.current_qty -= mov.qty_changed # Subtracting a negative deduction adds it back
+            inv.available_qty = inv.current_qty - (inv.reserved_qty or 0)
+            inv._allow_mutation = False
+            
+            # Log the cancellation movement
+            new_mov = InventoryMovement(
+                product_id=mov.product_id,
+                warehouse_id=mov.warehouse_id,
+                movement_type='IN',
+                qty_changed=-mov.qty_changed,
+                reference_id=sale.bill_number,
+                source='SALE_CANCELLED',
+                notes='Reverted due to sale cancellation'
+            )
+            db.add(new_mov)
+            
+    sale.status = 'Cancelled'
+    
+    # Add audit log
+    log = AuditLog(
+        user_id=current_user.id,
+        company_id=current_user.company_id,
+        action="CANCEL",
+        entity_type="Sale",
+        entity_id=sale.id,
+        details=f"Cancelled sale {sale.bill_number} and reverted inventory"
+    )
+    db.add(log)
+    
+    db.commit()
+    return {"message": "Sale cancelled successfully", "sale_id": sale.id, "status": "Cancelled"}

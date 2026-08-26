@@ -197,6 +197,26 @@ export default function InvoicePreviewPage() {
         </div>
 
         <div className={styles.toolbarRight}>
+          {invoice.status !== 'Cancelled' && (
+            <button 
+              className={styles.actionButton} 
+              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              onClick={() => {
+                if(window.confirm('Are you sure you want to cancel this bill? This will automatically revert the inventory.')) {
+                  posService.cancelSale(invoice.id).then(() => {
+                    queryClient.invalidateQueries(['sale', saleId]);
+                    queryClient.invalidateQueries(['sales']);
+                    queryClient.invalidateQueries(['inventory']);
+                    alert('Sale successfully cancelled and inventory reverted.');
+                  }).catch(err => {
+                    alert('Failed to cancel sale: ' + (err.response?.data?.detail || err.message));
+                  });
+                }
+              }}
+            >
+              <FiXCircle style={{ marginRight: '4px' }} /> Cancel Bill
+            </button>
+          )}
           <button className={styles.actionButton} onClick={handlePrint}>
             <FiPrinter /> Print
           </button>
