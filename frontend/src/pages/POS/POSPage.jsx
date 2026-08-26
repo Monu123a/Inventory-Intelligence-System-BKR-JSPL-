@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
 import { handleApiError } from '../../utils/errorHandler';
 import api from '../../services/api';
+import { warehouseService } from '../../services/warehouse';
 import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
 import InvoicePreviewModal from './InvoicePreviewModal';
@@ -145,6 +146,30 @@ const POSPage = () => {
   const idempotencyKeyRef = useRef(window.crypto.randomUUID());
 
   const queryClient = useQueryClient();
+    const { data: activeWarehouses = [] } = useQuery({
+    queryKey: ['activeWarehouses', companyCode],
+    queryFn: async () => {
+      const all = await warehouseService.getWarehouses();
+      return all.filter(w => w.status === 'ACTIVE' || w.status === 'Active');
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(savedState.selectedWarehouseId || '');
+
+  // Default warehouse selection logic
+  useEffect(() => {
+    if (!selectedWarehouseId && activeWarehouses.length > 0) {
+      // Try to find a default
+      const defaultWh = activeWarehouses.find(w => 
+        (w.code || '').toUpperCase().includes('DEFAULT') || 
+        (w.code || '').toUpperCase().includes('MAIN') ||
+        (w.code || '').toUpperCase().includes('POS')
+      ) || activeWarehouses[0];
+      setSelectedWarehouseId(defaultWh.id);
+    }
+  }, [activeWarehouses, selectedWarehouseId]);
+
   const { data: companySettings } = useQuery({
     queryKey: ['companySettings'],
     queryFn: async () => {
@@ -520,6 +545,7 @@ const POSPage = () => {
 
       payment_method: paymentMethod,
       payment_reference: paymentReference || null,
+      origin_warehouse_id: selectedWarehouseId || null,
       total_taxable_amount: totals.taxable,
       total_tax: totals.tax,
       grand_total: totals.grand,
@@ -548,10 +574,10 @@ const POSPage = () => {
   // Auto-save state to localStorage
   useEffect(() => {
     const stateToSave = {
-      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType
+      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId
     };
     localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(stateToSave));
-  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType]);
+  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId]);
 
   const handleClearCart = () => {
     if (window.confirm("Are you sure you want to clear the entire cart and customer details?")) {

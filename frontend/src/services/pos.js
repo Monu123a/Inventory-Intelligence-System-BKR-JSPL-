@@ -7,9 +7,11 @@ export const posService = {
     return response.data;
   },
 
-  searchProducts: async (query) => {
+  searchProducts: async (query, warehouseId) => {
     if (!query || query.length < 2) return [];
-    const res = await api.get(`/api/pos/products/search?q=${encodeURIComponent(query)}`);
+    let url = `/api/pos/products/search?q=${encodeURIComponent(query)}`;
+    if (warehouseId) url += `&warehouse_id=${warehouseId}`;
+    const res = await api.get(url);
     return normalizeResponse(res.data);
   },
 

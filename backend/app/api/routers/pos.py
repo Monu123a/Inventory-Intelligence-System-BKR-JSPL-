@@ -149,15 +149,18 @@ class PosCheckoutRequest(BaseModel):
 # --- Endpoints ---
 
 @router.get("/products/search")
-def search_products(q: str = "", company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db)):
+def search_products(q: str = "", warehouse_id: Optional[int] = None, company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db)):
     if not q or len(q) < 2:
         return []
 
     search_term = f"%{q}%"
     
-    # We need available stock from the default BKR warehouse
-    # Wait, requirement: "All offline POS sales should automatically deduct inventory from the default BKR warehouse."
-    default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
+    if warehouse_id:
+        default_warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
+        if not default_warehouse:
+            raise HTTPException(status_code=400, detail="Specified warehouse not found")
+    else:
+        default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
 
     results = db.query(
         Product.id,

@@ -116,7 +116,16 @@ const StateHubsPage = () => {
     setSelectedUnassignedWhId('');
     if (wh) {
       setEditingWarehouse(wh);
-      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wh.warehouse_type || 'FULFILLMENT_CENTER', status: wh.status || 'ACTIVE', external_mappings: wh.external_mappings || [] });
+      
+      let wType = wh.warehouse_type || 'FULFILLMENT_CENTER';
+      if (wType === 'FC') wType = 'FULFILLMENT_CENTER';
+      if (wType === 'DC') wType = 'REGIONAL';
+      if (wType === 'Store') wType = 'TRANSIT';
+      let wStatus = wh.status || 'ACTIVE';
+      if (wStatus === 'Active') wStatus = 'ACTIVE';
+      if (wStatus === 'Inactive') wStatus = 'INACTIVE';
+      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wType, status: wStatus, external_mappings: wh.external_mappings || [] });
+
     } else {
       setEditingWarehouse(null);
       setWarehouseFormData({ name: '', code: '', hub_id: hubId || '', warehouse_type: 'FULFILLMENT_CENTER', status: 'ACTIVE', external_mappings: [] });
@@ -343,9 +352,10 @@ const StateHubsPage = () => {
                   onChange={(e) => setWarehouseFormData({ ...warehouseFormData, warehouse_type: e.target.value })}
                   style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}
                 >
-                  <option value="FC">FC (Fulfillment Center)</option>
-                  <option value="DC">DC (Distribution Center)</option>
-                  <option value="Store">Store</option>
+                  <option value="FULFILLMENT_CENTER">Fulfillment Center</option>
+                  <option value="CENTRAL">Central Warehouse</option>
+                  <option value="REGIONAL">Regional Distribution Center</option>
+                  <option value="TRANSIT">Transit Node</option>
                 </select>
               </div>
               
@@ -356,8 +366,10 @@ const StateHubsPage = () => {
                   onChange={(e) => setWarehouseFormData({ ...warehouseFormData, status: e.target.value })}
                   style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}
                 >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="UNDER_MAINTENANCE">Under Maintenance</option>
+                  <option value="BLOCKED">Blocked</option>
                 </select>
               </div>
 
