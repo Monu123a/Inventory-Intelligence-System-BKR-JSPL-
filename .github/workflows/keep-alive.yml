@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Ping Backend API
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://halte-data-transformation.onrender.com/api/)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://inventory-intelligence-system-bkr-jspl.onrender.com/api/)
           if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then
             echo "Ping successful! Status: $STATUS"
           else
