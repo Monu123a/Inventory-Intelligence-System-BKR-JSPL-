@@ -112,11 +112,11 @@ const POSPage = () => {
 
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
-  const [invoicePrefix, setInvoicePrefix] = useState(companyCode || 'GST');
+  const [invoicePrefix, setInvoicePrefix] = useState(savedState.invoicePrefix || companyCode || 'GST');
   const [searchResults, setSearchResults] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [paymentMethod, setPaymentMethod] = useState('Cash');
-  const [paymentReference, setPaymentReference] = useState('');
+  const [cart, setCart] = useState(savedState.cart || []);
+  const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
+  const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
   const [previewReceiptData, setPreviewReceiptData] = useState(null);
@@ -131,6 +131,16 @@ const POSPage = () => {
 
   const queryClient = useQueryClient();
 
+  const POS_STORAGE_KEY = 'pos_draft_state_v1';
+  const getSavedState = () => {
+    try {
+      const saved = localStorage.getItem(POS_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch(e) { return {}; }
+  };
+  const savedState = getSavedState();
+
+
   // Load pending offline count on mount
   useEffect(() => {
     posService.getPending().then(items => {
@@ -138,17 +148,17 @@ const POSPage = () => {
     }).catch(() => {});
   }, []);
   // New: Invoice Type
-  const [invoiceType, setInvoiceType] = useState('B2C');
+  const [invoiceType, setInvoiceType] = useState(savedState.invoiceType || 'B2C');
 
   // New: Extended Customer Info
-  const [customerInfo, setCustomerInfo] = useState({
+  const [customerInfo, setCustomerInfo] = useState(savedState.customerInfo || {
     name: '', mobile: '', gstin: '', address: '',
     state: '', state_code: '', place_of_supply: '',
     email: '', phone: '',
   });
 
   // New: Invoice Info
-  const [invoiceInfo, setInvoiceInfo] = useState({
+  const [invoiceInfo, setInvoiceInfo] = useState(savedState.invoiceInfo || {
     payment_terms: '',
     delivery_note: '',
     delivery_note_date: '',
@@ -353,6 +363,7 @@ const POSPage = () => {
       setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', custom_invoice_number: '', custom_invoice_date: '' });
       setPaymentReference('');
       setSearchTerm('');
+      localStorage.removeItem(POS_STORAGE_KEY);
       
       // Regenerate idempotency key for the next operation
       idempotencyKeyRef.current = window.crypto.randomUUID();
@@ -477,6 +488,26 @@ const POSPage = () => {
     checkoutMutation.mutate(payload);
   };
 
+
+  // Auto-save state to localStorage
+  useEffect(() => {
+    const stateToSave = {
+      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType
+    };
+    localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(stateToSave));
+  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType]);
+
+  const handleClearCart = () => {
+    if (window.confirm("Are you sure you want to clear the entire cart and customer details?")) {
+      setCart([]);
+      setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
+      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', custom_invoice_number: '', custom_invoice_date: '' });
+      setPaymentMethod('Cash');
+      setPaymentReference('');
+      localStorage.removeItem(POS_STORAGE_KEY);
+    }
+  };
+
   // Helper to update nested state
   const updateCustomer = (field, value) => setCustomerInfo(prev => ({ ...prev, [field]: value }));
   const updateInvoice = (field, value) => setInvoiceInfo(prev => ({ ...prev, [field]: value }));
@@ -485,6 +516,9 @@ const POSPage = () => {
     <div className={styles.posContainer}>
       <div className={styles.header}>
         <h1>Offline POS ({companyName})</h1>
+        <button onClick={handleClearCart} style={{ background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px', marginLeft: '15px' }}>
+          Clear Cart / Start Fresh
+        </button>
         {pendingCount > 0 && (
           <button 
             onClick={async () => {
