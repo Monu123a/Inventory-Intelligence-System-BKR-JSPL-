@@ -37,7 +37,7 @@ export default function PurchasesList() {
       setSelectedBill(full);
       setBillModalOpen(true);
     } catch(e) {
-      alert("Failed to load bill");
+      alert("Failed to load bill details.");
     }
   };
 
@@ -46,24 +46,51 @@ export default function PurchasesList() {
     setPaymentModalOpen(true);
   };
 
+  const receiveDraft = async (purchase) => {
+    try {
+      if (confirm(`Receive stock for draft bill ${purchase.invoice_number || purchase.id}?`)) {
+        await PurchaseService.receivePurchase(purchase.id, {
+          idempotency_key: `recv-${crypto.randomUUID()}`,
+          warehouse_id: null // defaults to central
+        });
+        alert("Stock received successfully!");
+        loadData();
+      }
+    } catch(e) {
+      alert(e.response?.data?.detail || e.message);
+    }
+  };
+
   const vendorColumns = [
-    { name: 'ID', key: 'id' },
-    { name: 'Vendor Name', key: 'name' },
-    { name: 'Total Payable Balance (₹)', key: 'payable_balance', render: (_, row) => Number(row.payable_balance || 0).toFixed(2) },
+    { name: 'Vendor Name', key: 'name', render: (_, r) => <strong>{r.name}</strong> },
+    { name: 'Total Payable Balance', key: 'payable_balance', render: (_, r) => {
+        const bal = Number(r.payable_balance || 0);
+        return <span style={{ color: bal > 0 ? '#d9534f' : '#5cb85c', fontWeight: 'bold' }}>₹ {bal.toFixed(2)}</span>;
+    }}
   ];
 
   const billColumns = [
-    { name: 'Invoice #', key: 'invoice_number' },
+    { name: 'Bill ID', key: 'id', render: (_, r) => r.invoice_number || `PUR-${r.id}` },
     { name: 'Vendor', key: 'vendor_name' },
-    { name: 'Total Amount', key: 'total_amount', render: (_, r) => `₹ ${Number(r.total_amount||0).toFixed(2)}` },
-    { name: 'Paid', key: 'amount_paid', render: (_, r) => `₹ ${Number(r.amount_paid||0).toFixed(2)}` },
-    { name: 'Payment Status', key: 'payment_status' },
-    { name: 'Method', key: 'payment_method' },
-    { name: 'Actions', key: 'id', render: (_, r) => (
+    { name: 'Bill Amount', key: 'total_amount', render: (_, r) => `₹ ${Number(r.total_amount||0).toFixed(2)}` },
+    { name: 'Amount Paid', key: 'amount_paid', render: (_, r) => `₹ ${Number(r.amount_paid||0).toFixed(2)}` },
+    { name: 'Payment Status', key: 'payment_status', render: (_, r) => (
+      <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', background: r.payment_status === 'PAID' ? '#d4edda' : (r.payment_status === 'PARTIAL' ? '#fff3cd' : '#f8d7da') }}>
+        {r.payment_status}
+      </span>
+    )},
+    { name: 'Method', key: 'payment_method', render: (_, r) => r.payment_method || '-' },
+    { name: 'Stock Status', key: 'status', render: (_, r) => (
+      <span style={{ fontWeight: 'bold', color: r.status === 'RECEIVED' ? 'green' : 'orange' }}>{r.status}</span>
+    )},
+    { name: 'Actions', key: 'actions', render: (_, r) => (
       <div style={{ display: 'flex', gap: '8px' }}>
-        <button onClick={() => viewBill(r)} style={{ cursor: 'pointer' }}>View Bill</button>
+        <button onClick={() => viewBill(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '4px' }}>View Bill</button>
+        {r.status === 'DRAFT' && (
+          <button onClick={() => receiveDraft(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px' }}>Receive</button>
+        )}
         {r.payment_status !== 'PAID' && r.status === 'RECEIVED' && (
-          <button onClick={() => openPayment(r)} style={{ cursor: 'pointer', background: 'blue', color: 'white' }}>Pay</button>
+          <button onClick={() => openPayment(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>Pay</button>
         )}
       </div>
     ) }
@@ -71,17 +98,17 @@ export default function PurchasesList() {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h2>Vendor Payables & Purchases</h2>
+      <h2>Purchase Bills & Vendor Ledgers</h2>
       
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #ccc', paddingBottom: '10px' }}>
-        <button onClick={() => setActiveTab('bills')} style={{ fontWeight: activeTab === 'bills' ? 'bold' : 'normal' }}>Purchase Bills</button>
-        <button onClick={() => setActiveTab('vendors')} style={{ fontWeight: activeTab === 'vendors' ? 'bold' : 'normal' }}>Vendor Ledgers</button>
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
+        <button onClick={() => setActiveTab('bills')} style={{ padding: '10px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: activeTab === 'bills' ? 'bold' : 'normal', color: activeTab === 'bills' ? '#007bff' : '#333', borderBottom: activeTab === 'bills' ? '3px solid #007bff' : 'none' }}>Purchase Bills</button>
+        <button onClick={() => setActiveTab('vendors')} style={{ padding: '10px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: activeTab === 'vendors' ? 'bold' : 'normal', color: activeTab === 'vendors' ? '#007bff' : '#333', borderBottom: activeTab === 'vendors' ? '3px solid #007bff' : 'none' }}>Vendor Ledgers</button>
       </div>
       
       {activeTab === 'bills' ? (
-        <DataTable title="Purchase Bills" columns={billColumns} data={purchases} pagination />
+        <DataTable title="All Purchase Bills" columns={billColumns} data={purchases} pagination />
       ) : (
-        <DataTable title="Vendor Balances" columns={vendorColumns} data={payables} pagination />
+        <DataTable title="Outstanding Vendor Balances" columns={vendorColumns} data={payables} pagination />
       )}
       
       <PurchaseBillModal isOpen={billModalOpen} onClose={() => setBillModalOpen(false)} purchase={selectedBill} />
