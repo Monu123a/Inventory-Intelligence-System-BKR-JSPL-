@@ -127,7 +127,7 @@ export const UploadModal = ({ isOpen, onClose }) => {
                   <h5><FiAlertCircle /> Validation Errors</h5>
                   <ul>
                     {previewData.errors.map((err, i) => (
-                      <li key={i}>{err.row ? `Row ${err.row}: ` : ''}{err.error}</li>
+                      <li key={i}>{typeof err === 'string' ? err : `${err.row ? `Row ${err.row}: ` : ''}${err.error}`}</li>
                     ))}
                   </ul>
                 </div>

@@ -33,7 +33,7 @@ class InventoryAdapter:
                 raise ValueError(f"Could not find SKU or Quantity columns in the uploaded file. Columns found: {df.columns.tolist()}. Please ensure your file has columns like 'SKU' and 'Quantity'.")
 
             for _, row in df.iterrows():
-                sku_val = str(row[sku_col]).strip()[:6]
+                sku_val = str(row[sku_col]).strip()
                 qty_val = row[qty_col]
                     
                 if sku_val and isinstance(sku_val, str) and sku_val.lower() != "nan" and sku_val != "":
