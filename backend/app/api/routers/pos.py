@@ -337,6 +337,7 @@ def complete_sale(
         # 4. Create Sale Items and Deduct Inventory
         for item in payload.items:
             product = db.query(Product).filter(Product.id == item.product_id, Product.company_id == company_id).first()
+            final_hsn = item.hsn_sac or (product.hsn if product else None)
             sale_item = SaleItem(
                 sale_id=sale.id,
                 product_id=item.product_id,
@@ -351,10 +352,14 @@ def complete_sale(
                 line_total=item.line_total,
                 discount=item.discount,
                 product_name=item.product_name or (product.name if product else None),
-                hsn_sac=item.hsn_sac or (product.hsn if product else None),
+                hsn_sac=final_hsn,
                 unit=item.unit or (product.unit if product else None),
             )
             db.add(sale_item)
+
+            # Auto-update product HSN if it was missing in DB and provided in POS
+            if product and item.hsn_sac and (not product.hsn or product.hsn in ['0', 'N/A', '']):
+                product.hsn = item.hsn_sac
             
             # 5. Inventory Deduction via Event Engine
             # Use the verified DB product SKU, not the client-supplied SKU

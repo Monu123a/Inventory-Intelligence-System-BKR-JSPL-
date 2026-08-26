@@ -53,8 +53,9 @@ const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) =>
               {receipt.items.map((item, idx) => (
                 <tr key={idx}>
                   <td>
-                    {item.sku}
-                    <div style={{fontSize: '10px', color: '#666'}}>GST {item.gst_rate}%</div>
+                    <div style={{fontWeight: 'bold'}}>{item.sku}</div>
+                    {item.hsn_sac && <div style={{fontSize: '10px', color: '#555'}}>HSN: {item.hsn_sac}</div>}
+                    <div style={{fontSize: '10px', color: '#666'}}>GST: {item.gst_rate}%</div>
                   </td>
                   <td>{item.quantity}</td>
                   <td>{(item.rate || 0).toFixed(2)}</td>

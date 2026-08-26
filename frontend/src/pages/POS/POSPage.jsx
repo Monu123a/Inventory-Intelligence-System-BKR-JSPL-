@@ -691,7 +691,21 @@ const POSPage = () => {
                       <div className={styles.itemName}>{item.sku}</div>
                       <div className={styles.itemMeta}>{item.product_name || item.name}</div>
                     </td>
-                    <td className={styles.hsnCell}>{item.hsn_sac || '—'}</td>
+                    <td className={styles.hsnCell}>
+                      <input
+                        type="text"
+                        value={item.hsn_sac || ''}
+                        placeholder="Write HSN"
+                        onChange={(e) => updateCartItem(index, 'hsn_sac', e.target.value)}
+                        style={{
+                          width: '70px',
+                          padding: '4px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          fontSize: '0.85rem'
+                        }}
+                      />
+                    </td>
                     <td>
                       <input
                         type="number"
