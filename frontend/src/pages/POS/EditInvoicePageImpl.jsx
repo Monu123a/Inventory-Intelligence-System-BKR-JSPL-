@@ -377,7 +377,7 @@ const EditInvoicePage = () => {
   // ---------------------------------------------------------------------------
   // Totals (extended with IGST)
   // ---------------------------------------------------------------------------
-  const totals = cart.reduce((acc, item) => {
+  const totals = (cart || []).reduce((acc, item) => {
     acc.taxable += item.taxable_amount;
     acc.cgst += item.cgst;
     acc.sgst += item.sgst;
@@ -387,7 +387,7 @@ const EditInvoicePage = () => {
     return acc;
   }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, tax: 0, grand: 0 });
 
-  const hasUnconfirmedGst = cart.some(item => item.gst_needs_confirmation);
+  const hasUnconfirmedGst = (cart || []).some(item => item.gst_needs_confirmation);
 
   // ---------------------------------------------------------------------------
   // Checkout Mutation
@@ -719,7 +719,7 @@ const EditInvoicePage = () => {
               onChange={e => setSelectedWarehouseId(e.target.value)}
               style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', marginTop: '0.25rem' }}
             >
-              {activeWarehouses.map(w => (
+              {(activeWarehouses || []).map(w => (
                 <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
               ))}
             </select>
@@ -863,7 +863,7 @@ const EditInvoicePage = () => {
             />
             {searchResults.length > 0 && (
               <div className={styles.searchResults}>
-                {searchResults.map(result => (
+                {(searchResults || []).map(result => (
                   <div key={result.id} className={styles.searchItem} onClick={() => addToCart(result)}>
                     <div className={styles.searchItemMain}>
                       <span className={styles.itemName}>{result.sku} - {result.name}</span>
@@ -900,7 +900,7 @@ const EditInvoicePage = () => {
                 </tr>
               </thead>
               <tbody>
-                {cart.map((item, index) => (
+                {(cart || []).map((item, index) => (
                   <tr key={`${item.sku}-${index}`}>
                     <td>
                       <div className={styles.itemName}>{item.sku}</div>
