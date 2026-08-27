@@ -1074,7 +1074,7 @@ def update_sale(
         # Is it an existing item that came back from the UI? 
         # (Assuming the UI passes back the sale_item.id if it existed, we need a way to match them. 
         # If UI doesn't have sale_item.id, we map by SKU)
-        existing_item = next((oi for oi in old_items.values() if oi.sku == (req_item.product_sku or product.sku)), None)
+        existing_item = next((oi for oi in old_items.values() if oi.sku == (req_item.sku or product.sku)), None)
         
         delta_qty = req_item.quantity
         if existing_item:
