@@ -460,6 +460,13 @@ class Sale(Base):
     customer_state = Column(String, nullable=True)
     customer_state_code = Column(String, nullable=True)
     place_of_supply = Column(String, nullable=True)
+    
+    # Shipping snapshot (Ship To)
+    shipping_name = Column(String, nullable=True)
+    shipping_address = Column(Text, nullable=True)
+    shipping_state = Column(String, nullable=True)
+    shipping_state_code = Column(String, nullable=True)
+    shipping_gstin = Column(String, nullable=True)
     customer_email = Column(String, nullable=True)
     customer_phone = Column(String, nullable=True)
 

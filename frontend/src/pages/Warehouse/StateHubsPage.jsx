@@ -19,7 +19,7 @@ const StateHubsPage = () => {
   const [editingHub, setEditingHub] = useState(null);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [hubFormData, setHubFormData] = useState({ hub_code: '', hub_name: '', state: '', gstin: '', address: '', city: '', state_code: '', contact_person: '', phone: '', email: '' });
-  const [warehouseFormData, setWarehouseFormData] = useState({ name: '', code: '', hub_id: '', warehouse_type: 'FULFILLMENT_CENTER', status: 'ACTIVE', external_mappings: [] });
+  const [warehouseFormData, setWarehouseFormData] = useState({ name: '', code: '', hub_id: '', warehouse_type: 'FULFILLMENT_CENTER', status: 'ACTIVE', address: '', external_mappings: [] });
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedUnassignedWhId, setSelectedUnassignedWhId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -124,7 +124,7 @@ const StateHubsPage = () => {
       let wStatus = wh.status || 'ACTIVE';
       if (wStatus === 'Active') wStatus = 'ACTIVE';
       if (wStatus === 'Inactive') wStatus = 'INACTIVE';
-      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wType, status: wStatus, external_mappings: wh.external_mappings || [] });
+      setWarehouseFormData({ name: wh.name, code: wh.code, hub_id: wh.hub_id || '', warehouse_type: wType, status: wStatus, address: wh.address || '', external_mappings: wh.external_mappings || [] });
 
     } else {
       setEditingWarehouse(null);
@@ -344,6 +344,15 @@ const StateHubsPage = () => {
             <>
               <Input label="Warehouse Name" value={warehouseFormData.name} onChange={(e) => setWarehouseFormData({ ...warehouseFormData, name: e.target.value })} required />
               <Input label="Warehouse Code" value={warehouseFormData.code} onChange={(e) => setWarehouseFormData({ ...warehouseFormData, code: e.target.value })} required />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>FC / Delivery Address</label>
+                <textarea 
+                  value={warehouseFormData.address} 
+                  onChange={(e) => setWarehouseFormData({ ...warehouseFormData, address: e.target.value })}
+                  style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', minHeight: '60px', fontFamily: 'inherit' }}
+                  placeholder="Enter specific warehouse/FC address for shipping labels"
+                />
+              </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Warehouse Type</label>

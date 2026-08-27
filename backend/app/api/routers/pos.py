@@ -120,6 +120,12 @@ class PosCheckoutRequest(BaseModel):
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
 
+    shipping_name: Optional[str] = None
+    shipping_address: Optional[str] = None
+    shipping_state: Optional[str] = None
+    shipping_state_code: Optional[str] = None
+    shipping_gstin: Optional[str] = None
+
     invoice_type: str = "B2C"
     invoice_prefix: Optional[str] = None  # B2C | B2B
     custom_invoice_number: Optional[str] = None
@@ -290,6 +296,11 @@ def complete_sale(
             sale_date=payload.custom_invoice_date or datetime.utcnow(),
             customer_email=payload.customer_email,
             place_of_supply=payload.place_of_supply,
+            shipping_name=payload.shipping_name,
+            shipping_address=payload.shipping_address,
+            shipping_state=payload.shipping_state,
+            shipping_state_code=payload.shipping_state_code,
+            shipping_gstin=payload.shipping_gstin,
             idempotency_key=payload.idempotency_key,
             invoice_number=invoice_number,
             invoice_type=payload.invoice_type,
@@ -709,6 +720,13 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
             "phone": sale.customer_phone,
             "mobile": sale.customer_mobile,
         },
+        "shipping": {
+            "name": sale.shipping_name,
+            "gstin": sale.shipping_gstin,
+            "address": sale.shipping_address,
+            "state": sale.shipping_state,
+            "state_code": sale.shipping_state_code,
+        } if sale.shipping_name else None,
         "totals": {
             "taxable_amount": sale.total_taxable_amount,
             "total_tax": sale.total_tax,
