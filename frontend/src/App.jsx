@@ -21,6 +21,7 @@ const Settings = lazy(() => import('./pages/Settings/SettingsPage'));
 const POSPage = lazy(() => import('./pages/POS/POSPage'));
 const SalesHistoryPage = lazy(() => import('./pages/POS/SalesHistoryPage'));
 const InvoicePreviewPage = lazy(() => import('./pages/POS/InvoicePreviewPage'));
+const EditInvoicePage = lazy(() => import('./pages/POS/EditInvoicePage'));
 
 const JSPLReplenishmentView = lazy(() => import('./pages/Replenishment/JSPLReplenishmentView'));
 const BKRRequirementsView = lazy(() => import('./pages/Replenishment/BKRRequirementsView'));
@@ -103,6 +104,7 @@ const App = () => {
                 <Route path={ROUTES.POS} element={<POSPage />} />
                 <Route path={ROUTES.POS_HISTORY} element={<SalesHistoryPage />} />
                 <Route path={ROUTES.POS_INVOICE} element={<InvoicePreviewPage />} />
+                <Route path="/sales/:id/edit" element={<EditInvoicePage />} />
                 <Route path={ROUTES.REPLENISHMENT_JSPL} element={<JSPLReplenishmentView />} />
                 <Route path={ROUTES.REPLENISHMENT_BKR} element={<BKRRequirementsView />} />
                 <Route path={ROUTES.REPLENISHMENT_BKR_INVOICE} element={<BKRInvoiceGenerator />} />

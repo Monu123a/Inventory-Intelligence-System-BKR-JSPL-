@@ -10,7 +10,7 @@ import {
   FiFileText,
   FiCopy,
   FiEye,
-  FiXCircle
+  FiXCircle, FiEdit
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
@@ -216,6 +216,11 @@ export default function InvoicePreviewPage() {
               }}
             >
               <FiXCircle style={{ marginRight: '4px' }} /> Cancel Bill
+            </button>
+          )}
+          {invoice.status !== 'Cancelled' && (!invoice.related_returns || invoice.related_returns.length === 0) && (
+            <button className={styles.actionButton} onClick={() => navigate(`/sales/${invoice.id}/edit`)}>
+              <FiEdit style={{ marginRight: '4px' }} /> Edit Bill
             </button>
           )}
           <button className={styles.actionButton} onClick={handlePrint}>
