@@ -1061,6 +1061,20 @@ def update_sale(
     if not default_warehouse:
         raise HTTPException(status_code=400, detail="Warehouse not found for delta processing")
 
+    # 2.5 Resolve linked transfer (for inter-company edits)
+    from app.models.schema import StockTransfer
+    linked_transfer = db.query(StockTransfer).filter(StockTransfer.invoice_id == sale.id).first()
+    dest_warehouse_id = None
+    dest_company_id = None
+    if linked_transfer:
+        dest_company_id = linked_transfer.to_company_id
+        if linked_transfer.destination_warehouse_id:
+            dest_warehouse_id = linked_transfer.destination_warehouse_id
+        else:
+            dw = db.query(Warehouse).filter(Warehouse.company_id == linked_transfer.to_company_id).first()
+            if dw:
+                dest_warehouse_id = dw.id
+
     # 3. Item Delta Calculation
     old_items = {item.id: item for item in sale.items}
     new_items_payload = payload.items or []
@@ -1130,8 +1144,21 @@ def update_sale(
                 source=source,
                 reference_id=sale.bill_number,
                 metadata_payload={"sale_id": sale.id, "edit_delta": delta_qty},
-                
             )
+            
+            if linked_transfer and dest_warehouse_id:
+                dest_event_type = "TRANSFER_IN" if delta_qty > 0 else "TRANSFER_OUT"
+                InventoryEventEngine.process_event(
+                    db=db,
+                    company_id=dest_company_id,
+                    product_sku=product.sku,
+                    warehouse_id=dest_warehouse_id,
+                    quantity=abs(delta_qty),
+                    event_type=dest_event_type,
+                    source="INVOICE_EDIT",
+                    reference_id=sale.bill_number,
+                    metadata_payload={"sale_id": sale.id, "edit_delta": delta_qty, "linked_transfer": linked_transfer.id},
+                )
             
     # Process removals (anything left in old_items was deleted from the UI)
     for oi in old_items.values():
@@ -1146,8 +1173,20 @@ def update_sale(
                 source="INVOICE_EDIT",
                 reference_id=sale.bill_number,
                 metadata_payload={"sale_id": sale.id, "edit_delta": -oi.quantity},
-                
             )
+
+            if linked_transfer and dest_warehouse_id:
+                InventoryEventEngine.process_event(
+                    db=db,
+                    company_id=dest_company_id,
+                    product_sku=oi.sku,
+                    warehouse_id=dest_warehouse_id,
+                    quantity=oi.quantity,
+                    event_type="TRANSFER_OUT",
+                    source="INVOICE_EDIT",
+                    reference_id=sale.bill_number,
+                    metadata_payload={"sale_id": sale.id, "edit_delta": -oi.quantity, "linked_transfer": linked_transfer.id},
+                )
         db.delete(oi)
 
     db.commit()
