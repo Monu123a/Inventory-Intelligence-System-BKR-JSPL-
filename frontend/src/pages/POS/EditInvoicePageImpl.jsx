@@ -579,8 +579,8 @@ const EditInvoicePage = () => {
   // Load existing invoice data
   useEffect(() => {
     if (id && currentCompany && !isLoaded) {
-      api.get(`/api/sales/${id}/invoice`).then(res => {
-        const sale = res.data;
+      api.get(`/api/pos/sales/${id}`).then(res => {
+        const sale = res.data.receipt || res.data;
         if (sale.status === 'Cancelled') {
           setError('Cannot edit a cancelled invoice.');
         }
@@ -630,7 +630,7 @@ const EditInvoicePage = () => {
         setIsLoaded(true);
       }).catch(err => {
         console.error("Error loading sale:", err);
-        setError("Failed to load invoice for editing.");
+        setError("Error: " + (err.response?.data?.detail || err.message || String(err)));
       });
     }
   }, [id, currentCompany, isLoaded]);
