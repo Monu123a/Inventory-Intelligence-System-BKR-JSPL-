@@ -1016,6 +1016,16 @@ def update_sale(
         raise HTTPException(status_code=400, detail="Cannot edit a sale that has active sales returns. Please cancel the returns first.")
 
     # 1. Header Updates
+    if payload.custom_invoice_number and payload.custom_invoice_number.strip():
+        new_inv_no = payload.custom_invoice_number.strip()
+        if new_inv_no != sale.bill_number:
+            # Check for uniqueness
+            existing = db.query(Sale).filter(Sale.bill_number == new_inv_no, Sale.company_id == company_id).first()
+            if existing and existing.id != sale.id:
+                raise HTTPException(status_code=400, detail=f"Invoice number {new_inv_no} is already used.")
+            sale.bill_number = new_inv_no
+            sale.invoice_number = new_inv_no
+
     sale.customer_name = payload.customer_name
     sale.customer_gstin = payload.customer_gstin
     sale.customer_address = payload.customer_address
