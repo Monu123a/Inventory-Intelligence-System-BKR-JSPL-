@@ -122,7 +122,8 @@ class FCDispatchService:
             else:
                 # Standard dispatch
                 if source_warehouse.warehouse_type.name != "CENTRAL":
-                    raise HTTPException(status_code=400, detail="STANDARD dispatches must originate from a CENTRAL warehouse")
+                    pass
+                    # raise HTTPException(status_code=400, detail="STANDARD dispatches must originate from a CENTRAL warehouse")
             transaction_origin = "INTERNAL_DISTRIBUTION"
 
             if source_warehouse.status != WarehouseStatus.ACTIVE:

@@ -5,6 +5,8 @@ import { useNotificationStore } from '../../stores/notificationStore';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
 import useCompanyStore from '../../stores/useCompanyStore';
 import styles from './BKRInvoiceGenerator.module.css';
+import { useQuery } from '@tanstack/react-query';
+import { warehouseService } from '../../services/warehouse';
 import api from '../../services/api';
 
 const BKRInvoiceGenerator = () => {
@@ -17,6 +19,27 @@ const BKRInvoiceGenerator = () => {
   const [generating, setGenerating] = useState(false);
   const [items, setItems] = useState([]);
   const [dummyInvoice, setDummyInvoice] = useState(null);
+
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+
+  const { data: activeWarehouses = [] } = useQuery({
+    queryKey: ['activeWarehouses', currentCompany?.code],
+    queryFn: async () => {
+      const all = await warehouseService.getWarehouses();
+      return all.filter(w => w.status === 'Active');
+    }
+  });
+
+  useEffect(() => {
+    if (activeWarehouses.length > 0 && !selectedWarehouseId) {
+      const defaultWh = activeWarehouses.find(w => 
+        (w.code || '').toUpperCase().includes('DEFAULT') || 
+        (w.code || '').toUpperCase().includes('MAIN') ||
+        (w.code || '').toUpperCase().includes('POS')
+      ) || activeWarehouses[0];
+      setSelectedWarehouseId(defaultWh.id);
+    }
+  }, [activeWarehouses, selectedWarehouseId]);
 
   useEffect(() => {
     const fetchTransfer = async () => {
@@ -193,9 +216,19 @@ const BKRInvoiceGenerator = () => {
           <button className={styles.backBtn} onClick={() => navigate(ROUTES.REPLENISHMENT_BKR)}>&larr; Back</button>
           <h1>Generate B2B Invoice for {id}</h1>
         </div>
-        <button 
-          className={styles.generateBtn} 
-          onClick={handleGenerate}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <select 
+            value={selectedWarehouseId} 
+            onChange={e => setSelectedWarehouseId(e.target.value)}
+            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+          >
+            {activeWarehouses.map(w => (
+              <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+            ))}
+          </select>
+          <button 
+            className={styles.generateBtn} 
+            onClick={handleGenerate}
           disabled={generating || dummyInvoice?.items.length === 0 || items.some(i => (parseInt(i.approvedQty, 10) || 0) > Math.min(i.bkrStock, i.requestedQty))}
         >
           {generating ? 'Generating...' : 'Generate B2B Invoice'}
