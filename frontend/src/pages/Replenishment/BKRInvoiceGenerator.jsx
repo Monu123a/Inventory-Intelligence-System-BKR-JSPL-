@@ -229,10 +229,11 @@ const BKRInvoiceGenerator = () => {
           <button 
             className={styles.generateBtn} 
             onClick={handleGenerate}
-          disabled={generating || dummyInvoice?.items.length === 0 || items.some(i => (parseInt(i.approvedQty, 10) || 0) > Math.min(i.bkrStock, i.requestedQty))}
-        >
-          {generating ? 'Generating...' : 'Generate B2B Invoice'}
-        </button>
+            disabled={generating || dummyInvoice?.items.length === 0 || items.some(i => (parseInt(i.approvedQty, 10) || 0) > Math.min(i.bkrStock, i.requestedQty))}
+          >
+            {generating ? 'Generating...' : 'Generate B2B Invoice'}
+          </button>
+        </div>
       </div>
 
       <div className={styles.contentRow}>
