@@ -26,6 +26,7 @@ class FCDispatchRequestItem(BaseModel):
     edited_cost_price: Optional[float] = None
     edited_selling_price: Optional[float] = None
     edited_gst_percent: Optional[float] = None
+    edited_hsn: Optional[str] = None
     edited_notes: Optional[str] = None
 
 class FCDispatchBatchRequest(BaseModel):
@@ -257,7 +258,7 @@ class FCDispatchService:
                         product_id=product.id,
                         sku=product.sku,
                         product_name=product.name,
-                        hsn_sac=product.hsn,
+                        hsn_sac=req_item.edited_hsn if req_item.edited_hsn is not None else (product.hsn or ''),
                         unit=product.unit,
                         quantity=qty,
                         selling_price=unit_price,
@@ -317,11 +318,13 @@ class FCDispatchService:
                             "edited_cost_price": req.edited_cost_price,
                             "edited_selling_price": req.edited_selling_price,
                             "edited_gst_percent": req.edited_gst_percent,
+                            "edited_hsn": req.edited_hsn,
                             "edited_notes": req.edited_notes
                         } for req in request.items if (
                             req.edited_selling_price is not None or 
                             req.edited_gst_percent is not None or 
                             req.edited_cost_price is not None or
+                            req.edited_hsn is not None or
                             req.edited_notes is not None
                         )
                     ]

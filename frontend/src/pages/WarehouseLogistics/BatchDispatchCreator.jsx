@@ -175,11 +175,13 @@ const BatchDispatchCreator = () => {
       totalTaxable += taxable;
       totalTax += tax_amount;
 
+      const hsn_value = edited.edited_hsn !== undefined ? edited.edited_hsn : (p.hsn || '');
+
       return {
         // Fields for DeliveryChallanRenderer
         product_name_snapshot: p.name + (edited.edited_notes ? ` (${edited.edited_notes})` : ''),
         sku_snapshot: p.sku,
-        hsn_snapshot: p.hsn || '',
+        hsn_snapshot: hsn_value,
         unit_snapshot: 'PCS',
         quantity: p.transferQty,
         unit_price: unit_price,
@@ -190,7 +192,7 @@ const BatchDispatchCreator = () => {
         // Fields for InvoiceRenderer
         product_name: p.name + (edited.edited_notes ? ` (${edited.edited_notes})` : ''),
         sku: p.sku,
-        hsn_sac: p.hsn || '',
+        hsn_sac: hsn_value,
         unit: 'PCS',
         gst_rate: tax_rate,
         rate: unit_price,
@@ -629,6 +631,16 @@ const BatchDispatchCreator = () => {
                             className={styles.inputField}
                             value={edited.edited_gst_percent !== undefined ? edited.edited_gst_percent : (p.gst_rate || 18)}
                             onChange={e => setEditedFields(prev => ({...prev, [p.id]: {...prev[p.id], edited_gst_percent: parseFloat(e.target.value)}}))}
+                          />
+                        </div>
+                        <div style={{flex: '1 1 150px'}}>
+                          <label style={{display: 'block', fontSize: '12px', marginBottom: '4px'}}>HSN/SAC</label>
+                          <input 
+                            type="text" 
+                            className={styles.inputField}
+                            value={edited.edited_hsn !== undefined ? edited.edited_hsn : (p.hsn || '')}
+                            onChange={e => setEditedFields(prev => ({...prev, [p.id]: {...prev[p.id], edited_hsn: e.target.value}}))}
+                            placeholder={p.hsn || 'Enter HSN code'}
                           />
                         </div>
                         {isEdited && (
