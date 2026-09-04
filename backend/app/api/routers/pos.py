@@ -1078,12 +1078,9 @@ def update_sale(
     dest_company_id = None
     if linked_transfer:
         dest_company_id = linked_transfer.to_company_id
-        if linked_transfer.destination_warehouse_id:
-            dest_warehouse_id = linked_transfer.destination_warehouse_id
-        else:
-            dw = db.query(Warehouse).filter(Warehouse.company_id == linked_transfer.to_company_id).first()
-            if dw:
-                dest_warehouse_id = dw.id
+        dw = db.query(Warehouse).filter(Warehouse.company_id == linked_transfer.to_company_id).first()
+        if dw:
+            dest_warehouse_id = dw.id
 
     # 3. Item Delta Calculation
     old_items = {item.id: item for item in sale.items}
