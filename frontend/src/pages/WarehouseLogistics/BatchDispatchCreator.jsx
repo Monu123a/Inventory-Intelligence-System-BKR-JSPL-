@@ -24,12 +24,21 @@ const BatchDispatchCreator = () => {
 
   const idempotencyKeyRef = useRef(window.crypto.randomUUID());
 
-  const [step, setStep] = useState(1);
+  const loadDraft = () => {
+    try {
+      const draft = localStorage.getItem('jspl_wizard_draft');
+      if (draft) return JSON.parse(draft);
+    } catch(e) {}
+    return null;
+  };
+  const draft = loadDraft();
+
+  const [step, setStep] = useState(draft?.step || 1);
   const [submitting, setSubmitting] = useState(false);
-  const [sourceWarehouseId, setSourceWarehouseId] = useState('');
-  const [dispatchType, setDispatchType] = useState('STANDARD');
-  const [selectedHub, setSelectedHub] = useState('');
-  const [selectedFC, setSelectedFC] = useState('');
+  const [sourceWarehouseId, setSourceWarehouseId] = useState(draft?.sourceWarehouseId || '');
+  const [dispatchType, setDispatchType] = useState(draft?.dispatchType || 'STANDARD');
+  const [selectedHub, setSelectedHub] = useState(draft?.selectedHub || '');
+  const [selectedFC, setSelectedFC] = useState(draft?.selectedFC || '');
   
   const [hubs, setHubs] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -44,10 +53,17 @@ const BatchDispatchCreator = () => {
   // Products
   const [inventory, setInventory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [products, setProducts] = useState([]); // Will store items with transferQty > 0
+  const [products, setProducts] = useState(draft?.products || []); 
   const [loadingInventory, setLoadingInventory] = useState(false);
-  const [editedFields, setEditedFields] = useState({});
-  const [topLevelEdits, setTopLevelEdits] = useState({ invoice_number: '', invoice_date: '', notes: '' });
+  const [editedFields, setEditedFields] = useState(draft?.editedFields || {});
+  const [topLevelEdits, setTopLevelEdits] = useState(draft?.topLevelEdits || { invoice_number: '', invoice_date: '', notes: '' });
+
+  useEffect(() => {
+    const draftState = {
+      step, dispatchType, sourceWarehouseId, selectedHub, selectedFC, products, editedFields, topLevelEdits
+    };
+    localStorage.setItem('jspl_wizard_draft', JSON.stringify(draftState));
+  }, [step, dispatchType, sourceWarehouseId, selectedHub, selectedFC, products, editedFields, topLevelEdits]);
 
   useEffect(() => {
     const fetchData = async () => {
