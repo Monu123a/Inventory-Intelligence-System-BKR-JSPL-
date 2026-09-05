@@ -108,12 +108,18 @@ const BatchDispatchCreator = () => {
   const handleQtyChange = (id, val) => {
     let numVal = val === '' ? '' : parseInt(val, 10);
     if (numVal !== '') numVal = Math.max(0, numVal);
-    setInventory(prev => prev.map(item => {
-      if (item.id === id) {
-        return { ...item, transferQty: numVal > item.currentStock ? item.currentStock : numVal };
-      }
-      return item;
-    }));
+    setInventory(prev => {
+      const next = prev.map(item => {
+        if (item.id === id) {
+          return { ...item, transferQty: numVal > item.currentStock ? item.currentStock : numVal };
+        }
+        return item;
+      });
+      // Immediately update products state so draft auto-saves current selections on step 4
+      const selected = next.filter(p => p.transferQty > 0);
+      setProducts(selected);
+      return next;
+    });
   };
 
   const handleProceedToValidation = () => {
