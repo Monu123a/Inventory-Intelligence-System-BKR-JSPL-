@@ -59,10 +59,14 @@ const BatchDispatchCreator = () => {
   const [topLevelEdits, setTopLevelEdits] = useState(draft?.topLevelEdits || { invoice_number: '', invoice_date: '', notes: '' });
 
   useEffect(() => {
-    const draftState = {
-      step, dispatchType, sourceWarehouseId, selectedHub, selectedFC, products, editedFields, topLevelEdits
-    };
-    localStorage.setItem('jspl_wizard_draft', JSON.stringify(draftState));
+    try {
+      const draftState = {
+        step, dispatchType, sourceWarehouseId, selectedHub, selectedFC, products, editedFields, topLevelEdits
+      };
+      localStorage.setItem('jspl_wizard_draft', JSON.stringify(draftState));
+    } catch (e) {
+      console.warn('Failed to save draft to localStorage', e);
+    }
   }, [step, dispatchType, sourceWarehouseId, selectedHub, selectedFC, products, editedFields, topLevelEdits]);
 
   useEffect(() => {
@@ -277,14 +281,14 @@ const BatchDispatchCreator = () => {
         hub_id: selectedHub ? parseInt(selectedHub, 10) : null,
         dispatch_type: dispatchType,
         source_warehouse_id: resolvedSourceId,
-        items: products.map(p => ({ 
+        items: (products || []).map(p => ({ 
           product_id: p.id, 
           quantity: p.transferQty,
-          ...(editedFields[p.id] || {})
+          ...((editedFields && editedFields[p.id]) || {})
         })),
-        edited_invoice_number: topLevelEdits.invoice_number || null,
-        edited_invoice_date: topLevelEdits.invoice_date || null,
-        edited_notes: topLevelEdits.notes || null
+        edited_invoice_number: (topLevelEdits && topLevelEdits.invoice_number) || null,
+        edited_invoice_date: (topLevelEdits && topLevelEdits.invoice_date) || null,
+        edited_notes: (topLevelEdits && topLevelEdits.notes) || null
       }, { headers });
       
       // Reset idempotency key for the next operation
@@ -293,6 +297,9 @@ const BatchDispatchCreator = () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['dispatches'] });
       toast.success('Dispatch created successfully');
+      try {
+        localStorage.removeItem('jspl_wizard_draft');
+      } catch (e) {}
       setStep(1);
       setProducts([]);
       setInventory([]);
@@ -320,7 +327,24 @@ const BatchDispatchCreator = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>FC Dispatch Wizard</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '16px' }}>
+          <h1 className={styles.title} style={{ margin: 0 }}>FC Dispatch Wizard</h1>
+          {draft && (
+             <button 
+               onClick={() => {
+                 if(window.confirm('Are you sure you want to clear your current draft and start over?')) {
+                   try { localStorage.removeItem('jspl_wizard_draft'); } catch(e) {}
+                   window.location.reload();
+                 }
+               }}
+               style={{
+                 padding: '8px 16px', backgroundColor: '#ef4444', color: 'white', border: 'none', 
+                 borderRadius: '6px', fontSize: '14px', cursor: 'pointer', fontWeight: '500'
+               }}>
+               Clear Draft
+             </button>
+          )}
+        </div>
         
         {/* Progress Bar */}
         <div className={styles.progressContainer}>
