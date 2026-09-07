@@ -307,7 +307,19 @@ const BatchDispatchCreator = () => {
       setSelectedFC('');
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.detail || 'Error creating dispatch');
+      let errorMsg = 'Error creating dispatch';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMsg = err.response.data.detail;
+        } else if (err.response.data.detail.message) {
+          errorMsg = err.response.data.detail.message;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMsg = err.response.data.detail[0]?.msg || 'Validation error';
+        } else {
+          errorMsg = JSON.stringify(err.response.data.detail);
+        }
+      }
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }
