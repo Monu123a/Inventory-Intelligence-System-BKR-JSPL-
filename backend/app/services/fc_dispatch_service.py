@@ -165,7 +165,7 @@ class FCDispatchService:
                             if not dest_prod:
                                 missing_skus.append(src_prod.sku)
                     if missing_skus:
-                        raise HTTPException(status_code=400, detail={"message": "Products missing in destination company", "missing_skus": missing_skus})
+                        raise HTTPException(status_code=400, detail=f"Products missing in destination company: {\", \".join(missing_skus)}")
 
                             
                     # Audit log
