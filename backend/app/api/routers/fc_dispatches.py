@@ -19,7 +19,7 @@ def create_batch_dispatch(
     """Create single or batch dispatch to Fulfillment Centers"""
         
     try:
-        dispatches = FCDispatchService.create_batch_dispatch(db, company_id, request, current_user.id)
+        dispatches = FCDispatchService.create_batch_dispatch(db, company_id, request, 1)
         db.commit()
         return {"message": f"Successfully created {len(dispatches)} dispatches", "dispatches": [{"id": d.id, "dispatch_number": d.dispatch_number} for d in dispatches]}
     except HTTPException:
