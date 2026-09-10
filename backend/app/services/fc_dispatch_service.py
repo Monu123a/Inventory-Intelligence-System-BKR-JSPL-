@@ -157,16 +157,46 @@ class FCDispatchService:
                         
 
                     # Validate SKUs exist in destination company
-                    missing_skus = []
+                    # Automatically create missing products in destination company
                     for req_item in request.items:
                         src_prod = db.query(Product).filter(Product.id == req_item.product_id).first()
                         if src_prod:
                             dest_prod = db.query(Product).filter(Product.sku == src_prod.sku, Product.company_id == dest_warehouse.company_id).first()
                             if not dest_prod:
-                                missing_skus.append(src_prod.sku)
-                    if missing_skus:
-                        missing_str = ", ".join(missing_skus)
-                        raise HTTPException(status_code=400, detail=f"Products missing in destination company: {missing_str}")
+                                # Create product
+                                new_prod = Product(
+                                    company_id=dest_warehouse.company_id,
+                                    sku=src_prod.sku,
+                                    name=src_prod.name,
+                                    category=src_prod.category,
+                                    brand=src_prod.brand,
+                                    item_rate=src_prod.item_rate,
+                                    min_stock_level=src_prod.min_stock_level,
+                                    reorder_level=src_prod.reorder_level,
+                                    safety_stock=src_prod.safety_stock,
+                                    preferred_transfer_qty=src_prod.preferred_transfer_qty,
+                                    status=src_prod.status,
+                                    hsn=src_prod.hsn,
+                                    default_gst_rate=src_prod.default_gst_rate,
+                                    barcode=src_prod.barcode,
+                                    unit=src_prod.unit
+                                )
+                                db.add(new_prod)
+                                db.flush()
+                                
+                                # Initialize 0 inventory for all active warehouses in dest company
+                                dest_warehouses = db.query(Warehouse).filter_by(company_id=dest_warehouse.company_id, status="ACTIVE").all()
+                                for dw in dest_warehouses:
+                                    inv = Inventory(
+                                        company_id=dest_warehouse.company_id,
+                                        warehouse_id=dw.id,
+                                        product_id=new_prod.id,
+                                        current_qty=0,
+                                        available_qty=0,
+                                        reserved_qty=0
+                                    )
+                                    db.add(inv)
+                                db.flush()
 
                             
                     # Audit log
