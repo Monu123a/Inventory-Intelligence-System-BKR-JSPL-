@@ -182,7 +182,9 @@ class PurchaseService:
                         brand="N/A",
                         category="N/A",
                         hsn=item.hsn,
-                        status="DRAFT" # Needs review later
+                        item_rate=item.unit_cost,
+                        default_gst_rate=item.gst_pct,
+                        status="Active"
                     )
                     db.add(new_product)
                     db.flush()
