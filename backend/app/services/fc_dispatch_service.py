@@ -197,11 +197,12 @@ class FCDispatchService:
                                     inv = Inventory(
                                         company_id=dest_warehouse.company_id,
                                         warehouse_id=dw.id,
-                                        product_id=new_prod.id,
-                                        current_qty=0,
-                                        available_qty=0,
-                                        reserved_qty=0
+                                        product_id=new_prod.id
                                     )
+                                    inv._allow_mutation = True
+                                    inv.current_qty = 0
+                                    inv.available_qty = 0
+                                    inv.reserved_qty = 0
                                     db.add(inv)
                                 db.flush()
 
