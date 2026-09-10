@@ -32,7 +32,7 @@ class FCDispatchRequestItem(BaseModel):
 class FCDispatchBatchRequest(BaseModel):
     idempotency_key: Optional[str] = None
     dispatch_type: str = "STANDARD" # STANDARD or EMERGENCY
-    source_warehouse_id: int
+    source_warehouse_id: Optional[int] = None
     warehouse_ids: List[int] # Dest FCs
     hub_id: Optional[int] = None # Optional manual override from frontend
     items: List[FCDispatchRequestItem]
@@ -112,7 +112,14 @@ class FCDispatchService:
             company_code = company.code if company else "GST"
 
             # 1. Resolve Source Warehouse
-            source_warehouse = db.query(Warehouse).filter(Warehouse.id == request.source_warehouse_id).first()
+            if request.source_warehouse_id is None:
+                source_warehouse = db.query(Warehouse).filter(Warehouse.company_id == company_id, Warehouse.warehouse_type == 'CENTRAL').first()
+                if not source_warehouse:
+                    source_warehouse = db.query(Warehouse).filter(Warehouse.company_id == company_id).first()
+                if source_warehouse:
+                    request.source_warehouse_id = source_warehouse.id
+            else:
+                source_warehouse = db.query(Warehouse).filter(Warehouse.id == request.source_warehouse_id).first()
             if not source_warehouse:
                 raise HTTPException(status_code=404, detail="Source Warehouse not found")
 
