@@ -1,3 +1,6 @@
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
 from app.api.dependencies import get_current_user
 from fastapi import Depends, APIRouter
 
@@ -219,6 +222,20 @@ app.add_middleware(
 )
 
 # Register Inventory Management Routers
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    errors = exc.errors()
+    error_msgs = []
+    for error in errors:
+        loc = "->".join(str(l) for l in error.get("loc", []))
+        msg = error.get("msg", "")
+        error_msgs.append(f"{loc}: {msg}")
+    
+    error_str = "Validation Error: " + ", ".join(error_msgs)
+    # Return a STRING in detail so stuck React frontends don't crash when passing detail to toast.error
+    return JSONResponse(status_code=422, content={"detail": error_str})
+
 app.include_router(state_hubs_router, prefix="/api")
 app.include_router(warehouse_inventory_router, prefix="/api")
 app.include_router(companies_router, prefix="/api")
@@ -433,6 +450,8 @@ async def get_config():
         "rules": config_repo.load_rules(),
         "lookups": config_repo.load_lookups_config(),
     }
+
+
 
 
 @legacy_router.put("/config")
