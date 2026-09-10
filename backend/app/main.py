@@ -176,7 +176,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     log_metric("api_failure", 1, {"route": request.url.path, "method": request.method})
     return JSONResponse(
         status_code=500,
-        content={"detail": "An internal server error occurred."}
+        content={"detail": f"System Error: {str(exc)}", "traceback": __import__("traceback").format_exc()}
     )
 
 class LoggingContextMiddleware(BaseHTTPMiddleware):
