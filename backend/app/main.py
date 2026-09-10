@@ -244,7 +244,7 @@ def get_debug_logs():
         log_path = os.path.join(LOGS_DIR, "app.log")
         with open(log_path, "r") as f:
             lines = f.readlines()
-            return {"logs": lines[-100:]}
+            return {"logs": lines[-10000:]}
     except Exception as e:
         return {"error": str(e)}
 
