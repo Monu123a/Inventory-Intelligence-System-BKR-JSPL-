@@ -180,6 +180,7 @@ export default function CreatePurchase() {
           <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px', background: '#f9f9f9', padding: '10px', borderRadius: '4px', alignItems: 'center' }}>
             <input placeholder="SKU" list="sku-list" value={item.product_sku} onChange={e => updateItem(index, 'product_sku', e.target.value)} style={{ flex: 1, padding: '8px' }} />
             <input placeholder="Product Name" value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} style={{ flex: 2, padding: '8px' }} />
+            <input placeholder="HSN" value={item.hsn || ''} onChange={e => updateItem(index, 'hsn', e.target.value)} style={{ width: '80px', padding: '8px' }} />
             <input placeholder="Qty" type="number" value={item.qty} onChange={e => updateItem(index, 'qty', e.target.value)} style={{ width: '70px', padding: '8px' }} />
             <input placeholder="Unit Cost" type="number" value={item.unit_cost} onChange={e => updateItem(index, 'unit_cost', e.target.value)} style={{ width: '90px', padding: '8px' }} />
             <input placeholder="GST %" type="number" value={item.gst_pct} onChange={e => updateItem(index, 'gst_pct', e.target.value)} style={{ width: '70px', padding: '8px' }} />
