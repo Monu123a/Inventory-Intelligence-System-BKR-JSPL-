@@ -236,6 +236,18 @@ async def validation_exception_handler(request, exc):
     # Return a STRING in detail so stuck React frontends don't crash when passing detail to toast.error
     return JSONResponse(status_code=422, content={"detail": error_str})
 
+
+@app.get("/api/debug/logs")
+def get_debug_logs():
+    import os
+    try:
+        log_path = os.path.join(LOGS_DIR, "app.log")
+        with open(log_path, "r") as f:
+            lines = f.readlines()
+            return {"logs": lines[-100:]}
+    except Exception as e:
+        return {"error": str(e)}
+
 app.include_router(state_hubs_router, prefix="/api")
 app.include_router(warehouse_inventory_router, prefix="/api")
 app.include_router(companies_router, prefix="/api")
