@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.models.db import get_db
 from app.models.schema import Product
-from app.api.dependencies import get_current_company_id, require_admin
+from app.api.dependencies import get_current_company_id, require_admin, get_current_user
 from app.api.routers.auth import verify_admin_action_password
 from app.services.audit_log_service import AuditLogService
 from app.models.schema import Inventory, InventoryMovement, SaleItem, SalesReturnItem, DeliveryChallanItem, StockTransferItem, ServiceRecordItem, User, DamageClaim, DefectiveInventory, FCDispatchItem, FCReturnItem
@@ -46,9 +46,8 @@ def get_product_filters(company_id: int = Depends(get_current_company_id), db: S
 def get_products(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     return db.query(Product).filter(Product.company_id == company_id).all()
 
-@router.post("/", response_model=ProductResponse, dependencies=[Depends(require_admin)])
-def create_product(product: ProductCreate, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    verify_admin_action_password(product.admin_password, current_user)
+@router.post("/", response_model=ProductResponse)
+def create_product(product: ProductCreate, company_id: int = Depends(get_current_company_id), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     existing = db.query(Product).filter(Product.sku == product.sku, Product.company_id == company_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Product with this SKU already exists")
@@ -72,9 +71,8 @@ def get_product(sku: str, company_id: int = Depends(get_current_company_id), db:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
-@router.put("/{sku}", response_model=ProductResponse, dependencies=[Depends(require_admin)])
-def update_product(sku: str, product: ProductCreate, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    verify_admin_action_password(product.admin_password, current_user)
+@router.put("/{sku}", response_model=ProductResponse)
+def update_product(sku: str, product: ProductCreate, company_id: int = Depends(get_current_company_id), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     existing = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")

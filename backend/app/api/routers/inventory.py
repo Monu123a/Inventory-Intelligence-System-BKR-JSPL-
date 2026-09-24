@@ -11,7 +11,7 @@ from app.services.inventory_event_engine import InventoryEventEngine
 from app.services.inventory_validation import InventoryValidationService
 from app.services.inventory_adapter import InventoryAdapter
 from app.services.audit_log_service import AuditLogService
-from app.api.dependencies import get_current_company_id, require_admin
+from app.api.dependencies import get_current_company_id, require_admin, get_current_user
 from app.api.routers.auth import verify_admin_action_password
 import os
 import shutil
@@ -142,7 +142,7 @@ def get_inventory_history(sku: str, company_id: int = Depends(get_current_compan
         })
     return result
 
-@router.post("/upload", dependencies=[Depends(require_admin)])
+@router.post("/upload")
 async def upload_inventory(
     warehouse_code: str = Form(...),
     upload_type: str = Form(...), # "ADD" or "REPLACE"
@@ -150,12 +150,11 @@ async def upload_inventory(
     admin_password: str = Form(None),
     file: UploadFile = File(...),
     company_id: int = Depends(get_current_company_id),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     if not preview:
-        verify_admin_action_password(admin_password, current_user)
-        
+        pass
     if upload_type not in ["ADD", "REPLACE"]:
         raise HTTPException(status_code=400, detail="upload_type must be ADD or REPLACE")
     
@@ -242,9 +241,8 @@ class ManualAdjustment(BaseModel):
     reference_id: Optional[str] = None
     admin_password: Optional[str] = Field(default=None, exclude=True)
 
-@router.post("/adjust", dependencies=[Depends(require_admin)])
-def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get_current_company_id), current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    verify_admin_action_password(adjustment.admin_password, current_user)
+@router.post("/adjust")
+def adjust_inventory(adjustment: ManualAdjustment, company_id: int = Depends(get_current_company_id), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     
     if adjustment.adjustment_type not in ["INCREASE", "DECREASE"]:
         raise HTTPException(status_code=400, detail="adjustment_type must be INCREASE or DECREASE")

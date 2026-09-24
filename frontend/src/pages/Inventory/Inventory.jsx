@@ -37,9 +37,8 @@ const Inventory = () => {
 
   const handleSearch = useCallback((val) => { setSearch(val); setPage(1); }, []);
 
-  const handleAdjustmentSubmit = (formData) => {
-    const { admin_password, ...data } = formData;
-    adjustMutation.mutate({ data, adminPassword: admin_password }, {
+  const handleAdjustmentSubmit = (data) => {
+    adjustMutation.mutate({ data }, {
       onSuccess: () => setAdjustingItem(null)
     });
   };

@@ -27,8 +27,7 @@ export const AdjustmentModal = ({ isOpen, onClose, onSubmit, inventoryRow, isLoa
       quantity: parseInt(data.quantity, 10),
       adjustment_type: data.adjustment_type,
       reason: data.reason.trim(),
-      reference_id: data.reference_id.trim() || undefined,
-      admin_password: data.admin_password
+      reference_id: data.reference_id.trim() || undefined
     });
   };
 
@@ -72,13 +71,7 @@ export const AdjustmentModal = ({ isOpen, onClose, onSubmit, inventoryRow, isLoa
           {...register('reference_id')}
         />
 
-        <Input 
-          label="Admin Password *" 
-          type="password"
-          placeholder="Enter admin password"
-          {...register('admin_password', { required: 'Admin password is required' })}
-          error={errors.admin_password}
-        />
+
 
         <div className={styles.actions}>
           <Button variant="secondary" onClick={onClose} type="button" disabled={isLoading}>Cancel</Button>

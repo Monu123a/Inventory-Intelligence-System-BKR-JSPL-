@@ -50,6 +50,7 @@ const DeliveryChallanPreviewPage = lazy(() => import('./pages/DeliveryChallans/D
 
 // BKR Service Module
 const JobCardList = lazy(() => import('./pages/Service/JobCardList'));
+const JobCardPrintView = lazy(() => import('./pages/Service/JobCardPrintView'));
 const ServiceInvoicePreview = lazy(() => import('./pages/Service/ServiceInvoicePreview'));
 
 // Warehouse Phase 8 Routes
@@ -136,6 +137,7 @@ const App = () => {
                 <Route path={ROUTES.BKR_JOB_CARDS} element={<JobCardList />} />
                 <Route path={ROUTES.BKR_JOB_CARD_CREATE} element={<CreateServicePage />} />
                 <Route path={ROUTES.BKR_JOB_CARD_DETAIL} element={<ServiceInvoicePreview />} />
+                <Route path={ROUTES.BKR_JOB_CARD_PRINT} element={<JobCardPrintView />} />
                 <Route path={ROUTES.BKR_SERVICE_INVOICE} element={<ServiceInvoicePreview />} />
 
                 {/* Warehouse Phase 8 Routes */}

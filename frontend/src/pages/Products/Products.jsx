@@ -65,9 +65,12 @@ const Products = () => {
   };
 
   const handleFormSubmit = (data) => {
-    setPendingFormData(data);
+    if (editingProduct) {
+      updateMutation.mutate({ sku: editingProduct.sku, data });
+    } else {
+      createMutation.mutate({ data });
+    }
     setIsFormModalOpen(false);
-    setPasswordModalOpen(true);
   };
 
   const handlePasswordSubmit = (adminPassword) => {

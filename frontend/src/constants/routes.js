@@ -45,6 +45,7 @@ export const ROUTES = {
   BKR_JOB_CARDS: '/services/job-cards',
   BKR_JOB_CARD_CREATE: '/services/job-cards/new',
   BKR_JOB_CARD_DETAIL: '/services/job-cards/:id',
+  BKR_JOB_CARD_PRINT: '/services/job-cards/:id/print',
   BKR_SERVICE_INVOICE: '/services/invoices/:id',
   HELP: '/help',
   ADMIN_APPROVALS: '/admin/approvals',

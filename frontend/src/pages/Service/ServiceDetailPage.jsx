@@ -231,6 +231,15 @@ export default function ServiceDetailPage() {
 
                   <button 
                     onClick={() => {
+                      navigate(`/services/job-cards/${service.job_cards[0].id}/print`);
+                    }}
+                    className={styles.btnOutline}
+                    style={{width: '100%', justifyContent: 'center', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}
+                  >
+                    <FiPrinter /> Print Job Card
+                  </button>
+                  <button 
+                    onClick={() => {
                       const jc = service.job_cards[0];
                       if (jc.invoices && jc.invoices.length > 0) {
                         navigate(`/services/invoices/${jc.invoices[0].id}`);

@@ -5,7 +5,7 @@ import Button from '../../components/forms/Button';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader } from '../../components/DataTable';
-import { FiPlus, FiEye, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiEye, FiPrinter, FiFileText } from 'react-icons/fi';
 
 const JobCardList = () => {
   const navigate = useNavigate();
@@ -64,6 +64,9 @@ const JobCardList = () => {
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <button onClick={() => navigate(`/services/job-cards/${card.id}`)} style={{ color: 'var(--color-primary-600)' }} title="View Job Card">
                           <FiEye />
+                        </button>
+                        <button onClick={() => navigate(`/services/job-cards/${card.id}/print`)} style={{ color: '#4b5563' }} title="Print Job Card">
+                          <FiPrinter />
                         </button>
                         {card.status === 'COMPLETED' && (
                           <button onClick={() => navigate(`/services/invoices/${card.id}`)} style={{ color: 'var(--color-success-600)' }} title="Generate Invoice">

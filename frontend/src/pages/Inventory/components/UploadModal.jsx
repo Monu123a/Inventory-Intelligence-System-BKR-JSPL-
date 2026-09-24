@@ -47,7 +47,7 @@ export const UploadModal = ({ isOpen, onClose }) => {
     if (uploadType === 'REPLACE') {
       setConfirmReplace(true);
     } else {
-      setPasswordModalOpen(true);
+      executeCommit();
     }
   };
 
@@ -152,18 +152,13 @@ export const UploadModal = ({ isOpen, onClose }) => {
       <ConfirmationDialog 
         isOpen={confirmReplace}
         onClose={() => setConfirmReplace(false)}
-        onConfirm={() => setPasswordModalOpen(true)}
+        onConfirm={() => executeCommit()}
         title="Confirm REPLACE"
         message="WARNING: You are about to REPLACE all inventory at this warehouse. All existing items not in this file will be set to 0. Are you sure?"
         confirmText="Yes, Replace Inventory"
         isDanger={true}
       />
-      <AdminPasswordModal 
-        isOpen={passwordModalOpen}
-        onClose={() => setPasswordModalOpen(false)}
-        onSubmit={executeCommit}
-        actionName="upload inventory"
-      />
+      
     </>
   );
 };
