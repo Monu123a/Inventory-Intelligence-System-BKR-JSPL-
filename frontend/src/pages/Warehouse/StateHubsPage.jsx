@@ -22,8 +22,8 @@ const AmazonNetworkDropdown = ({ warehouse }) => {
     setNetwork(val);
     setSaving(true);
     try {
-      const { api } = await import('../../services/api');
-      await api.default.put(`/warehouses/${warehouse.id}/amazon-network`, { amazon_network: val || null });
+      const { default: api } = await import('../../services/api');
+      await api.put(`/warehouses/${warehouse.id}/amazon-network`, { amazon_network: val || null });
     } catch (err) {
       alert("Failed to update Amazon network mapping");
     } finally {
