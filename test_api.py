@@ -1,9 +1,7 @@
-import urllib.request
-import json
+import requests
 
-try:
-    req = urllib.request.Request("http://127.0.0.1:8000/api/companies/")
-    with urllib.request.urlopen(req) as response:
-        print(response.read().decode())
-except Exception as e:
-    print(f"Error: {e}")
+url = "http://localhost:8000/api/pos/sales/49"
+headers = {"X-Company-Id": "2"}
+res = requests.get(url, headers=headers)
+print("Status Code:", res.status_code)
+print("Response:", res.text)

@@ -98,6 +98,7 @@ const Sidebar = () => {
       icon: FaAmazon,
       items: [
         { path: ROUTES.AMAZON_RETURNS, label: 'Amazon Returns', icon: FiRefreshCw },
+        { path: '/amazon/live-inventory', label: 'Live Inventory (SP-API)', icon: FiLayers },
       ]
     }] : []),
     ...(isBkr ? [{

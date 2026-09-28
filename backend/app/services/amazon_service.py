@@ -1,116 +1,164 @@
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.services.amazon_client import get_amazon_client
-from app.services.inventory_event_engine import InventoryEventEngine
-from app.models.schema import AmazonSyncLog, Product
-from app.models.schema import WarehouseExternalMapping
+from app.models.schema import Product, WarehouseExternalMapping
+from app.models.schema import AmazonLiveAllocation, AmazonOrderEventLog, AmazonDLQ, AmazonNetworkType, AllocationStatus, DLQType
 
 logger = logging.getLogger(__name__)
 
 class AmazonService:
     @staticmethod
-    def poll_orders(db: Session, company_id: int, since: datetime = None) -> Tuple[int, int]:
+    def poll_orders(db: Session, company_id: int) -> Tuple[int, int]:
         """
-        Polls Amazon for orders, processes them idempotently, and logs the result.
+        Polls Amazon for orders, creates soft allocations (upsert), and handles the lifecycle.
         Returns a tuple of (processed_count, skipped_count).
         """
         client = get_amazon_client()
-        orders = client.fetch_orders(since=since)
         
+        # 15 min + 5 min buffer = 20 mins back
+        since = datetime.utcnow() - timedelta(minutes=20)
+        
+        try:
+            orders = client.fetch_orders(since=since)
+        except Exception as e:
+            logger.error(f"Failed to fetch from SP-API: {e}")
+            dlq = AmazonDLQ(
+                company_id=company_id,
+                dlq_type=DLQType.API_FAILURE,
+                error_message=str(e),
+                payload={"since": since.isoformat()}
+            )
+            db.add(dlq)
+            db.commit()
+            return 0, 0
+            
         processed_count = 0
         skipped_count = 0
         
-        # We no longer use a default warehouse. FC code must be mapped.
-            
         for order in orders:
             order_id = order.get("order_id")
+            amazon_status = order.get("status")
+            channel = order.get("fulfillment_channel", "MFN")
+            last_update_str = order.get("last_update_date")
+            last_update = datetime.fromisoformat(last_update_str.replace("Z", "+00:00")).replace(tzinfo=None) if last_update_str else datetime.utcnow()
             
-            # Duplicate check
-            existing_log = db.query(AmazonSyncLog).filter(AmazonSyncLog.order_id == order_id, AmazonSyncLog.company_id == company_id).first()
-            if existing_log:
-                skipped_count += 1
-                continue
+            # Map Amazon status to our AllocationStatus
+            status_map = {
+                "Pending": AllocationStatus.PENDING,
+                "Unshipped": AllocationStatus.UNSHIPPED,
+                "PartiallyShipped": AllocationStatus.UNSHIPPED, # Treat as unshipped until report
+                "Shipped": AllocationStatus.SHIPPED,
+                "Canceled": AllocationStatus.CANCELLED,
+            }
+            mapped_status = status_map.get(amazon_status, AllocationStatus.PENDING)
+            
+            # Identify target network
+            network = AmazonNetworkType.MFN if channel == "MFN" else AmazonNetworkType.AFN
+            
+            # Find a warehouse mapping to associate (optional for soft allocation, but good for UI)
+            mapping = db.query(WarehouseExternalMapping).filter(WarehouseExternalMapping.amazon_network == network).first()
+            warehouse_id = mapping.warehouse_id if mapping else None
+            
+            for item in order.get("items", []):
+                sku = str(item.get("sku", "")).strip().upper()
+                line_item_id = item.get("amazon_line_item_id", "default")
+                qty = int(item.get("quantity") or 0)
                 
-            # Use savepoint so we can rollback a single order without affecting others or caller
-            try:
-                with db.begin_nested():
-                    items = order.get("items", [])
-                    fc_code = order.get("fulfillment_center")
+                if not sku:
+                    continue
                     
-                    if not fc_code:
-                        raise ValueError("No fulfillment center in order")
+                # Verify SKU exists
+                prod_exists = db.query(Product).filter(Product.sku == sku, Product.company_id == company_id).first()
+                if not prod_exists:
+                    # Throw to DLQ
+                    dlq = AmazonDLQ(
+                        company_id=company_id,
+                        dlq_type=DLQType.DATA_MISMATCH,
+                        reference_id=order_id,
+                        error_message=f"Unknown SKU: {sku}",
+                        payload={"item": item}
+                    )
+                    db.add(dlq)
+                    skipped_count += 1
+                    continue
+                
+                try:
+                    with db.begin_nested():
+                        # UPSERT Logic (Optimistic Versioning)
+                        existing = db.query(AmazonLiveAllocation).filter(
+                            AmazonLiveAllocation.order_id == order_id,
+                            AmazonLiveAllocation.sku == sku,
+                            AmazonLiveAllocation.amazon_line_item_id == line_item_id
+                        ).with_for_update().first() # Row-level lock
                         
-                    # Lookup External Mapping
-                    mapping = db.query(WarehouseExternalMapping).filter(
-                        WarehouseExternalMapping.marketplace == "Amazon",
-                        WarehouseExternalMapping.external_code == fc_code
-                    ).first()
-                    
-                    if not mapping:
-                        # Log to quarantine
-                        sync_log = AmazonSyncLog(
-                            company_id=company_id, 
-                            order_id=order_id, 
-                            status="Quarantined", 
-                            errors="Needs Mapping",
-                            unknown_skus=f'["{fc_code}"]' # Hack to store FC code for UI for now
-                        )
-                        db.add(sync_log)
-                        skipped_count += 1
-                        continue
-                        
-                    warehouse_id = mapping.warehouse_id
-                    
-                    # Pre-flight check: verify all SKUs exist
-                    missing_skus = []
-                    for item in items:
-                        sku_val = str(item.get("sku", "")).strip().upper()[:6]
-                        if not sku_val:
-                            continue
-                        prod_exists = db.query(Product).filter(Product.sku == sku_val, Product.company_id == company_id).first()
-                        if not prod_exists:
-                            missing_skus.append(sku_val)
+                        if existing:
+                            # Version check
+                            if existing.updated_at >= last_update:
+                                skipped_count += 1
+                                continue
                             
-                    if missing_skus:
-                        sync_log = AmazonSyncLog(
-                            company_id=company_id, 
-                            order_id=order_id, 
-                            status="Quarantined", 
-                            errors="Unknown SKUs",
-                            unknown_skus=json.dumps(list(set(missing_skus)))
-                        )
-                        db.add(sync_log)
-                        skipped_count += 1
-                        continue
+                            # Status Guard: If it was cancelled/refunded, don't reopen it
+                            if existing.status in [AllocationStatus.CANCELLED, AllocationStatus.RETURNED, AllocationStatus.REFUNDED]:
+                                skipped_count += 1
+                                continue
+                                
+                            prev_status = existing.status
+                            existing.status = mapped_status
+                            existing.allocated_qty = qty
+                            existing.updated_at = last_update
+                            
+                            if mapped_status in [AllocationStatus.CANCELLED, AllocationStatus.RETURNED, AllocationStatus.REFUNDED]:
+                                existing.closed = True
+                                existing.allocated_qty = existing.reconciled_qty # Instantly restore soft allocation
+                                
+                            if prev_status != mapped_status:
+                                event = AmazonOrderEventLog(
+                                    allocation_id=existing.id,
+                                    previous_status=prev_status.value,
+                                    new_status=mapped_status.value,
+                                    timestamp=datetime.utcnow()
+                                )
+                                db.add(event)
+                                
+                        else:
+                            # Create new allocation
+                            closed = mapped_status in [AllocationStatus.CANCELLED, AllocationStatus.RETURNED, AllocationStatus.REFUNDED]
+                            final_qty = 0 if closed else qty
+                            
+                            allocation = AmazonLiveAllocation(
+                                company_id=company_id,
+                                order_id=order_id,
+                                sku=sku,
+                                amazon_line_item_id=line_item_id,
+                                warehouse_id=warehouse_id,
+                                amazon_network_at_allocation=network,
+                                allocated_qty=final_qty,
+                                status=mapped_status,
+                                closed=closed,
+                                updated_at=last_update
+                            )
+                            db.add(allocation)
+                            db.flush() # get ID
+                            
+                            event = AmazonOrderEventLog(
+                                allocation_id=allocation.id,
+                                previous_status=None,
+                                new_status=mapped_status.value,
+                                timestamp=datetime.utcnow()
+                            )
+                            db.add(event)
+                            
+                    processed_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to process item {sku} for order {order_id}: {e}")
+                    # Savepoint rolled back
+                    skipped_count += 1
                     
-                    # Process each item in the order
-                    for idx, item in enumerate(items):
-                        sku = str(item.get("sku", "")).strip()[:6]
-                        quantity = int(item.get("quantity") or 0)
-                        
-                        movement = InventoryEventEngine.process_event(
-                            db=db,
-                            company_id=company_id,
-                            product_sku=sku,
-                            warehouse_id=warehouse_id,
-                            quantity=quantity,
-                            event_type="DEDUCT",
-                            source="Amazon",
-                            reference_id=order_id,
-                            metadata_payload={"amazon_order": order, "line_id": str(idx)}
-                        )
-                        
-                    # Add AmazonSyncLog ONLY after successful processing
-                    sync_log = AmazonSyncLog(company_id=company_id, order_id=order_id, status="Processed")
-                    db.add(sync_log)
-                    
-                processed_count += 1
-            except Exception as e:
-                logger.error(f"Failed to process order {order_id}: {e}")
-                # Savepoint rolls back automatically
-                
+        db.commit()
         return processed_count, skipped_count
+

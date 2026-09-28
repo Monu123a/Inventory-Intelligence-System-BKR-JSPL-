@@ -121,13 +121,26 @@ api.interceptors.response.use(
         break;
       case 400:
       case 422:
-      case 409:
+      case 409: {
+        let msg = 'Please check your inputs and try again.';
+        if (data && data.detail) {
+          if (typeof data.detail === 'string') {
+            msg = data.detail;
+          } else if (data.detail.message) {
+            msg = data.detail.message;
+          } else if (Array.isArray(data.detail)) {
+            msg = data.detail[0]?.msg || 'Validation error';
+          } else {
+            msg = JSON.stringify(data.detail);
+          }
+        }
         useNotificationStore.getState().addNotification({
           type: 'warning',
           title: 'Validation Error',
-          message: data.detail || 'Please check your inputs and try again.'
+          message: msg
         });
         break;
+      }
       case 500:
         console.error('System Error:', error);
         useNotificationStore.getState().addNotification({

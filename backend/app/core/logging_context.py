@@ -15,3 +15,4 @@ class ContextFilter(logging.Filter):
         record.route = route_var.get()
         record.method = method_var.get()
         return True
+

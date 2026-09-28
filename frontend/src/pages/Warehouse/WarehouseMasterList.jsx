@@ -5,7 +5,42 @@ import { DataTable, TableHeader, TableRow } from '../../components/DataTable';
 import { SearchBar } from '../../components/forms/SearchBar';
 import { stateHubService } from '../../services/stateHubService';
 import { warehouseService } from '../../services/warehouse';
+import api from '../../services/api';
 import styles from './Warehouse.module.css';
+
+
+const AmazonNetworkDropdown = ({ warehouse }) => {
+  const [network, setNetwork] = useState(
+    warehouse.external_mappings?.find(m => m.marketplace === "Amazon")?.amazon_network || ""
+  );
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = async (e) => {
+    const val = e.target.value;
+    setNetwork(val);
+    setSaving(true);
+    try {
+      await api.put(`/warehouses/${warehouse.id}/amazon-network`, { amazon_network: val || null });
+    } catch (err) {
+      alert("Failed to update Amazon network mapping");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <select 
+      value={network} 
+      onChange={handleChange}
+      disabled={saving}
+      style={{ padding: '0.25rem', borderRadius: '0.25rem', border: '1px solid #ccc' }}
+    >
+      <option value="">-- None --</option>
+      <option value="MFN">MFN</option>
+      <option value="AFN">AFN</option>
+    </select>
+  );
+};
 
 const WarehouseMasterList = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -48,6 +83,7 @@ const WarehouseMasterList = () => {
     { key: 'status', label: 'Status' },
     { key: 'hub_name', label: 'State Hub' },
     { key: 'state', label: 'State' },
+    { key: 'amazon_network', label: 'Amazon Network' },
   ];
 
   const filteredWarehouses = warehouses.filter(wh => {
@@ -71,7 +107,8 @@ const WarehouseMasterList = () => {
       ),
       state: hub.state || '-',
       warehouse_type: wh.warehouse_type || '-',
-      status: wh.status || 'Active'
+      status: wh.status || 'Active',
+      amazon_network: <AmazonNetworkDropdown warehouse={wh} />
     };
   });
 

@@ -1,0 +1,1 @@
+{"logs":["2026-09-10 08:11:24,024 INFO [-] [- -] amazon_logic_transformer: Starting up Amazon Logic Transformer...\n","2026-09-10 08:11:24,025 INFO [-] [- -] app.services.scheduler_service: Scheduler startup skipped because another process already owns the scheduler lock.\n"]}
