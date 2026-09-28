@@ -10,6 +10,41 @@ import { warehouseService } from '../../services/warehouse';
 import AdminPasswordModal from '../../components/common/AdminPasswordModal';
 import styles from './Warehouse.module.css';
 
+
+const AmazonNetworkDropdown = ({ warehouse }) => {
+  const [network, setNetwork] = React.useState(
+    warehouse.external_mappings?.find(m => m.marketplace === "Amazon")?.amazon_network || ""
+  );
+  const [saving, setSaving] = React.useState(false);
+
+  const handleChange = async (e) => {
+    const val = e.target.value;
+    setNetwork(val);
+    setSaving(true);
+    try {
+      const { api } = await import('../../services/api');
+      await api.default.put(`/warehouses/${warehouse.id}/amazon-network`, { amazon_network: val || null });
+    } catch (err) {
+      alert("Failed to update Amazon network mapping");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <select 
+      value={network} 
+      onChange={handleChange}
+      disabled={saving}
+      style={{ padding: '0.25rem', borderRadius: '0.25rem', border: '1px solid #ccc', marginLeft: '1rem', fontSize: '0.75rem' }}
+    >
+      <option value="">Amazon: None</option>
+      <option value="MFN">Amazon: MFN</option>
+      <option value="AFN">Amazon: AFN</option>
+    </select>
+  );
+};
+
 const StateHubsPage = () => {
   const [hubs, setHubs] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -257,6 +292,7 @@ const StateHubsPage = () => {
                                 <span className={styles.warehouseCode}>{wh.code}</span>
                                 <span style={{ marginLeft: '1rem', fontSize: '0.75rem', backgroundColor: '#e5e7eb', padding: '0.125rem 0.5rem', borderRadius: '1rem' }}>{wh.warehouse_type || 'Unknown'}</span>
                                 <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: wh.status === 'Active' ? 'green' : 'gray' }}>{wh.status || 'Active'}</span>
+                                <AmazonNetworkDropdown warehouse={wh} />
                               </div>
                               <div className={styles.warehouseActions}>
                                 <Button variant="secondary" size="small" onClick={() => handleOpenWarehouseModal(hub.id, wh)}>Edit</Button>

@@ -57,6 +57,7 @@ const ServiceInvoicePreview = lazy(() => import('./pages/Service/ServiceInvoiceP
 const ApprovalDashboard = lazy(() => import("./pages/Admin/ApprovalDashboard"));
 const WarehouseDashboard = lazy(() => import('./pages/Warehouse/WarehouseDashboard'));
 const StateHubsPage = lazy(() => import('./pages/Warehouse/StateHubsPage'));
+const AmazonLiveInventory = lazy(() => import('./pages/Amazon/AmazonLiveInventory'));
 const WarehouseMasterList = lazy(() => import('./pages/Warehouse/WarehouseMasterList'));
 const WarehouseDetailPage = lazy(() => import('./pages/Warehouse/WarehouseDetailPage'));
 const WarehouseInventoryPage = lazy(() => import('./pages/Warehouse/WarehouseInventoryPage'));
@@ -143,6 +144,7 @@ const App = () => {
                 {/* Warehouse Phase 8 Routes */}
                 <Route path={ROUTES.WAREHOUSE_DASHBOARD} element={<WarehouseDashboard />} />
                 <Route path={ROUTES.WAREHOUSE_STATE_HUBS} element={<StateHubsPage />} />
+                <Route path="/amazon/live-inventory" element={<AmazonLiveInventory />} />
                 <Route path={ROUTES.WAREHOUSE_MASTER_LIST} element={<WarehouseMasterList />} />
                 <Route path={ROUTES.WAREHOUSE_INVENTORY} element={<WarehouseInventoryPage />} />
                 <Route path={ROUTES.WAREHOUSE_USERS} element={<WarehouseUsers />} />
