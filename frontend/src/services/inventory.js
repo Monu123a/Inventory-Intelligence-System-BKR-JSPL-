@@ -27,10 +27,9 @@ export const inventoryService = {
     formData.append('file', file);
     
     const response = await api.post(API_ROUTES.INVENTORY.UPLOAD, formData, {
-      transformRequest: [(data, headers) => {
-        delete headers['Content-Type'];
-        return data;
-      }]
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
     });
     return normalizeResponse(response.data);
   },
