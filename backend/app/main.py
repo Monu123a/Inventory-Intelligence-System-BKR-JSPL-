@@ -30,8 +30,8 @@ from app.plugins.plugin_registry import PluginRegistry
 
 # New routers
 from app.api.routers.products import router as products_router
-from app.api.routers import purchases
-from app.api.routers import reports, replenishment, transfers, accounting, amazon_returns, defective_inventory, returns_reports
+from app.api.routers import fix_sku, purchases
+from app.api.routers import fix_sku, reports, replenishment, transfers, accounting, amazon_returns, defective_inventory, returns_reports
 from app.api.routers.sales_returns import router as sales_returns_router
 from app.api.routers.delivery_challans import router as delivery_challans_router
 from app.api.routers.fc_returns import router as fc_returns_router
@@ -42,7 +42,7 @@ from app.api.routers.state_hubs import router as state_hubs_router
 from app.api.routers.warehouse_inventory import router as warehouse_inventory_router
 from app.api.routers.dashboard import router as dashboard_router
 from app.api.routers.companies import router as companies_router
-from app.api.routers import amazon
+from app.api.routers import fix_sku, amazon
 from app.api.routers.auth import router as auth_router
 from app.api.routers.users import router as users_router
 from app.api.routers.pos import router as pos_router
