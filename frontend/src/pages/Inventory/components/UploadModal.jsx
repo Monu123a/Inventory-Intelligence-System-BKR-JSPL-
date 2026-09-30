@@ -56,7 +56,11 @@ export const UploadModal = ({ isOpen, onClose }) => {
     uploadMutation.mutate(
       { warehouseCode, uploadType, file, preview: false, adminPassword },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          if (data && data.status === "error") {
+            alert("Upload Failed: " + (data.errors ? data.errors.join(", ") : data.message));
+            return;
+          }
           setPasswordModalOpen(false);
           handleClose();
         },
