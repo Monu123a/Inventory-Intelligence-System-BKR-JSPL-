@@ -225,7 +225,7 @@ async def upload_inventory(
         except Exception as e:
             logger.error(str(e), exc_info=True)
             db.rollback()
-            raise
+            raise HTTPException(status_code=400, detail=str(e))
         
     finally:
         if os.path.exists(temp_file):
