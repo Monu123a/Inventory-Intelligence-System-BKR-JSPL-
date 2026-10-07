@@ -1,6 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import useCompanyStore from '../../stores/useCompanyStore';
+import api from '../../services/api';
 import { PurchaseService } from '../../services/purchaseService';
 import { productService } from '../../services/products';
 
@@ -45,6 +47,19 @@ export default function CreatePurchase() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  
+  const { data: vendors = [] } = useQuery({
+    queryKey: ['vendors'],
+    queryFn: async () => {
+      const res = await api.get('/api/vendors/');
+      return res.data;
+    }
+  });
+
+  const handleVendorSelect = (value) => {
+    setVendorName(value);
+  };
 
   const handleAddItem = () => setItems([...items, { product_sku: '', description: '', qty: 1, unit_cost: 0, gst_pct: 0, hsn: '' }]);
 
