@@ -518,7 +518,24 @@ const POSPage = () => {
 
     setError('');
 
-    const payload = {
+    
+      // Also save the customer silently in background
+      if (customerInfo.name || customerInfo.mobile) {
+        api.post('/api/customers/', {
+          name: customerInfo.name || "Unknown",
+          mobile: customerInfo.mobile || null,
+          phone: customerInfo.phone || null,
+          email: customerInfo.email || null,
+          gstin: customerInfo.gstin || null,
+          address: customerInfo.address || null,
+          state: customerInfo.state || null,
+          state_code: customerInfo.state_code || null,
+          place_of_supply: customerInfo.place_of_supply || null
+        }).catch(err => console.error("Failed to save customer", err));
+      }
+      
+      const payload = {
+
       idempotency_key: idempotencyKeyRef.current,
       invoice_type: invoiceType,
       invoice_prefix: invoicePrefix,
@@ -580,6 +597,38 @@ const POSPage = () => {
     };
     localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(stateToSave));
   }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId]);
+
+  
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      const res = await api.get('/api/customers/');
+      return res.data;
+    }
+  });
+
+  const handleCustomerSelect = (value, field) => {
+    updateCustomer(field, value);
+    // Find if it matches an existing customer exactly
+    let matched = null;
+    if (field === 'mobile' && value.length === 10) {
+      matched = customers.find(c => c.mobile === value);
+    } else if (field === 'name') {
+      matched = customers.find(c => c.name === value);
+    }
+    
+    if (matched) {
+      if (matched.name && field !== 'name') updateCustomer('name', matched.name);
+      if (matched.mobile && field !== 'mobile') updateCustomer('mobile', matched.mobile);
+      if (matched.gstin) updateCustomer('gstin', matched.gstin);
+      if (matched.email) updateCustomer('email', matched.email);
+      if (matched.address) updateCustomer('address', matched.address);
+      if (matched.state) updateCustomer('state', matched.state);
+      if (matched.state_code) updateCustomer('state_code', matched.state_code);
+      if (matched.place_of_supply) updateCustomer('place_of_supply', matched.place_of_supply);
+      if (matched.phone) updateCustomer('phone', matched.phone);
+    }
+  };
 
   const handleClearCart = () => {
     if (window.confirm("Are you sure you want to clear the entire cart and customer details?")) {
@@ -675,20 +724,26 @@ const POSPage = () => {
             <div className={styles.formGrid}>
               <div className={styles.inputGroup}>
                 <label>Customer Name {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>
-                <input value={customerInfo.name} onChange={e => updateCustomer('name', e.target.value)} placeholder="Enter name" />
+                <input list="customer-names" value={customerInfo.name} onChange={e => handleCustomerSelect(e.target.value, 'name')} placeholder="Enter name or select from list" />
+                <datalist id="customer-names">
+                  {customers.map(c => <option key={c.id} value={c.name}>{c.mobile ? `${c.name} - ${c.mobile}` : c.name}</option>)}
+                </datalist>
               </div>
               <div className={styles.inputGroup}>
                 <label>Mobile Number</label>
-                <input 
+                <input list="customer-mobiles" 
                   value={customerInfo.mobile} 
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    updateCustomer('mobile', val);
+                    handleCustomerSelect(val, 'mobile');
                   }} 
                   placeholder="10 digit mobile" 
                   pattern="\d{10}"
                   maxLength={10}
                 />
+                <datalist id="customer-mobiles">
+                  {customers.filter(c => c.mobile).map(c => <option key={c.id} value={c.mobile}>{c.name}</option>)}
+                </datalist>
               </div>
               <div className={styles.inputGroup}>
                 <label>GSTIN {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>

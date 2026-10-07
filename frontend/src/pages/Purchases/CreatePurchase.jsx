@@ -163,7 +163,10 @@ export default function CreatePurchase() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '5px' }}>Vendor Name</label>
-            <input value={vendorName} onChange={e => setVendorName(e.target.value)} required style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }} placeholder="Enter Vendor Name..." />
+            <input list="vendor-names" value={vendorName} onChange={e => handleVendorSelect(e.target.value)} required style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }} placeholder="Enter Vendor Name or select..." />
+            <datalist id="vendor-names">
+              {vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+            </datalist>
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: '5px' }}>Invoice Number (Optional)</label>
