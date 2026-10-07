@@ -1290,6 +1290,25 @@ class AdminApprovalEvent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+
+class Customer(Base):
+    __tablename__ = 'customers'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey('companies.id'), nullable=False)
+    name = Column(String, nullable=False)
+    mobile = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    gstin = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    state = Column(String, nullable=True)
+    state_code = Column(String, nullable=True)
+    place_of_supply = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    company = relationship("Company")
+
 class Vendor(Base):
     __tablename__ = "vendors"
     
