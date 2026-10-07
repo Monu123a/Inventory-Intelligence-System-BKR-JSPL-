@@ -14,9 +14,13 @@ export const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = null
 
   useEffect(() => {
     if (isOpen) {
-      reset(initialData || {
+      const dataToReset = initialData ? { ...initialData } : {
         sku: '', name: '', category: '', brand: '', hsn: '', barcode: '', unit: '', min_stock_level: 0, item_rate: 0, default_gst_rate: 0, status: 'Active'
-      });
+      };
+      if (dataToReset.item_rate !== undefined && dataToReset.item_rate !== null) {
+        dataToReset.item_rate = parseFloat(parseFloat(dataToReset.item_rate).toFixed(2));
+      }
+      reset(dataToReset);
     }
   }, [isOpen, initialData, reset]);
 
@@ -32,7 +36,7 @@ export const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = null
       barcode: data.barcode?.trim() || '',
       unit: data.unit?.trim() || '',
       min_stock_level: parseInt(data.min_stock_level, 10) || 0,
-      item_rate: parseFloat(data.item_rate) || 0.0,
+      item_rate: parseFloat((parseFloat(data.item_rate) || 0.0).toFixed(2)),
       default_gst_rate: parseFloat(data.default_gst_rate) || 0.0,
     };
     onSubmit(processed);

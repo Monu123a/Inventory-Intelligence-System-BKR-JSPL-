@@ -385,6 +385,9 @@ const POSPage = () => {
     return acc;
   }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, tax: 0, grand: 0 });
 
+  // Round off grand total to nearest integer
+  totals.grand = Math.round(totals.grand);
+
   const hasUnconfirmedGst = cart.some(item => item.gst_needs_confirmation);
 
   // ---------------------------------------------------------------------------
