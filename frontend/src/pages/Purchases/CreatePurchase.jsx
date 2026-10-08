@@ -195,7 +195,7 @@ export default function CreatePurchase() {
         </datalist>
         
         
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '5px', fontWeight: 'bold', fontSize: '13px', color: '#555', padding: '0 10px' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '5px', fontWeight: '600', fontSize: '12px', color: '#6b7280', padding: '0 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           <div style={{ flex: 1 }}>SKU</div>
           <div style={{ flex: 2 }}>Product Name</div>
           <div style={{ width: '80px' }}>HSN</div>
@@ -209,24 +209,24 @@ export default function CreatePurchase() {
         
         {items.map((item, index) => (
 
-          <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px', background: '#f9f9f9', padding: '10px', borderRadius: '4px', alignItems: 'center' }}>
-            <input placeholder="SKU" list="sku-list" value={item.product_sku} onChange={e => updateItem(index, 'product_sku', e.target.value)} style={{ flex: 1, padding: '8px' }} />
-            <input placeholder="Product Name" value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} style={{ flex: 2, padding: '8px' }} />
-            <input placeholder="HSN" value={item.hsn || ''} onChange={e => updateItem(index, 'hsn', e.target.value)} style={{ width: '80px', padding: '8px' }} />
-            <input placeholder="Qty" type="number" value={item.qty} onChange={e => updateItem(index, 'qty', e.target.value)} style={{ width: '70px', padding: '8px' }} />
-            <input placeholder="Unit Cost" type="number" value={item.unit_cost} onChange={e => updateItem(index, 'unit_cost', e.target.value)} style={{ width: '90px', padding: '8px' }} />
-                        <input placeholder="GST %" type="number" value={item.gst_pct} onChange={e => updateItem(index, 'gst_pct', e.target.value)} style={{ width: '70px', padding: '8px' }} />
-            <div style={{ width: '80px', padding: '8px', fontSize: '14px', textAlign: 'right' }}>
+          <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '8px', background: '#ffffff', padding: '10px', borderRadius: '6px', alignItems: 'center', border: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'box-shadow 0.2s' }}>
+            <input placeholder="SKU" list="sku-list" value={item.product_sku} onChange={e => updateItem(index, 'product_sku', e.target.value)} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', fontSize: '14px', backgroundColor: '#fdfdfd' }} />
+            <input placeholder="Product Name" value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} style={{ flex: 2, padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', fontSize: '14px', backgroundColor: '#fdfdfd' }} />
+            <input placeholder="HSN" value={item.hsn || ''} onChange={e => updateItem(index, 'hsn', e.target.value)} style={{ width: '80px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', fontSize: '14px', backgroundColor: '#fdfdfd' }} />
+            <input placeholder="Qty" type="number" value={item.qty} onChange={e => updateItem(index, 'qty', e.target.value)} style={{ width: '70px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', fontSize: '14px', backgroundColor: '#fdfdfd' }} />
+            <input placeholder="Unit Cost" type="number" value={item.unit_cost} onChange={e => updateItem(index, 'unit_cost', e.target.value)} style={{ width: '90px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', fontSize: '14px', backgroundColor: '#fdfdfd' }} />
+                        <input placeholder="GST %" type="number" value={item.gst_pct} onChange={e => updateItem(index, 'gst_pct', e.target.value)} style={{ width: '70px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box', fontSize: '14px', backgroundColor: '#fdfdfd' }} />
+            <div style={{ width: '80px', padding: '8px', fontSize: '14px', textAlign: 'right', color: '#4b5563', backgroundColor: '#f3f4f6', borderRadius: '4px', border: '1px solid transparent', boxSizing: 'border-box' }}>
               ₹{((item.qty || 0) * (item.unit_cost || 0) * (item.gst_pct || 0) / 100).toFixed(2)}
             </div>
-            <div style={{ width: '100px', padding: '8px', fontSize: '14px', textAlign: 'right', fontWeight: 'bold' }}>
+            <div style={{ width: '100px', padding: '8px', fontSize: '14px', textAlign: 'right', fontWeight: '600', color: '#111827', backgroundColor: '#e5e7eb', borderRadius: '4px', border: '1px solid transparent', boxSizing: 'border-box' }}>
               ₹{((item.qty || 0) * (item.unit_cost || 0) * (1 + (item.gst_pct || 0) / 100)).toFixed(2)}
             </div>
             <button onClick={() => { const newItems = [...items]; newItems.splice(index, 1); setItems(newItems); }} style={{ width: '30px', padding: '5px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', height: '30px' }} title="Remove Item">X</button>
 
           </div>
         ))}
-        <button onClick={handleAddItem} style={{ padding: '8px 16px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}>+ Add Item</button>
+        <button onClick={handleAddItem} style={{ padding: '8px 16px', background: '#f3f4f6', color: '#374151', border: '1px dashed #d1d5db', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', transition: 'all 0.2s', marginTop: '10px', width: '100%' }}>+ Add Another Item</button>
 
         <div style={{ marginTop: '30px', borderTop: '2px solid #eee', paddingTop: '20px' }}>
           <h3 style={{ textAlign: 'right', marginBottom: '20px' }}>Total Amount: ₹ {calculateTotal().toFixed(2)}</h3>
