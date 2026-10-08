@@ -4,7 +4,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from app.models.db import get_db
 from app.models.schema import User, Customer
-from app.api.deps import get_current_user, get_current_company_id
+from app.api.dependencies import get_current_user, get_current_company_id
 
 router = APIRouter(tags=["Customers"])
 
