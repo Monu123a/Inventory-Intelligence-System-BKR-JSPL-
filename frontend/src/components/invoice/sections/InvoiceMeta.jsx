@@ -23,6 +23,15 @@ const InvoiceMeta = ({ invoice }) => {
           <span className={styles.metaLabel}>Invoice Date</span>
           <span className={styles.metaValue}>{formatDate(invoice.date || invoice.sale_date)}</span>
         </div>
+        
+        <div className={styles.metaItem}>
+          <span className={styles.metaLabel}>Buyer's Order No.</span>
+          <span className={styles.metaValue}>{invoice.buyer_order_no || '-'}</span>
+        </div>
+        <div className={styles.metaItem}>
+          <span className={styles.metaLabel}>Buyer's Order Date</span>
+          <span className={styles.metaValue}>{formatDate(invoice.buyer_order_date) || '-'}</span>
+        </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Payment Terms</span>
           <span className={styles.metaValue}>{invoice.payment_terms ? invoice.payment_terms : (invoice.payment_method ? `${invoice.payment_method}${invoice.payment_reference ? ` (${invoice.payment_reference})` : ''}` : '-')}</span>

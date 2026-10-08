@@ -202,6 +202,8 @@ const POSPage = () => {
 
   // New: Invoice Info
   const [invoiceInfo, setInvoiceInfo] = useState((savedState.invoiceInfo && typeof savedState.invoiceInfo === 'object') ? savedState.invoiceInfo : {
+    buyer_order_no: '',
+    buyer_order_date: '',
     payment_terms: '',
     delivery_note: '',
     delivery_note_date: '',
@@ -555,6 +557,8 @@ const POSPage = () => {
       custom_invoice_number: invoiceInfo.custom_invoice_number || null,
       custom_invoice_date: invoiceInfo.custom_invoice_date || null,
 
+      buyer_order_no: invoiceInfo.buyer_order_no || null,
+      buyer_order_date: invoiceInfo.buyer_order_date || null,
       payment_terms: invoiceInfo.payment_terms || null,
       delivery_note: invoiceInfo.delivery_note || null,
       delivery_note_date: invoiceInfo.delivery_note_date || null,
@@ -1097,6 +1101,28 @@ const POSPage = () => {
                className={styles.inputField}
              />
           </div>
+
+          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+             <label>Buyer Order No.</label>
+             <input
+               type="text"
+               value={invoiceInfo.buyer_order_no || ''}
+               onChange={e => updateInvoice('buyer_order_no', e.target.value)}
+               placeholder="Order No. / PO No."
+               className={styles.inputField}
+             />
+          </div>
+
+          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+             <label>Buyer Order Date</label>
+             <input
+               type="date"
+               value={invoiceInfo.buyer_order_date || ''}
+               onChange={e => updateInvoice('buyer_order_date', e.target.value)}
+               className={styles.inputField}
+             />
+          </div>
+
           {invoiceType === 'B2B' && (
             <div className={styles.b2bNotice}>
               B2B Invoice — will attempt Tally sync if enabled
