@@ -540,6 +540,8 @@ class Sale(Base):
     customer_phone = Column(String, nullable=True)
 
     # Invoice information
+    buyer_order_no = Column(String, nullable=True)
+    buyer_order_date = Column(String, nullable=True)
     payment_terms = Column(String, nullable=True)
     delivery_note = Column(String, nullable=True)
     delivery_note_date = Column(DateTime, nullable=True)

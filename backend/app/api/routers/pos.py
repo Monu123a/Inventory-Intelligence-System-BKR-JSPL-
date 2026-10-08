@@ -130,6 +130,8 @@ class PosCheckoutRequest(BaseModel):
     invoice_prefix: Optional[str] = None  # B2C | B2B
     custom_invoice_number: Optional[str] = None
     custom_invoice_date: Optional[datetime] = None
+    buyer_order_no: Optional[str] = None
+    buyer_order_date: Optional[str] = None
     payment_terms: Optional[str] = None
     delivery_note: Optional[str] = None
     delivery_note_date: Optional[datetime] = None
@@ -689,6 +691,8 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
         "payment_method": sale.payment_method,
         "payment_reference": sale.payment_reference,
         "payment_date": sale.payment_date.isoformat() if sale.payment_date else None,
+        "buyer_order_no": sale.buyer_order_no,
+        "buyer_order_date": sale.buyer_order_date,
         "payment_terms": sale.payment_terms,
         "delivery_note": sale.delivery_note,
         "delivery_note_date": sale.delivery_note_date.isoformat() if sale.delivery_note_date else None,
