@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import useCompanyStore from '../../stores/useCompanyStore';
 import { PurchaseService } from '../../services/purchaseService';
+import { SearchBar } from '../../components/forms/SearchBar';
 import { DataTable } from '../../components/DataTable/DataTable';
 import { PurchaseBillModal } from '../../components/Purchases/PurchaseBillModal';
 import { RecordPaymentModal } from '../../components/Purchases/RecordPaymentModal';
@@ -14,6 +15,11 @@ export default function PurchasesList() {
   const [activeTab, setActiveTab] = useState('bills');
   const [payables, setPayables] = useState([]);
   const [purchases, setPurchases] = useState([]);
+
+  const [vendorSearch, setVendorSearch] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+
   
   const [selectedBill, setSelectedBill] = useState(null);
   const [billModalOpen, setBillModalOpen] = useState(false);
@@ -30,6 +36,23 @@ export default function PurchasesList() {
   useEffect(() => {
     loadData();
   }, [user, activeCompanyId]);
+
+  
+  const filteredPayables = payables.filter(p => {
+    let match = true;
+    if (vendorSearch) match = match && p.name.toLowerCase().includes(vendorSearch.toLowerCase());
+    if (minAmount) match = match && p.payable_balance >= parseFloat(minAmount);
+    if (maxAmount) match = match && p.payable_balance <= parseFloat(maxAmount);
+    return match;
+  });
+
+  const filteredPurchases = purchases.filter(p => {
+    let match = true;
+    if (vendorSearch) match = match && (p.vendor_name || '').toLowerCase().includes(vendorSearch.toLowerCase());
+    if (minAmount) match = match && p.grand_total >= parseFloat(minAmount);
+    if (maxAmount) match = match && p.grand_total <= parseFloat(maxAmount);
+    return match;
+  });
 
   const viewBill = async (purchase) => {
     try {
@@ -110,11 +133,25 @@ export default function PurchasesList() {
         <button onClick={() => setActiveTab('vendors')} style={{ padding: '10px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: activeTab === 'vendors' ? 'bold' : 'normal', color: activeTab === 'vendors' ? '#007bff' : '#333', borderBottom: activeTab === 'vendors' ? '3px solid #007bff' : 'none' }}>Vendor Ledgers</button>
       </div>
       
+      
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', alignItems: 'center', background: '#f9f9f9', padding: '15px', borderRadius: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <SearchBar placeholder="Search Vendor Name..." value={vendorSearch} onChange={setVendorSearch} />
+        </div>
+        <div>
+          <input type="number" placeholder="Min Amount" value={minAmount} onChange={e => setMinAmount(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', width: '120px' }} />
+        </div>
+        <div>
+          <input type="number" placeholder="Max Amount" value={maxAmount} onChange={e => setMaxAmount(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', width: '120px' }} />
+        </div>
+      </div>
+      
       {activeTab === 'bills' ? (
-        <DataTable title="All Purchase Bills" columns={billColumns} data={purchases} pagination />
+        <DataTable title="All Purchase Bills" columns={billColumns} data={filteredPurchases} pagination />
       ) : (
-        <DataTable title="Outstanding Vendor Balances" columns={vendorColumns} data={payables} pagination />
+        <DataTable title="Outstanding Vendor Balances" columns={vendorColumns} data={filteredPayables} pagination />
       )}
+
       
       <PurchaseBillModal isOpen={billModalOpen} onClose={() => setBillModalOpen(false)} purchase={selectedBill} />
       <RecordPaymentModal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} purchase={selectedPaymentPurchase} onSuccess={() => { setPaymentModalOpen(false); loadData(); }} />
