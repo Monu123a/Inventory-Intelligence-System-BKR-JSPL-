@@ -1344,6 +1344,11 @@ class Purchase(Base):
     
     # Financial tracking added for Vendor Ledgers
     payment_status = Column(String(50), default='UNPAID')
+    date = Column(DateTime, nullable=True)
+    payment_terms = Column(String, nullable=True)
+    eway_bill = Column(String, nullable=True)
+    vehicle_number = Column(String, nullable=True)
+    vendor_name = Column(String, nullable=True)
     amount_paid = Column(Numeric(15, 2), default=0.0)
     payment_method = Column(String(50), nullable=True)
     
