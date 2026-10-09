@@ -245,16 +245,29 @@ def complete_sale(
                 required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
 
             for product_id, total_qty in required_quantities.items():
-                inv = db.query(Inventory).filter(
-                    Inventory.product_id == product_id,
-                    Inventory.warehouse_id == default_warehouse.id,
-                    Inventory.company_id == company_id
-                ).with_for_update().first() # Lock row
+                if default_warehouse.id == 39:
+                    invs = db.query(Inventory).filter(
+                        Inventory.product_id == product_id,
+                        Inventory.warehouse_id.in_([39, 2]),
+                        Inventory.company_id == company_id
+                    ).with_for_update().all()
+                    
+                    total_available = sum(inv.available_qty for inv in invs)
+                    if total_available < total_qty:
+                        product = db.query(Product).filter(Product.id == product_id).first()
+                        sku_name = product.sku if product else str(product_id)
+                        raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name} (Combined Central & Auto Godown)")
+                else:
+                    inv = db.query(Inventory).filter(
+                        Inventory.product_id == product_id,
+                        Inventory.warehouse_id == default_warehouse.id,
+                        Inventory.company_id == company_id
+                    ).with_for_update().first() # Lock row
 
-                if not inv or inv.available_qty < total_qty:
-                    product = db.query(Product).filter(Product.id == product_id).first()
-                    sku_name = product.sku if product else str(product_id)
-                    raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
+                    if not inv or inv.available_qty < total_qty:
+                        product = db.query(Product).filter(Product.id == product_id).first()
+                        sku_name = product.sku if product else str(product_id)
+                        raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
         # 2. Generate Bill Number (company-aware)
         company = db.query(Company).filter(Company.id == company_id).first()
@@ -382,16 +395,43 @@ def complete_sale(
             # Use the verified DB product SKU, not the client-supplied SKU
             # Deduct from Inventory using Event Engine (if not skipped)
             if not payload.skip_inventory_update and product:
-                InventoryEventEngine.process_event(
-                    db=db,
-                    company_id=company_id,product_sku=product.sku,
-                    warehouse_id=default_warehouse.id,
-                    quantity=item.quantity,
-                    event_type="SALE",
-                    source="OFFLINE_POS",
-                    reference_id=bill_number,
-                    metadata_payload={"sale_id": sale.id}
-                )
+                if default_warehouse.id == 39:
+                    # Deduct from 4 first, then 6
+                    inv_39 = db.query(Inventory).filter(Inventory.product_id == product.id, Inventory.warehouse_id == 39).first()
+                    avail_39 = inv_39.available_qty if inv_39 else 0
+                    qty_to_deduct = item.quantity
+                    
+                    deduct_from_39 = min(max(avail_39, 0), qty_to_deduct) # Only use positive avail stock
+                    if avail_39 <= 0: deduct_from_39 = 0 # if negative, deduct 0 from 4, all from 6 (or just go negative on 4?)
+                    # Actually, if we allow negative, just deduct from 4 until 0, then 6
+                    
+                    deduct_from_2 = qty_to_deduct - deduct_from_39
+                    
+                    if deduct_from_39 > 0:
+                        InventoryEventEngine.process_event(
+                            db=db, company_id=company_id, product_sku=product.sku,
+                            warehouse_id=39, quantity=deduct_from_39,
+                            event_type="SALE", source="OFFLINE_POS", reference_id=bill_number,
+                            metadata_payload={"sale_id": sale.id}
+                        )
+                    if deduct_from_2 > 0:
+                        InventoryEventEngine.process_event(
+                            db=db, company_id=company_id, product_sku=product.sku,
+                            warehouse_id=2, quantity=deduct_from_2,
+                            event_type="SALE", source="OFFLINE_POS", reference_id=bill_number,
+                            metadata_payload={"sale_id": sale.id, "note": "Auto Fallback from Central"}
+                        )
+                else:
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=company_id,product_sku=product.sku,
+                        warehouse_id=default_warehouse.id,
+                        quantity=item.quantity,
+                        event_type="SALE",
+                        source="OFFLINE_POS",
+                        reference_id=bill_number,
+                        metadata_payload={"sale_id": sale.id}
+                    )
 
         if commit:
             db.commit()
