@@ -46,6 +46,7 @@ export default function InvoicePreviewPage() {
   const [emailDomain, setEmailDomain] = useState('@gmail.com');
   const [emailing, setEmailing] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [printScale, setPrintScale] = useState(100);
   const [emailSuccess, setEmailSuccess] = useState('');
 
   const { data: tallyPayloads, refetch: fetchTallyPayloads } = useQuery({
@@ -223,7 +224,13 @@ export default function InvoicePreviewPage() {
               <FiEdit style={{ marginRight: '4px' }} /> Edit Bill
             </button>
           )}
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginRight: '15px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Bill Size: {printScale}%</span>
+            <input type="range" min="25" max="150" step="25" value={printScale} onChange={e => setPrintScale(e.target.value)} />
+          </div>
           <button className={styles.actionButton} onClick={handlePrint}>
+
             <FiPrinter /> Print
           </button>
           <button className={styles.actionButton} onClick={handleDownloadPdf}>
@@ -239,7 +246,7 @@ export default function InvoicePreviewPage() {
 
       
 
-        <div className={styles.invoicePaper} ref={invoiceRef}>
+        <div className={`${styles.invoicePaper} print-only`} ref={invoiceRef} style={{ transform: `scale(${printScale / 100})`, transformOrigin: "top center" }}>
           <InvoiceRenderer invoice={invoice} />
         </div>
         

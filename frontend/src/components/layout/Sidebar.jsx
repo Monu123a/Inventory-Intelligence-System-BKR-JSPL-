@@ -6,7 +6,7 @@ import { useUIStore } from '../../stores/uiStore';
 import useCompanyStore from '../../stores/useCompanyStore';
 import { 
   FiHome, FiBox, FiLayers, FiList, FiClock, FiFileText, FiDownload, 
-  FiSettings, FiShoppingCart, FiDollarSign, FiRefreshCw, FiRepeat,
+  FiSettings, FiShoppingCart, FiUsers, FiDollarSign, FiRefreshCw, FiRepeat,
   FiChevronDown, FiChevronRight, FiBriefcase, FiTool, FiPieChart, FiTruck
 } from 'react-icons/fi';
 import { FaAmazon } from 'react-icons/fa';
@@ -47,7 +47,7 @@ const Sidebar = () => {
     ...(isPosEnabledForCompany ? [{
       id: 'sales',
       label: 'Sales',
-      icon: FiShoppingCart,
+      icon: FiShoppingCart, FiUsers,
       items: [
         { path: ROUTES.POS, label: 'Offline Sales', icon: FiShoppingCart },
         { path: ROUTES.POS_HISTORY, label: 'Sales History', icon: FiDollarSign },
@@ -58,7 +58,7 @@ const Sidebar = () => {
     {
       id: 'purchases',
       label: 'Purchases',
-      icon: FiShoppingCart,
+      icon: FiShoppingCart, FiUsers,
       items: [
         { path: '/purchases/create', label: 'Create Purchase', icon: FiShoppingCart },
         { path: '/purchases/list', label: 'Vendor Payables', icon: FiDollarSign },

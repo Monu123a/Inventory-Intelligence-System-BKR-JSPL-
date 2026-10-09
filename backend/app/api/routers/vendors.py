@@ -29,3 +29,80 @@ def get_vendors(
         search_term = f"%{search.lower()}%"
         query = query.filter(Vendor.name.ilike(search_term))
     return query.all()
+
+
+class VendorCreate(BaseModel):
+    name: str
+    contact: Optional[str] = None
+    payable_balance: Optional[float] = 0.0
+
+@router.post("/", response_model=VendorResponse)
+def create_vendor(
+    vendor: VendorCreate,
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    new_vendor = Vendor(
+        company_id=company_id,
+        name=vendor.name,
+        contact=vendor.contact,
+        payable_balance=vendor.payable_balance or 0.0
+    )
+    db.add(new_vendor)
+    db.commit()
+    db.refresh(new_vendor)
+    return new_vendor
+
+@router.put("/{vendor_id}", response_model=VendorResponse)
+def update_vendor(
+    vendor_id: int,
+    vendor: VendorCreate,
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    db_vendor = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.company_id == company_id).first()
+    if not db_vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    db_vendor.name = vendor.name
+    db_vendor.contact = vendor.contact
+    if vendor.payable_balance is not None:
+        db_vendor.payable_balance = vendor.payable_balance
+        
+    db.commit()
+    db.refresh(db_vendor)
+    return db_vendor
+
+from app.models.schema import Purchase
+from sqlalchemy import desc
+
+@router.get("/{vendor_id}/history")
+def get_vendor_history(
+    vendor_id: int,
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    db_vendor = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.company_id == company_id).first()
+    if not db_vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+        
+    purchases = db.query(Purchase).filter(Purchase.vendor_name == db_vendor.name, Purchase.company_id == company_id).order_by(desc(Purchase.date)).all()
+    
+    return {
+        "vendor": {
+            "id": db_vendor.id,
+            "name": db_vendor.name,
+            "contact": db_vendor.contact,
+            "payable_balance": db_vendor.payable_balance
+        },
+        "purchases": [
+            {
+                "id": p.id,
+                "invoice_number": p.invoice_number,
+                "date": p.date.isoformat() if p.date else None,
+                "total_amount": p.total_amount,
+                "status": p.status
+            }
+            for p in purchases
+        ]
+    }
