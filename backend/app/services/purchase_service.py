@@ -118,7 +118,9 @@ class PurchaseService:
         for item_req in request.items:
             norm_sku = strict_normalize_sku(item_req.product_sku) or item_req.product_sku.strip().upper()
             
-            line_total = item_req.qty * item_req.unit_cost
+            base_val = item_req.qty * item_req.unit_cost
+            tax_amt = base_val * (item_req.gst_pct / 100.0) if item_req.gst_pct else 0
+            line_total = base_val + tax_amt
             total_amount += line_total
             
             product_id = item_req.product_id
