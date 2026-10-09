@@ -13,6 +13,10 @@ export default function CreatePurchase() {
   
   const [vendorName, setVendorName] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentTerms, setPaymentTerms] = useState('');
+  const [ewayBill, setEwayBill] = useState('');
+  const [vehicleNo, setVehicleNo] = useState('');
   const [items, setItems] = useState([{ product_sku: '', description: '', qty: 1, unit_cost: 0, gst_pct: 0, hsn: '' }]);
   const [warehouseId, setWarehouseId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -98,6 +102,10 @@ export default function CreatePurchase() {
         company_id: activeCompanyId,
         vendor_name: vendorName,
         invoice_number: invoiceNumber || null,
+        bill_date: billDate,
+        payment_terms: paymentTerms || null,
+        eway_bill: ewayBill || null,
+        vehicle_number: vehicleNo || null,
         items: items.map(i => ({
           ...i,
           qty: parseFloat(i.qty || 0),
@@ -175,21 +183,61 @@ export default function CreatePurchase() {
       </div>
 
       <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Vendor Name</label>
-            <input list="vendor-names" value={vendorName} onChange={e => handleVendorSelect(e.target.value)} required style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }} placeholder="Enter Vendor Name or select..." />
-            <datalist id="vendor-names">
-              {vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
-            </datalist>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+          {/* Vendor & General Details */}
+          <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#334155', fontSize: '14px', textTransform: 'uppercase' }}>Vendor Details</h4>
+            
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500', color: '#475569' }}>Vendor Name *</label>
+              <input list="vendor-names" value={vendorName} onChange={e => handleVendorSelect(e.target.value)} required style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' }} placeholder="Select or type Vendor Name..." />
+              <datalist id="vendor-names">
+                {vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+              </datalist>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500', color: '#475569' }}>Payment Terms</label>
+                <input value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' }} placeholder="e.g. Net 30" />
+              </div>
+            </div>
           </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Invoice Number (Optional)</label>
-            <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }} placeholder="e.g. INV-1001" />
+
+          {/* Invoice Details */}
+          <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#334155', fontSize: '14px', textTransform: 'uppercase' }}>Invoice Details</h4>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500', color: '#475569' }}>Invoice Number</label>
+                <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' }} placeholder="e.g. INV-1001" />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500', color: '#475569' }}>Bill Date</label>
+                <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' }} />
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500', color: '#475569' }}>E-Way Bill No.</label>
+                <input value={ewayBill} onChange={e => setEwayBill(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' }} placeholder="Optional" />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500', color: '#475569' }}>Vehicle No.</label>
+                <input value={vehicleNo} onChange={e => setVehicleNo(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' }} placeholder="Optional" />
+              </div>
+            </div>
           </div>
         </div>
 
-        <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Line Items</h4>
+        {/* LINE ITEMS HEADER */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, color: '#0f172a' }}>Item Details</h3>
+        </div>
+
         <datalist id="sku-list">
           {allProducts.map(p => <option key={p.sku} value={p.sku}>{p.name}</option>)}
         </datalist>

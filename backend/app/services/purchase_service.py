@@ -52,6 +52,10 @@ class PurchaseDraftRequest(BaseModel):
     items: List[PurchaseItemRequest]
     notes: Optional[str] = None
     warehouse_id: Optional[int] = None
+    bill_date: Optional[str] = None
+    payment_terms: Optional[str] = None
+    eway_bill: Optional[str] = None
+    vehicle_number: Optional[str] = None
 
 class PurchaseReceiveRequest(BaseModel):
     idempotency_key: str
@@ -94,6 +98,11 @@ class PurchaseService:
         
         purchase = Purchase(
             vendor_id=vendor.id,
+            vendor_name=vendor.name,
+            date=datetime.fromisoformat(request.bill_date.replace('Z', '')) if request.bill_date else datetime.utcnow(),
+            payment_terms=request.payment_terms,
+            eway_bill=request.eway_bill,
+            vehicle_number=request.vehicle_number,
             company_id=request.company_id,
             operator_id=operator_id,
             status="DRAFT",
