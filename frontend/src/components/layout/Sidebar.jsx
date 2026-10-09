@@ -47,7 +47,7 @@ const Sidebar = () => {
     ...(isPosEnabledForCompany ? [{
       id: 'sales',
       label: 'Sales',
-      icon: FiShoppingCart, FiUsers,
+      icon: FiShoppingCart,
       items: [
         { path: ROUTES.POS, label: 'Offline Sales', icon: FiShoppingCart },
         { path: ROUTES.POS_HISTORY, label: 'Sales History', icon: FiDollarSign },
@@ -58,12 +58,13 @@ const Sidebar = () => {
     {
       id: 'purchases',
       label: 'Purchases',
-      icon: FiShoppingCart, FiUsers,
+      icon: FiShoppingCart,
       items: [
         { path: '/purchases/create', label: 'Create Purchase', icon: FiShoppingCart },
         { path: '/purchases/list', label: 'Vendor Payables', icon: FiDollarSign },
+        { path: '/vendors', label: 'Vendor CRM', icon: FiUsers },
       ]
-    },,
+    },
     {
       id: 'inventory',
       label: 'Inventory',
