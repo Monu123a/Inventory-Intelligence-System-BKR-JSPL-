@@ -76,7 +76,7 @@ export default function CreatePurchase() {
         newItems[index].description = match.name || '';
         newItems[index].hsn = match.hsn || '';
         newItems[index].unit_cost = match.item_rate || 0;
-        newItems[index].gst_pct = match.gst_pct || 0;
+        newItems[index].gst_pct = match.default_gst_rate || 0;
       }
     }
     setItems(newItems);
