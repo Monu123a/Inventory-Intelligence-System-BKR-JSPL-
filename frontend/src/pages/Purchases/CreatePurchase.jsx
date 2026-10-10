@@ -65,7 +65,7 @@ export default function CreatePurchase() {
   const { data: warehousesQuery = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const res = await api.get('/api/warehouses');
+      const res = await api.get('/api/warehouses/');
       return res.data;
     }
   });

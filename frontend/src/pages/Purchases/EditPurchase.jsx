@@ -28,7 +28,6 @@ export default function EditPurchase() {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [warehouses, setWarehouses] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
   const [paymentNotes, setPaymentNotes] = useState('');
   const [txnRef, setTxnRef] = useState('');
 
@@ -99,7 +98,7 @@ export default function EditPurchase() {
   const { data: warehousesQuery = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const res = await api.get('/api/warehouses');
+      const res = await api.get('/api/warehouses/');
       return res.data;
     }
   });
