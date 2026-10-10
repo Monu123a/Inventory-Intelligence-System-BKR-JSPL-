@@ -4,7 +4,7 @@ import { normalizeResponse } from '../utils/normalizeResponse';
 
 export const productService = {
   getProducts: async () => {
-    const response = await api.get(API_ROUTES.PRODUCTS);
+    const response = await api.get(API_ROUTES.PRODUCTS + '/');
     return normalizeResponse(response.data);
   },
 
