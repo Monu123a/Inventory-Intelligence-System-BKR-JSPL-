@@ -249,11 +249,11 @@ export default function CreatePurchase() {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase' }}>SKU</th>
+                <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '120px' }}>SKU</th>
                 <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase' }}>Product Name</th>
-                <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '80px' }}>HSN</th>
+                <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '140px' }}>HSN</th>
                 <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '80px' }}>Qty</th>
-                <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '100px' }}>Unit Cost</th>
+                <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '140px' }}>Unit Cost</th>
                 <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '80px' }}>GST %</th>
                 <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '100px', textAlign: 'right' }}>Tax Amt</th>
                 <th style={{ padding: '12px', fontSize: '13px', color: '#475569', fontWeight: '600', textTransform: 'uppercase', width: '120px', textAlign: 'right' }}>Total</th>
@@ -282,10 +282,10 @@ export default function CreatePurchase() {
                     <input placeholder="GST%" type="number" value={item.gst_pct} onChange={e => updateItem(index, 'gst_pct', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none', fontSize: '14px' }} />
                   </td>
                   <td style={{ padding: '8px 12px', fontSize: '14px', textAlign: 'right', color: '#64748b' }}>
-                    ₹{((item.qty || 0) * (item.unit_cost || 0) * (item.gst_pct || 0) / 100).toFixed(2)}
+                    ₹{Math.round(((item.qty || 0) * (item.unit_cost || 0) * (item.gst_pct || 0)) / 100)}
                   </td>
                   <td style={{ padding: '8px 12px', fontSize: '14px', textAlign: 'right', fontWeight: '600', color: '#0f172a' }}>
-                    ₹{((item.qty || 0) * (item.unit_cost || 0) * (1 + (item.gst_pct || 0) / 100)).toFixed(2)}
+                    ₹{Math.round((item.qty || 0) * (item.unit_cost || 0) * (1 + (item.gst_pct || 0) / 100))}
                   </td>
                   <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                     <button onClick={() => { const newItems = [...items]; newItems.splice(index, 1); setItems(newItems); }} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 'bold' }} title="Remove Item">&times;</button>
@@ -300,7 +300,7 @@ export default function CreatePurchase() {
         </div>
 
         <div style={{ marginTop: '30px', borderTop: '2px solid #eee', paddingTop: '20px' }}>
-          <h3 style={{ textAlign: 'right', marginBottom: '20px' }}>Total Amount: ₹ {calculateTotal().toFixed(2)}</h3>
+          <h3 style={{ textAlign: 'right', marginBottom: '20px' }}>Total Amount: ₹ {Math.round(calculateTotal())}</h3>
           
           <div style={{ background: '#f0f8ff', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
             <h4 style={{ marginTop: 0 }}>Payment Details (Optional)</h4>
