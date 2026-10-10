@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class AmazonService:
     @staticmethod
-    def poll_orders(db: Session, company_id: int) -> Tuple[int, int]:
+    def poll_orders(db: Session, company_id: int, since=None) -> Tuple[int, int]:
         """
         Polls Amazon for orders, creates soft allocations (upsert), and handles the lifecycle.
         Returns a tuple of (processed_count, skipped_count).
@@ -21,7 +21,7 @@ class AmazonService:
         client = get_amazon_client()
         
         # 15 min + 5 min buffer = 20 mins back
-        since = datetime.utcnow() - timedelta(minutes=20)
+        since = since or (datetime.utcnow() - timedelta(minutes=20))
         
         try:
             orders = client.fetch_orders(since=since)

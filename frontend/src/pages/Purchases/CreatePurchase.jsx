@@ -25,6 +25,7 @@ export default function CreatePurchase() {
   // Payment Options
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [amountPaid, setAmountPaid] = useState('');
+  const [warehouses, setWarehouses] = useState([]);
   const [paymentNotes, setPaymentNotes] = useState('');
   const [txnRef, setTxnRef] = useState('');
 
