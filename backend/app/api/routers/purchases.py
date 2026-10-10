@@ -23,6 +23,30 @@ def require_admin_or_manager(user: User = Depends(get_current_user)):
         )
     return user
 
+@router.put("/{purchase_id}")
+def update_purchase(
+    purchase_id: int, 
+    request: PurchaseDraftRequest, 
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    try:
+        operator_id = user.id if user else 1
+        res = PurchaseService.update_purchase(db, purchase_id, request, operator_id)
+        db.commit()
+        return res
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except exc.IntegrityError as e:
+        db.rollback()
+        if "uix_company_invoice_number" in str(e):
+            raise HTTPException(status_code=400, detail="This Invoice Number has already been saved. Please check your purchase history or enter a different invoice number.")
+        raise HTTPException(status_code=400, detail="Database integrity error: " + str(e.orig))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/", summary="Create Purchase Draft")
 def create_purchase_draft(
     request: PurchaseDraftRequest,

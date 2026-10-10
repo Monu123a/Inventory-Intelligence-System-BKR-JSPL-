@@ -195,6 +195,15 @@ export default function CreatePurchase() {
 
       <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
         
+        <div style={{ marginBottom: '20px', background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Receiving Warehouse (Destination for Stock) *</label>
+            <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none' }}>
+              <option value="">-- Select Warehouse --</option>
+              {warehouses.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
           {/* Vendor & General Details */}
           <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
