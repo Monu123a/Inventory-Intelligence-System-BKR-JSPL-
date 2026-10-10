@@ -177,7 +177,7 @@ export default function CreatePurchase() {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '900px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+    <div style={{ padding: '20px', maxWidth: '1300px', margin: '0 auto', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>Create Purchase Bill (Micro-Shipment)</h2>
         {isOffline && <span style={{ background: 'red', color: 'white', padding: '4px 8px', borderRadius: '4px' }}>OFFLINE MODE</span>}
