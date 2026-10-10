@@ -30,11 +30,11 @@ const JSPLReplenishmentView = () => {
         setRecommendations(recRes.data);
 
         
-        const whRes = await api.get(`/api/warehouses?all_companies=${isCrossCompanyEnabled}`);
+        const whRes = await api.get(`/api/warehouses/?all_companies=${isCrossCompanyEnabled}`);
         setWarehouses(whRes.data || []);
 
         // Fetch active transfers
-        const transfersRes = await api.get('/api/transfers?status=active');
+        const transfersRes = await api.get('/api/transfers/?status=active');
         setActiveTransfers(transfersRes.data);
       } catch (error) {
         addNotification({ type: 'error', title: 'Error', message: 'Failed to load replenishment data' });

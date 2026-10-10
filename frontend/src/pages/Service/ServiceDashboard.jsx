@@ -22,8 +22,8 @@ export default function ServiceDashboard() {
       try {
         setLoading(true);
         const [activeRes, historyRes, remindersRes] = await Promise.all([
-          api.get('/api/services?status=active'),
-          api.get('/api/services?status=history'),
+          api.get('/api/services/?status=active'),
+          api.get('/api/services/?status=history'),
           api.get('/api/service-reminders')
         ]);
         

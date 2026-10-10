@@ -12,7 +12,7 @@ export default function ServiceHistoryPage() {
   useEffect(() => {
     if (currentCompany?.id) {
       setLoading(true);
-      api.get('/api/services?status=history')
+      api.get('/api/services/?status=history')
         .then(res => setServices(res.data?.items || res.data || []))
         .catch(err => console.error(err))
         .finally(() => setLoading(false));

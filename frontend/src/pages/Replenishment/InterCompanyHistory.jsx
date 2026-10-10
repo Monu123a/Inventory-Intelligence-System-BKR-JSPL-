@@ -15,7 +15,7 @@ const InterCompanyHistory = () => {
     const fetchHistory = async () => {
       setIsLoading(true);
       try {
-        const response = await api.get('/api/transfers?history=true');
+        const response = await api.get('/api/transfers/?history=true');
         setTransfers(response.data);
       } catch (error) {
         addNotification({ type: 'error', title: 'Error', message: 'Error fetching inter-company history' });

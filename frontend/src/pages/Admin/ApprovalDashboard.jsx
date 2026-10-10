@@ -19,7 +19,7 @@ const ApprovalDashboard = () => {
   const loadRequests = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/api/admin-approvals?status=${statusFilter}`);
+      const res = await api.get(`/api/admin-approvals/?status=${statusFilter}`);
       setRequests(res.data);
     } catch (err) {
       console.error(err);

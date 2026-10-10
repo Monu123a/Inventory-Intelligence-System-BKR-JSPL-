@@ -12,7 +12,7 @@ export default function ServiceRecordsPage() {
   useEffect(() => {
     if (currentCompany?.id) {
       setLoading(true);
-      api.get('/api/services?status=active')
+      api.get('/api/services/?status=active')
         .then(res => setServices(res.data?.items || res.data || []))
         .catch(err => console.error(err))
         .finally(() => setLoading(false));

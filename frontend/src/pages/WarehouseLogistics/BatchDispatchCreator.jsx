@@ -75,8 +75,8 @@ const BatchDispatchCreator = () => {
         let headers = {};
 
         const [hubsRes, whRes] = await Promise.all([
-          api.get(`/api/state-hubs?all_companies=${allowOtherCompanies}`, { headers }),
-          api.get(`/api/warehouses?all_companies=${allowOtherCompanies}`, { headers })
+          api.get(`/api/state-hubs/?all_companies=${allowOtherCompanies}`, { headers }),
+          api.get(`/api/warehouses/?all_companies=${allowOtherCompanies}`, { headers })
         ]);
         setHubs(hubsRes.data || []);
         setWarehouses(whRes.data || []);
@@ -275,7 +275,7 @@ const BatchDispatchCreator = () => {
       
       let headers = {};
 
-      await api.post('/api/fc-dispatches', {
+      await api.post('/api/fc-dispatches/', {
         idempotency_key: idempotencyKeyRef.current,
         warehouse_ids: [selectedFC],
         hub_id: selectedHub ? parseInt(selectedHub, 10) : null,

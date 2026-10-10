@@ -14,7 +14,7 @@ const BKRRequirementsView = () => {
   useEffect(() => {
     const fetchTransfers = async () => {
       try {
-        const res = await api.get('/api/transfers?status=active');
+        const res = await api.get('/api/transfers/?status=active');
         // The backend already filters active if status=active is passed.
         // Let's ensure we only show pending/in progress
         setTransfers(res.data.filter(t => t.status === 'Pending' || t.status === 'In Progress'));
