@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import useCompanyStore from '../../stores/useCompanyStore';
 import { PurchaseService } from '../../services/purchaseService';
@@ -8,6 +9,7 @@ import { PurchaseBillModal } from '../../components/Purchases/PurchaseBillModal'
 import { RecordPaymentModal } from '../../components/Purchases/RecordPaymentModal';
 
 export default function PurchasesList() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { currentCompany } = useCompanyStore();
   const activeCompanyId = currentCompany?.id || 2;
@@ -114,6 +116,7 @@ export default function PurchasesList() {
     { name: 'Actions', key: 'actions', render: (_, r) => (
       <div style={{ display: 'flex', gap: '8px' }}>
         <button onClick={() => viewBill(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '4px' }}>View Bill</button>
+        <button onClick={() => navigate(`/purchases/${r.id}/edit`)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#ffc107', color: '#000', border: 'none', borderRadius: '4px' }}>Edit</button>
         {r.status === 'DRAFT' && (
           <button onClick={() => receiveDraft(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px' }}>Receive</button>
         )}
