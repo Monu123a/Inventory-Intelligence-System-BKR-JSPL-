@@ -10,7 +10,7 @@ export default function VendorsPage() {
   const [editingVendor, setEditingVendor] = useState(null);
   const [activeVendorId, setActiveVendorId] = useState(null);
   
-  const [formData, setFormData] = useState({ name: '', contact: '', payable_balance: 0 });
+  const [formData, setFormData] = useState({ name: '', contact: '', phone: '', gst_number: '', address: '', bank_details: '', payable_balance: 0 });
 
   const { data: vendors = [], isLoading } = useQuery({
     queryKey: ['vendors', search],
@@ -40,17 +40,17 @@ export default function VendorsPage() {
       queryClient.invalidateQueries(['vendors']);
       setIsModalOpen(false);
       setEditingVendor(null);
-      setFormData({ name: '', contact: '', payable_balance: 0 });
+      setFormData({ name: '', contact: '', phone: '', gst_number: '', address: '', bank_details: '', payable_balance: 0 });
     }
   });
 
   const handleOpenModal = (vendor = null) => {
     if (vendor) {
       setEditingVendor(vendor);
-      setFormData({ name: vendor.name, contact: vendor.contact || '', payable_balance: vendor.payable_balance || 0 });
+      setFormData({ name: vendor.name, contact: vendor.contact || '', phone: vendor.phone || '', gst_number: vendor.gst_number || '', address: vendor.address || '', bank_details: vendor.bank_details || '', payable_balance: vendor.payable_balance || 0 });
     } else {
       setEditingVendor(null);
-      setFormData({ name: '', contact: '', payable_balance: 0 });
+      setFormData({ name: '', contact: '', phone: '', gst_number: '', address: '', bank_details: '', payable_balance: 0 });
     }
     setIsModalOpen(true);
   };
@@ -137,30 +137,33 @@ export default function VendorsPage() {
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Vendor Name *</label>
-                <input 
-                  type="text" 
-                  value={formData.name} 
-                  onChange={e => setFormData({...formData, name: e.target.value})} 
-                  style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} 
-                />
+                <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Phone Number</label>
+                  <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Email</label>
+                  <input type="text" value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} />
+                </div>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Contact Info (Phone / Email)</label>
-                <input 
-                  type="text" 
-                  value={formData.contact} 
-                  onChange={e => setFormData({...formData, contact: e.target.value})} 
-                  style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} 
-                />
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>GST Number</label>
+                <input type="text" value={formData.gst_number} onChange={e => setFormData({...formData, gst_number: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Address</label>
+                <textarea value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box', minHeight: '60px', resize: 'vertical' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Bank Details (Optional)</label>
+                <textarea value={formData.bank_details} onChange={e => setFormData({...formData, bank_details: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box', minHeight: '60px', resize: 'vertical' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Ledger Balance (₹)</label>
-                <input 
-                  type="number" 
-                  value={formData.payable_balance} 
-                  onChange={e => setFormData({...formData, payable_balance: e.target.value})} 
-                  style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} 
-                />
+                <input type="number" value={formData.payable_balance} onChange={e => setFormData({...formData, payable_balance: parseFloat(e.target.value) || 0})} disabled={!!editingVendor} style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box', background: editingVendor ? '#f3f4f6' : 'white' }} />
               </div>
             </div>
             <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '10px', background: '#f9fafb' }}>

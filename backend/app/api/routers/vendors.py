@@ -12,6 +12,10 @@ class VendorResponse(BaseModel):
     id: int
     name: str
     contact: Optional[str] = None
+    phone: Optional[str] = None
+    gst_number: Optional[str] = None
+    address: Optional[str] = None
+    bank_details: Optional[str] = None
     payable_balance: float
 
     class Config:
@@ -34,6 +38,10 @@ def get_vendors(
 class VendorCreate(BaseModel):
     name: str
     contact: Optional[str] = None
+    phone: Optional[str] = None
+    gst_number: Optional[str] = None
+    address: Optional[str] = None
+    bank_details: Optional[str] = None
     payable_balance: Optional[float] = 0.0
 
 @router.post("/", response_model=VendorResponse)
@@ -46,6 +54,10 @@ def create_vendor(
         company_id=company_id,
         name=vendor.name,
         contact=vendor.contact,
+        phone=vendor.phone,
+        gst_number=vendor.gst_number,
+        address=vendor.address,
+        bank_details=vendor.bank_details,
         payable_balance=vendor.payable_balance or 0.0
     )
     db.add(new_vendor)
@@ -66,6 +78,10 @@ def update_vendor(
     
     db_vendor.name = vendor.name
     db_vendor.contact = vendor.contact
+    db_vendor.phone = vendor.phone
+    db_vendor.gst_number = vendor.gst_number
+    db_vendor.address = vendor.address
+    db_vendor.bank_details = vendor.bank_details
     if vendor.payable_balance is not None:
         db_vendor.payable_balance = vendor.payable_balance
         

@@ -1319,6 +1319,10 @@ class Vendor(Base):
     contact = Column(String, nullable=True)
     payable_balance = Column(Float, default=0.0)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    gst_number = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    bank_details = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     company = relationship("Company")
