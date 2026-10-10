@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import exc
 from typing import List, Dict, Any, Optional
 
 from app.models.db import get_db
@@ -35,6 +36,11 @@ def create_purchase_draft(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except exc.IntegrityError as e:
+        db.rollback()
+        if "uix_company_invoice_number" in str(e):
+            raise HTTPException(status_code=400, detail="This Invoice Number has already been saved. Please check your purchase history or enter a different invoice number.")
+        raise HTTPException(status_code=400, detail="Database integrity error: " + str(e.orig))
     except Exception as e:
         db.rollback()
         logger.exception("Error creating purchase draft")
