@@ -36,6 +36,37 @@ export default function EditPurchase() {
   const [draftIdempotency] = useState(crypto.randomUUID());
   const [allProducts, setAllProducts] = useState([]);
   
+  
+  useEffect(() => {
+    const fetchPurchase = async () => {
+      try {
+        const res = await api.get(`/api/purchases/${id}`);
+        const purchase = res.data;
+        setVendorId(purchase.vendor_id);
+        setVendorName(purchase.vendor_name);
+        setInvoiceNumber(purchase.invoice_number || '');
+        setBillDate(purchase.date ? purchase.date.split('T')[0] : '');
+        setPaymentTerms(purchase.payment_terms || '');
+        setEwayBill(purchase.eway_bill || '');
+        setVehicleNo(purchase.vehicle_number || '');
+        setNotes(purchase.notes || '');
+        
+        const mappedItems = (purchase.items || []).map(i => ({
+          product_sku: i.product_sku || '',
+          description: i.description || '',
+          qty: i.qty || 1,
+          unit_cost: i.unit_cost || 0,
+          gst_pct: i.gst_pct || 0,
+          hsn: i.hsn || ''
+        }));
+        setItems(mappedItems.length > 0 ? mappedItems : [{ product_sku: '', description: '', qty: 1, unit_cost: 0, gst_pct: 0, hsn: '' }]);
+      } catch (err) {
+        console.error("Error loading purchase", err);
+      }
+    };
+    if (id) fetchPurchase();
+  }, [id]);
+
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -64,6 +95,23 @@ export default function EditPurchase() {
       return res.data;
     }
   });
+
+  const { data: warehousesQuery = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const res = await api.get('/api/warehouses');
+      return res.data;
+    }
+  });
+
+  useEffect(() => {
+    if (warehousesQuery.length > 0 && warehouses.length === 0) {
+      setWarehouses(warehousesQuery);
+      if (!warehouseId) {
+        setWarehouseId(warehousesQuery[0].id);
+      }
+    }
+  }, [warehousesQuery, warehouses, warehouseId]);
 
   const handleVendorSelect = (value) => {
     setVendorName(value);
@@ -133,8 +181,8 @@ export default function EditPurchase() {
       if (res.status === 'PENDING') {
         alert('Saved to offline queue!');
       } else {
-        setDraftId(res.id);
-        alert(`Draft created successfully! Bill ID: ${res.id}`);
+        alert('Purchase updated successfully!');
+        navigate('/purchases');
       }
     } catch (e) {
       handleError(e);

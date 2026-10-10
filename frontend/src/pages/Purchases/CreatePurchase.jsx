@@ -62,6 +62,23 @@ export default function CreatePurchase() {
     }
   });
 
+  const { data: warehousesQuery = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const res = await api.get('/api/warehouses');
+      return res.data;
+    }
+  });
+
+  useEffect(() => {
+    if (warehousesQuery.length > 0 && warehouses.length === 0) {
+      setWarehouses(warehousesQuery);
+      if (!warehouseId) {
+        setWarehouseId(warehousesQuery[0].id);
+      }
+    }
+  }, [warehousesQuery, warehouses, warehouseId]);
+
   const handleVendorSelect = (value) => {
     setVendorName(value);
   };
