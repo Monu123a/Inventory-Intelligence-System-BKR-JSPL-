@@ -79,6 +79,15 @@ export default function CreatePurchase() {
         newItems[index].gst_pct = match.default_gst_rate || 0;
       }
     }
+    if (field === 'description') {
+      const match = allProducts.find(p => p.name.toLowerCase() === value.toLowerCase());
+      if (match) {
+        newItems[index].product_sku = match.sku || '';
+        newItems[index].hsn = match.hsn || '';
+        newItems[index].unit_cost = match.item_rate || 0;
+        newItems[index].gst_pct = match.default_gst_rate || 0;
+      }
+    }
     setItems(newItems);
   };
 
@@ -242,6 +251,9 @@ export default function CreatePurchase() {
         <datalist id="sku-list">
           {allProducts.map(p => <option key={p.sku} value={p.sku}>{p.name}</option>)}
         </datalist>
+        <datalist id="name-list">
+          {allProducts.map(p => <option key={p.sku} value={p.name}>{p.sku}</option>)}
+        </datalist>
         
         
         
@@ -267,7 +279,7 @@ export default function CreatePurchase() {
                     <input placeholder="SKU" list="sku-list" value={item.product_sku} onChange={e => updateItem(index, 'product_sku', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none', fontSize: '14px' }} />
                   </td>
                   <td style={{ padding: '8px 12px' }}>
-                    <input placeholder="Product Name" value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none', fontSize: '14px' }} />
+                    <input placeholder="Product Name" list="name-list" value={item.description} onChange={e => updateItem(index, 'description', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none', fontSize: '14px' }} />
                   </td>
                   <td style={{ padding: '8px 12px' }}>
                     <input placeholder="HSN" value={item.hsn || ''} onChange={e => updateItem(index, 'hsn', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none', fontSize: '14px' }} />
