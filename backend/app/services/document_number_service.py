@@ -45,9 +45,12 @@ class DocumentNumberService:
                 DocumentSequence.fiscal_year == fiscal_year,
                 DocumentSequence.prefix == prefix
             ).first()
-            if prefix.upper() in ['GST', 'JGST']:
-                return f"{prefix}-{seq.last_number:03d}"
-            return f"{prefix}/{fiscal_year}/{seq.last_number:05d}"
+            def _format_doc_number(pref: str, num: int) -> str:
+                if document_type == DocumentTypeEnum.SALE or pref.upper() in ['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL']:
+                    return f"{pref}-{num:03d}"
+                return f"{pref}/{fiscal_year}/{num:05d}"
+
+            return _format_doc_number(prefix, seq.last_number)
 
         # Step 2: No existing row — create one
         try:
@@ -60,7 +63,7 @@ class DocumentNumberService:
             )
             db.add(seq)
             db.flush()
-            if prefix.upper() in ['GST', 'JGST']:
+            if document_type == DocumentTypeEnum.SALE or prefix.upper() in ['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL']:
                 return f"{prefix}-001"
             return f"{prefix}/{fiscal_year}/00001"
         except IntegrityError:
@@ -83,7 +86,7 @@ class DocumentNumberService:
                 DocumentSequence.prefix == prefix
             ).first()
 
-            if prefix.upper() in ['GST', 'JGST']:
+            if document_type == DocumentTypeEnum.SALE or prefix.upper() in ['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL']:
                 return f"{prefix}-{seq.last_number:03d}"
             return f"{prefix}/{fiscal_year}/{seq.last_number:05d}"
 

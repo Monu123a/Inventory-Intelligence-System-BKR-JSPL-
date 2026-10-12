@@ -1,7 +1,8 @@
 .posContainer {
-  padding: 24px 32px;
-  max-width: 1550px;
-  margin: 0 auto;
+  padding: 16px 20px;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 100vh;
   color: #0f172a;
 }
@@ -88,8 +89,8 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 390px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -406,27 +407,26 @@
 .cartTable {
   width: 100%;
   border-collapse: collapse;
-  min-width: 950px;
 }
 
 .cartTable th {
   background: #f8fafc;
   text-align: left;
-  padding: 12px 10px;
+  padding: 10px 6px;
   border-bottom: 2px solid #e2e8f0;
   font-size: 11px;
   font-weight: 700;
   color: #475569;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
 .cartTable td {
-  padding: 12px 10px;
+  padding: 8px 6px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .cartRow:hover {
@@ -434,33 +434,33 @@
 }
 
 .productCell {
-  min-width: 220px;
+  min-width: 150px;
 }
 
 .skuBadge {
   display: inline-block;
   background: #eff6ff;
   color: #1d4ed8;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   border: 1px solid #dbeafe;
 }
 
 .productTitle {
   font-weight: 500;
   color: #1e293b;
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: 12.5px;
+  line-height: 1.3;
 }
 
 .tableInput {
-  padding: 6px 8px;
+  padding: 5px 6px;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 5px;
+  font-size: 12.5px;
   outline: none;
   background: white;
   transition: all 0.15s;
@@ -473,29 +473,29 @@
 }
 
 .qtyInput {
-  width: 65px;
+  width: 50px;
   text-align: center;
   font-weight: 600;
 }
 
 .priceInput {
-  width: 85px;
+  width: 75px;
   text-align: right;
   font-weight: 500;
 }
 
 .discInput {
-  width: 65px;
+  width: 55px;
   text-align: right;
 }
 
 .hsnInput {
-  width: 75px;
+  width: 65px;
   text-align: center;
 }
 
 .gstInput {
-  width: 55px;
+  width: 50px;
   text-align: center;
   font-weight: 500;
 }
@@ -507,7 +507,7 @@
 
 .unitCell {
   color: #64748b;
-  font-size: 12px;
+  font-size: 11.5px;
   text-align: center;
   white-space: nowrap;
 }
@@ -515,7 +515,7 @@
 .amountCell {
   text-align: right;
   color: #475569;
-  font-size: 13px;
+  font-size: 12.5px;
   white-space: nowrap;
 }
 
@@ -523,7 +523,7 @@
   text-align: right;
   font-weight: 700;
   color: #0f172a;
-  font-size: 14px;
+  font-size: 13.5px;
   white-space: nowrap;
 }
 

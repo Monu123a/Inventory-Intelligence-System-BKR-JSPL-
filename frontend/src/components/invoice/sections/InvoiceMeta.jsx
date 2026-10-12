@@ -17,7 +17,13 @@ const InvoiceMeta = ({ invoice }) => {
       <div className={styles.metaGrid}>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Invoice No.</span>
-          <span className={styles.metaValue}>{invoice.invoice_number}</span>
+          <span className={styles.metaValue} style={{ fontWeight: 700 }}>{invoice.invoice_number || invoice.bill_number}</span>
+        </div>
+        <div className={styles.metaItem}>
+          <span className={styles.metaLabel}>Bill Series</span>
+          <span className={styles.metaValue} style={{ fontWeight: 600 }}>
+            {invoice.invoice_prefix || (invoice.invoice_number && invoice.invoice_number.includes('-') ? invoice.invoice_number.split('-')[0] : (invoice.invoice_number && invoice.invoice_number.includes('/') ? invoice.invoice_number.split('/')[0] : 'GST'))}
+          </span>
         </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Invoice Date</span>
@@ -33,8 +39,18 @@ const InvoiceMeta = ({ invoice }) => {
           <span className={styles.metaValue}>{formatDate(invoice.buyer_order_date || invoice.order_date) || '-'}</span>
         </div>
         <div className={styles.metaItem}>
+          <span className={styles.metaLabel}>Payment Mode</span>
+          <span className={styles.metaValue}>{invoice.payment_method ? `${invoice.payment_method}${invoice.payment_reference ? ` (${invoice.payment_reference})` : ''}` : '-'}</span>
+        </div>
+        {invoice.payment_remarks && (
+          <div className={styles.metaItem} style={{ background: '#f8fafc', borderRadius: '4px', padding: '4px 6px' }}>
+            <span className={styles.metaLabel} style={{ color: '#0369a1', fontWeight: 600 }}>Payment Remarks</span>
+            <span className={styles.metaValue} style={{ fontWeight: 600, color: '#0f172a' }}>{invoice.payment_remarks}</span>
+          </div>
+        )}
+        <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Payment Terms</span>
-          <span className={styles.metaValue}>{invoice.payment_terms ? invoice.payment_terms : (invoice.payment_method ? `${invoice.payment_method}${invoice.payment_reference ? ` (${invoice.payment_reference})` : ''}` : '-')}</span>
+          <span className={styles.metaValue}>{invoice.payment_terms || '-'}</span>
         </div>
         <div className={styles.metaItem}>
           <span className={styles.metaLabel}>Delivery Note</span>

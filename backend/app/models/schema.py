@@ -506,8 +506,9 @@ class Sale(Base):
     total_taxable_amount = Column(Float, default=0.0)
     total_tax = Column(Float, default=0.0)
     grand_total = Column(Float, default=0.0)
-    payment_method = Column(String, nullable=True) # Cash, UPI, Card, Bank Transfer, Cheque, Credit
+    payment_method = Column(String, nullable=True) # Cash, UPI, Card, Bank Transfer, Cheque, Credit, COD, Mix
     payment_reference = Column(String, nullable=True)  # UPI txn ref, cheque no, etc.
+    payment_remarks = Column(Text, nullable=True)  # Split/mixed payment details, remarks
     payment_date = Column(DateTime, nullable=True)
     status = Column(String, default="Completed") # Draft, Completed, Cancelled, Returned
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)

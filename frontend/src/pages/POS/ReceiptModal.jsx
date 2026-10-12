@@ -25,8 +25,14 @@ const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) =>
 
           <div className={styles.row}>
             <span>Bill No:</span>
-            <span className={styles.bold}>{receipt.bill_number}</span>
+            <span className={styles.bold}>{receipt.invoice_number || receipt.bill_number}</span>
           </div>
+          {(receipt.invoice_prefix || (receipt.invoice_number && receipt.invoice_number.includes('-'))) && (
+            <div className={styles.row}>
+              <span>Series:</span>
+              <span className={styles.bold}>{receipt.invoice_prefix || receipt.invoice_number.split('-')[0]}</span>
+            </div>
+          )}
           <div className={styles.row}>
             <span>Date:</span>
             <span>{formatDate(receipt.sale_date)}</span>
@@ -98,6 +104,18 @@ const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) =>
             <span>Payment Method:</span>
             <span>{receipt.payment_method}</span>
           </div>
+          {receipt.payment_reference && (
+            <div className={styles.row}>
+              <span>Payment Ref:</span>
+              <span>{receipt.payment_reference}</span>
+            </div>
+          )}
+          {receipt.payment_remarks && (
+            <div className={styles.row} style={{ background: '#f8fafc', padding: '4px 6px', borderRadius: '4px' }}>
+              <span>Payment Remarks:</span>
+              <span className={styles.bold}>{receipt.payment_remarks}</span>
+            </div>
+          )}
 
           <div className={styles.footer}>
             Thank you for shopping with us!

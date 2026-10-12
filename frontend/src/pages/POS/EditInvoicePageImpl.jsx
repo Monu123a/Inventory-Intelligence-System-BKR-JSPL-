@@ -135,6 +135,7 @@ const EditInvoicePage = () => {
   const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart.filter(i => i && typeof i === 'object') : []);
   const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
   const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
+  const [paymentRemarks, setPaymentRemarks] = useState(savedState.paymentRemarks || '');
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
   const [previewReceiptData, setPreviewReceiptData] = useState(null);
@@ -412,9 +413,13 @@ const EditInvoicePage = () => {
     }
   });
 
-  
   const handlePreview = () => {
-    // Generate a mock invoice object matching InvoiceRenderer structure
+    const formattedInvoiceNo = invoiceInfo.custom_invoice_number 
+      ? (invoicePrefix && !invoiceInfo.custom_invoice_number.toUpperCase().startsWith(`${invoicePrefix}-`) 
+          ? `${invoicePrefix}-${invoiceInfo.custom_invoice_number}` 
+          : invoiceInfo.custom_invoice_number)
+      : (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW');
+
     const mockInvoice = {
       company: companySettings ? {
         name: companySettings.legal_name || currentCompany?.name || 'BKR',
@@ -428,7 +433,8 @@ const EditInvoicePage = () => {
         bank_details: companySettings.bank_details,
       } : (currentCompany || { name: 'BKR', gstin: 'TEST' }),
       invoice_type: invoiceType || 'B2C',
-      invoice_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
+      invoice_prefix: invoicePrefix,
+      invoice_number: formattedInvoiceNo,
       date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
       customer: customerInfo ? { 
         name: customerInfo.name || customerInfo.phone || customerInfo.mobile || 'Cash Customer',
@@ -467,7 +473,9 @@ const EditInvoicePage = () => {
         total_tax: isInterState ? totals.igst : (totals.cgst + totals.sgst),
         grand_total: totals.grand
       },
-      payment_method: paymentMethod
+      payment_method: paymentMethod,
+      payment_reference: paymentReference,
+      payment_remarks: paymentRemarks
     };
     setPreviewReceiptData(mockInvoice);
   };
@@ -542,6 +550,7 @@ const EditInvoicePage = () => {
 
       payment_method: paymentMethod,
       payment_reference: paymentReference || null,
+      payment_remarks: paymentRemarks || null,
       origin_warehouse_id: selectedWarehouseId || null,
       total_taxable_amount: totals.taxable,
       total_tax: totals.tax,
@@ -579,6 +588,12 @@ const EditInvoicePage = () => {
         }
         
         setInvoiceType(sale.invoice_type || 'B2C');
+        if (sale.payment_method) setPaymentMethod(sale.payment_method);
+        if (sale.payment_reference) setPaymentReference(sale.payment_reference);
+        if (sale.payment_remarks) setPaymentRemarks(sale.payment_remarks);
+        if (sale.invoice_number && sale.invoice_number.includes('-')) {
+          setInvoicePrefix(sale.invoice_number.split('-')[0]);
+        }
         
         if (sale.customer) {
           setCustomerInfo({
@@ -648,10 +663,10 @@ const EditInvoicePage = () => {
   // Auto-save state to localStorage
   useEffect(() => {
     const stateToSave = {
-      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId
+      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, paymentRemarks, invoicePrefix, invoiceType, selectedWarehouseId
     };
     localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(stateToSave));
-  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId]);
+  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, paymentRemarks, invoicePrefix, invoiceType, selectedWarehouseId]);
 
   const handleClearCart = () => {
     if (window.confirm("Are you sure you want to clear the entire cart and customer details?")) {
@@ -1007,23 +1022,34 @@ const EditInvoicePage = () => {
             <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
               <option value="Cash">Cash</option>
               <option value="UPI">UPI</option>
-              <option value="Card">Card</option>
-              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Card">Card / POS</option>
+              <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+              <option value="COD">COD (Cash on Delivery)</option>
+              <option value="Mix / Split">Mix / Split Payment</option>
               <option value="Cheque">Cheque</option>
-              <option value="Credit">Credit</option>
+              <option value="Credit">Credit / Pay Later</option>
             </select>
           </div>
 
-          {paymentMethod !== 'Cash' && (
+          {paymentMethod !== 'Cash' && paymentMethod !== 'COD' && (
             <div className={styles.inputGroup} style={{marginBottom: '16px'}}>
-              <label>Transaction Reference</label>
+              <label>{paymentMethod === 'UPI' ? 'UPI UTR / Reference No.' : paymentMethod === 'Cheque' ? 'Cheque Number' : paymentMethod === 'Mix / Split' ? 'Payment Reference' : 'Transaction Reference'}</label>
               <input
                 value={paymentReference}
                 onChange={e => setPaymentReference(e.target.value)}
-                placeholder={paymentMethod === 'UPI' ? 'UPI Txn ID' : paymentMethod === 'Cheque' ? 'Cheque No.' : 'Reference'}
+                placeholder={paymentMethod === 'UPI' ? 'Enter 12-digit UPI UTR' : paymentMethod === 'Cheque' ? 'Enter Cheque No.' : 'Transaction Reference'}
               />
             </div>
           )}
+
+          <div className={styles.inputGroup} style={{marginBottom: '16px'}}>
+            <label>Payment Remarks (Mix / Split Details)</label>
+            <input
+              value={paymentRemarks}
+              onChange={e => setPaymentRemarks(e.target.value)}
+              placeholder="e.g. ₹500 Cash + ₹1200 UPI Ref #9872"
+            />
+          </div>
 
           <div className={styles.summaryRow}>
             <span>Taxable Amount</span>
@@ -1051,12 +1077,12 @@ const EditInvoicePage = () => {
             <span>₹{totals.grand.toFixed(2)}</span>
           </div>
 
-                    {/* Invoice Series Dropdown */}
+          {/* Invoice Series Dropdown */}
           <div className={styles.formGroup} style={{ marginTop: '16px' }}>
             <label>Invoice Series (Prefix)</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <select 
-                value={['GST', 'JGST', companyCode].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                value={['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
                 onChange={e => {
                   if (e.target.value !== 'CUSTOM') {
                     setInvoicePrefix(e.target.value);
@@ -1069,10 +1095,15 @@ const EditInvoicePage = () => {
               >
                 <option value="GST">GST-</option>
                 <option value="JGST">JGST-</option>
-                {companyCode && <option value={companyCode}>{companyCode}/</option>}
+                <option value="SERVICE">SERVICE-</option>
+                <option value="BKR">BKR-</option>
+                <option value="JSPL">JSPL-</option>
+                {companyCode && !['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL'].includes(companyCode) && (
+                  <option value={companyCode}>{companyCode}-</option>
+                )}
                 <option value="CUSTOM">Custom</option>
               </select>
-              {!['GST', 'JGST', companyCode].includes(invoicePrefix) && (
+              {!['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) && (
                 <input 
                   type="text" 
                   value={invoicePrefix} 

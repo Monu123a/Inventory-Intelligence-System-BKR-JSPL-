@@ -133,6 +133,7 @@ const POSPage = () => {
   const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart.filter(i => i && typeof i === 'object') : []);
   const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
   const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
+  const [paymentRemarks, setPaymentRemarks] = useState(savedState.paymentRemarks || '');
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
   const [previewReceiptData, setPreviewReceiptData] = useState(null);
@@ -410,6 +411,7 @@ const POSPage = () => {
       setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
       setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', custom_invoice_number: '', custom_invoice_date: '' });
       setPaymentReference('');
+      setPaymentRemarks('');
       setSearchTerm('');
       localStorage.removeItem(POS_STORAGE_KEY);
       
@@ -430,6 +432,12 @@ const POSPage = () => {
   
   const handlePreview = () => {
     // Generate a mock invoice object matching InvoiceRenderer structure
+    const formattedInvoiceNo = invoiceInfo.custom_invoice_number 
+      ? (invoicePrefix && !invoiceInfo.custom_invoice_number.toUpperCase().startsWith(`${invoicePrefix}-`) 
+          ? `${invoicePrefix}-${invoiceInfo.custom_invoice_number}` 
+          : invoiceInfo.custom_invoice_number)
+      : (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW');
+
     const mockInvoice = {
       company: companySettings ? {
         name: companySettings.legal_name || currentCompany?.name || 'BKR',
@@ -443,7 +451,8 @@ const POSPage = () => {
         bank_details: companySettings.bank_details,
       } : (currentCompany || { name: 'BKR', gstin: 'TEST' }),
       invoice_type: invoiceType || 'B2C',
-      invoice_number: invoiceInfo.custom_invoice_number || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'),
+      invoice_prefix: invoicePrefix,
+      invoice_number: formattedInvoiceNo,
       date: invoiceInfo.custom_invoice_date || new Date().toISOString(),
       customer: customerInfo ? { 
         name: customerInfo.name || customerInfo.phone || customerInfo.mobile || 'Cash Customer',
@@ -482,7 +491,9 @@ const POSPage = () => {
         total_tax: isInterState ? totals.igst : (totals.cgst + totals.sgst),
         grand_total: totals.grand
       },
-      payment_method: paymentMethod
+      payment_method: paymentMethod,
+      payment_reference: paymentReference,
+      payment_remarks: paymentRemarks
     };
     setPreviewReceiptData(mockInvoice);
   };
@@ -573,6 +584,7 @@ const POSPage = () => {
 
       payment_method: paymentMethod,
       payment_reference: paymentReference || null,
+      payment_remarks: paymentRemarks || null,
       origin_warehouse_id: selectedWarehouseId || null,
       total_taxable_amount: totals.taxable,
       total_tax: totals.tax,
@@ -602,10 +614,10 @@ const POSPage = () => {
   // Auto-save state to localStorage
   useEffect(() => {
     const stateToSave = {
-      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId
+      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, paymentRemarks, invoicePrefix, invoiceType, selectedWarehouseId
     };
     localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(stateToSave));
-  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, invoicePrefix, invoiceType, selectedWarehouseId]);
+  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, paymentRemarks, invoicePrefix, invoiceType, selectedWarehouseId]);
 
   
   const { data: customers = [] } = useQuery({
@@ -652,6 +664,7 @@ const POSPage = () => {
       });
       setPaymentMethod('Cash');
       setPaymentReference('');
+      setPaymentRemarks('');
       localStorage.removeItem(POS_STORAGE_KEY);
     }
   };
@@ -762,7 +775,7 @@ const POSPage = () => {
                 <label>Bill Series</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <select 
-                    value={['GST', 'JGST', companyCode].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                    value={['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
                     onChange={e => {
                       if (e.target.value !== 'CUSTOM') {
                         setInvoicePrefix(e.target.value);
@@ -771,14 +784,19 @@ const POSPage = () => {
                       }
                     }}
                     className={styles.inputField}
-                    style={{ width: '100px' }}
+                    style={{ width: '110px' }}
                   >
                     <option value="GST">GST-</option>
                     <option value="JGST">JGST-</option>
-                    {companyCode && <option value={companyCode}>{companyCode}/</option>}
+                    <option value="SERVICE">SERVICE-</option>
+                    <option value="BKR">BKR-</option>
+                    <option value="JSPL">JSPL-</option>
+                    {companyCode && !['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL'].includes(companyCode) && (
+                      <option value={companyCode}>{companyCode}-</option>
+                    )}
                     <option value="CUSTOM">Custom</option>
                   </select>
-                  {!['GST', 'JGST', companyCode].includes(invoicePrefix) && (
+                  {!['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) && (
                     <input 
                       type="text" 
                       value={invoicePrefix} 
@@ -1077,17 +1095,17 @@ const POSPage = () => {
               <table className={styles.cartTable}>
                 <thead>
                   <tr>
-                    <th style={{ width: '28%' }}>Product Details</th>
-                    <th style={{ width: '9%' }}>HSN</th>
-                    <th style={{ width: '8%', textAlign: 'center' }}>Qty</th>
-                    <th style={{ width: '6%', textAlign: 'center' }}>Unit</th>
-                    <th style={{ width: '10%', textAlign: 'right' }}>Rate (₹)</th>
-                    <th style={{ width: '8%', textAlign: 'right' }}>Disc. (₹)</th>
-                    <th style={{ width: '7%', textAlign: 'center' }}>GST %</th>
-                    <th style={{ width: '10%', textAlign: 'right' }}>Taxable</th>
-                    <th style={{ width: '10%', textAlign: 'right' }}>{isInterState ? 'IGST (₹)' : 'Taxes (₹)'}</th>
-                    <th style={{ width: '11%', textAlign: 'right' }}>Total (₹)</th>
-                    <th style={{ width: '4%' }}></th>
+                    <th style={{ minWidth: '160px' }}>Product Details</th>
+                    <th style={{ width: '70px', textAlign: 'center' }}>HSN</th>
+                    <th style={{ width: '50px', textAlign: 'center' }}>Qty</th>
+                    <th style={{ width: '40px', textAlign: 'center' }}>Unit</th>
+                    <th style={{ width: '80px', textAlign: 'right' }}>Rate (₹)</th>
+                    <th style={{ width: '60px', textAlign: 'right' }}>Disc. (₹)</th>
+                    <th style={{ width: '55px', textAlign: 'center' }}>GST %</th>
+                    <th style={{ width: '75px', textAlign: 'right' }}>Taxable</th>
+                    <th style={{ width: '70px', textAlign: 'right' }}>{isInterState ? 'IGST (₹)' : 'Taxes (₹)'}</th>
+                    <th style={{ width: '80px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ width: '32px', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1229,16 +1247,18 @@ const POSPage = () => {
               <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={styles.inputField}>
                 <option value="Cash">Cash</option>
                 <option value="UPI">UPI</option>
-                <option value="Card">Card</option>
-                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Card">Card / POS</option>
+                <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                <option value="COD">COD (Cash on Delivery)</option>
+                <option value="Mix / Split">Mix / Split Payment</option>
                 <option value="Cheque">Cheque</option>
-                <option value="Credit">Credit</option>
+                <option value="Credit">Credit / Pay Later</option>
               </select>
             </div>
 
-            {paymentMethod !== 'Cash' && (
+            {paymentMethod !== 'Cash' && paymentMethod !== 'COD' && (
               <div className={styles.inputGroup}>
-                <label>{paymentMethod === 'UPI' ? 'UPI UTR / Reference No.' : paymentMethod === 'Cheque' ? 'Cheque Number' : 'Transaction Reference'}</label>
+                <label>{paymentMethod === 'UPI' ? 'UPI UTR / Reference No.' : paymentMethod === 'Cheque' ? 'Cheque Number' : paymentMethod === 'Mix / Split' ? 'Payment Reference' : 'Transaction Reference'}</label>
                 <input
                   value={paymentReference}
                   onChange={e => setPaymentReference(e.target.value)}
@@ -1247,6 +1267,16 @@ const POSPage = () => {
                 />
               </div>
             )}
+
+            <div className={styles.inputGroup} style={{ marginTop: '10px' }}>
+              <label>Payment Remarks (Mix / Split Details)</label>
+              <input
+                value={paymentRemarks}
+                onChange={e => setPaymentRemarks(e.target.value)}
+                placeholder="e.g. ₹500 Cash + ₹1200 UPI Ref #9872"
+                className={styles.inputField}
+              />
+            </div>
           </div>
 
           {invoiceType === 'B2B' && (

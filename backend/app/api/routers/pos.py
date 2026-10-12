@@ -148,6 +148,7 @@ class PosCheckoutRequest(BaseModel):
 
     payment_method: str
     payment_reference: Optional[str] = None
+    payment_remarks: Optional[str] = None
     payment_date: Optional[datetime] = None
     total_taxable_amount: float
     total_tax: float
@@ -269,20 +270,21 @@ def complete_sale(
                         sku_name = product.sku if product else str(product_id)
                         raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
-        # 2. Generate Bill Number (company-aware)
-        company = db.query(Company).filter(Company.id == company_id).first()
-        company_code = company.code if company else "CO"
-        bill_number = _generate_bill_number(company_code)
-
-        # 2.1 Generate Invoice Number (sequence-based)
+        # 2. Generate Invoice Number (sequence-based or prefixed custom)
         from app.services.document_number_service import DocumentNumberService
         from app.models.schema import DocumentTypeEnum
         from app.services.invoice_number_service import _get_fiscal_year_string
         from datetime import datetime
         company = db.query(Company).filter(Company.id == company_id).first()
+        company_code = company.code if company else "CO"
+        prefix = (payload.invoice_prefix or company_code).strip().upper()
         
-        if payload.custom_invoice_number:
-            invoice_number = payload.custom_invoice_number
+        if payload.custom_invoice_number and payload.custom_invoice_number.strip():
+            raw_no = payload.custom_invoice_number.strip()
+            if prefix and not raw_no.upper().startswith(f"{prefix}-") and not raw_no.upper().startswith(f"{prefix}/"):
+                invoice_number = f"{prefix}-{raw_no}"
+            else:
+                invoice_number = raw_no
         else:
             fy = _get_fiscal_year_string(datetime.today().date())
             invoice_number = DocumentNumberService.generate_number(
@@ -290,8 +292,11 @@ def complete_sale(
                 company_id=company_id,
                 document_type=DocumentTypeEnum.SALE,
                 fiscal_year=fy,
-                prefix_override=payload.invoice_prefix or (company.code if company else "CO")
+                prefix_override=prefix
             )
+
+        # Ensure bill_number is consistent and matches invoice_number
+        bill_number = invoice_number or _generate_bill_number(company_code)
 
         # Company snapshot source (settings)
         settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
@@ -347,6 +352,7 @@ def complete_sale(
             grand_total=payload.grand_total,
             payment_method=payload.payment_method,
             payment_reference=payload.payment_reference,
+            payment_remarks=payload.payment_remarks,
             payment_date=payload.payment_date,
             status="Completed"
         )
@@ -734,6 +740,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
         "sale_date": sale.sale_date.isoformat() if sale.sale_date else None,
         "payment_method": sale.payment_method,
         "payment_reference": sale.payment_reference,
+        "payment_remarks": sale.payment_remarks,
         "payment_date": sale.payment_date.isoformat() if sale.payment_date else None,
         "buyer_order_no": sale.buyer_order_no,
         "buyer_order_date": sale.buyer_order_date,
@@ -1065,7 +1072,13 @@ def update_sale(
 
     # 1. Header Updates
     if payload.custom_invoice_number and payload.custom_invoice_number.strip():
-        new_inv_no = payload.custom_invoice_number.strip()
+        raw_no = payload.custom_invoice_number.strip()
+        prefix = (payload.invoice_prefix or "").strip().upper()
+        if prefix and not raw_no.upper().startswith(f"{prefix}-") and not raw_no.upper().startswith(f"{prefix}/"):
+            new_inv_no = f"{prefix}-{raw_no}"
+        else:
+            new_inv_no = raw_no
+
         if new_inv_no != sale.bill_number:
             # Check for uniqueness
             existing = db.query(Sale).filter(Sale.bill_number == new_inv_no, Sale.company_id == company_id).first()
@@ -1109,6 +1122,12 @@ def update_sale(
     sale.total_taxable_amount = payload.total_taxable_amount
     sale.total_tax = payload.total_tax
     sale.grand_total = payload.grand_total
+
+    sale.payment_method = payload.payment_method
+    sale.payment_reference = payload.payment_reference
+    sale.payment_remarks = payload.payment_remarks
+    if payload.payment_date:
+        sale.payment_date = payload.payment_date
     
     # Reset Tally sync
     if sale.tally_sync_status in ['COMPLETED', 'FAILED', 'PENDING']:
