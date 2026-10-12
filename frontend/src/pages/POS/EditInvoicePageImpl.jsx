@@ -70,21 +70,9 @@ const CollapsibleSection = ({ title, defaultOpen = false, children }) => {
 // POSPage Component
 // ---------------------------------------------------------------------------
 const EditInvoicePage = () => {
-  const POS_STORAGE_KEY = 'pos_draft_state_v1';
-  const getSavedState = () => {
-    try {
-      const saved = localStorage.getItem(POS_STORAGE_KEY);
-      if (!saved) return {};
-      const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed;
-      }
-      return {};
-    } catch(e) { return {}; }
-  };
-  const savedState = getSavedState() || {};
   const navigate = useNavigate();
   const { id } = useParams();
+  const [isLoadingSale, setIsLoadingSale] = useState(true);
   const [isLoaded, setIsLoaded] = React.useState(false);
 
   const location = useLocation();
@@ -92,7 +80,6 @@ const EditInvoicePage = () => {
   useEffect(() => {
     if (location.state?.tallyItems && location.state.tallyItems.length > 0) {
       const newItems = location.state.tallyItems.map((item, idx) => {
-        // Find existing index logic if needed, but we can just append
         const rate = item.rate || 0;
         const qty = item.quantity || 1;
         const gst = item.gst_rate || 0;
@@ -119,8 +106,7 @@ const EditInvoicePage = () => {
         };
       });
       setCart(prev => [...prev, ...newItems]);
-      // clear state so it doesn't run again on reload
-      window.history.replaceState({}, document.title)
+      window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
@@ -128,14 +114,14 @@ const EditInvoicePage = () => {
   const companyName = currentCompany?.name || 'POS';
   const companyCode = useCompanyStore(state => state.companyCode) || '';
 
-  // Existing state
+  // Clean form state for editing
   const [searchTerm, setSearchTerm] = useState('');
-  const [invoicePrefix, setInvoicePrefix] = useState(savedState.invoicePrefix || companyCode || 'GST');
+  const [invoicePrefix, setInvoicePrefix] = useState(companyCode || 'GST');
   const [searchResults, setSearchResults] = useState([]);
-  const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart.filter(i => i && typeof i === 'object') : []);
-  const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
-  const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
-  const [paymentRemarks, setPaymentRemarks] = useState(savedState.paymentRemarks || '');
+  const [cart, setCart] = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentRemarks, setPaymentRemarks] = useState('');
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
   const [previewReceiptData, setPreviewReceiptData] = useState(null);
@@ -149,7 +135,7 @@ const EditInvoicePage = () => {
   const idempotencyKeyRef = useRef(window.crypto.randomUUID());
 
   const queryClient = useQueryClient();
-    const { data: activeWarehouses = [] } = useQuery({
+  const { data: activeWarehouses = [] } = useQuery({
     queryKey: ['activeWarehouses', companyCode],
     queryFn: async () => {
       const all = await warehouseService.getWarehouses();
@@ -158,20 +144,17 @@ const EditInvoicePage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(savedState.selectedWarehouseId || '');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
 
   // Default warehouse selection logic
   useEffect(() => {
-    if (activeWarehouses.length > 0) {
-      const isValid = activeWarehouses.find(w => String(w.id) === String(selectedWarehouseId));
-      if (!isValid) {
-        const defaultWh = activeWarehouses.find(w => 
-          (w.code || '').toUpperCase().includes('DEFAULT') || 
-          (w.code || '').toUpperCase().includes('MAIN') ||
-          (w.code || '').toUpperCase().includes('POS')
-        ) || activeWarehouses[0];
-        setSelectedWarehouseId(defaultWh.id);
-      }
+    if (activeWarehouses.length > 0 && !selectedWarehouseId) {
+      const defaultWh = activeWarehouses.find(w => 
+        (w.code || '').toUpperCase().includes('DEFAULT') || 
+        (w.code || '').toUpperCase().includes('MAIN') ||
+        (w.code || '').toUpperCase().includes('POS')
+      ) || activeWarehouses[0];
+      setSelectedWarehouseId(defaultWh.id);
     }
   }, [activeWarehouses, selectedWarehouseId]);
 
@@ -184,27 +167,25 @@ const EditInvoicePage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-
-
-
   // Load pending offline count on mount
   useEffect(() => {
     posService.getPending().then(items => {
       if (Array.isArray(items)) setPendingCount(items.length);
     }).catch(() => {});
   }, []);
-  // New: Invoice Type
-  const [invoiceType, setInvoiceType] = useState(savedState.invoiceType || 'B2C');
 
-  // New: Extended Customer Info
-  const [customerInfo, setCustomerInfo] = useState((savedState.customerInfo && typeof savedState.customerInfo === 'object') ? savedState.customerInfo : {
+  // Invoice Type
+  const [invoiceType, setInvoiceType] = useState('B2C');
+
+  // Extended Customer Info
+  const [customerInfo, setCustomerInfo] = useState({
     name: '', mobile: '', gstin: '', address: '',
     state: '', state_code: '', place_of_supply: '',
     email: '', phone: '',
   });
 
-  // New: Invoice Info
-  const [invoiceInfo, setInvoiceInfo] = useState((savedState.invoiceInfo && typeof savedState.invoiceInfo === 'object') ? savedState.invoiceInfo : {
+  // Invoice Info
+  const [invoiceInfo, setInvoiceInfo] = useState({
     buyer_order_no: '',
     buyer_order_date: '',
     payment_terms: '',
@@ -403,10 +384,10 @@ const EditInvoicePage = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['sale', id] });
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       
-      localStorage.removeItem(POS_STORAGE_KEY);
-      navigate(`/pos-history`);
+      navigate(`/sales/${id}/invoice`);
     },
     onError: (err) => {
       handleApiError(err, "Update failed");
@@ -580,21 +561,27 @@ const EditInvoicePage = () => {
 
   // Load existing invoice data
   useEffect(() => {
-    if (id && currentCompany && !isLoaded) {
-      api.get(`/api/pos/sales/${id}`).then(res => {
+    if (!id) return;
+    let isMounted = true;
+    setIsLoadingSale(true);
+    api.get(`/api/pos/sales/${id}`)
+      .then(res => {
+        if (!isMounted) return;
         const sale = res.data.receipt || res.data;
         if (sale.status === 'Cancelled') {
           setError('Cannot edit a cancelled invoice.');
         }
-        
+
         setInvoiceType(sale.invoice_type || 'B2C');
         if (sale.payment_method) setPaymentMethod(sale.payment_method);
         if (sale.payment_reference) setPaymentReference(sale.payment_reference);
         if (sale.payment_remarks) setPaymentRemarks(sale.payment_remarks);
+        if (sale.origin_warehouse_id) setSelectedWarehouseId(sale.origin_warehouse_id);
+
         if (sale.invoice_number && sale.invoice_number.includes('-')) {
           setInvoicePrefix(sale.invoice_number.split('-')[0]);
         }
-        
+
         if (sale.customer) {
           setCustomerInfo({
             name: sale.customer.name || '',
@@ -608,15 +595,20 @@ const EditInvoicePage = () => {
             phone: sale.customer.phone || ''
           });
         }
-        
+
+        const cleanDate = (d) => {
+          if (!d) return '';
+          return d.includes('T') ? d.split('T')[0] : d;
+        };
+
         setInvoiceInfo({
           custom_invoice_number: sale.invoice_number || '',
-          custom_invoice_date: sale.sale_date || '',
+          custom_invoice_date: cleanDate(sale.sale_date),
           buyer_order_no: sale.buyer_order_no || '',
-          buyer_order_date: sale.buyer_order_date || '',
+          buyer_order_date: cleanDate(sale.buyer_order_date),
           payment_terms: sale.payment_terms || '',
           delivery_note: sale.delivery_note || '',
-          delivery_note_date: sale.delivery_note_date || '',
+          delivery_note_date: cleanDate(sale.delivery_note_date),
           dispatch_document_number: sale.dispatch_document_number || '',
           dispatch_through: sale.dispatch_through || '',
           destination: sale.destination || '',
@@ -624,97 +616,81 @@ const EditInvoicePage = () => {
           lr_rr_number: sale.lr_rr_number || '',
           terms_of_delivery: sale.terms_of_delivery || ''
         });
-        
+
         const mappedCart = (sale.items || []).map(item => {
           const qty = item.quantity || 1;
-          const rate = item.rate || item.selling_price || 0;
+          const rate = item.rate !== undefined ? item.rate : (item.selling_price || 0);
           const discount = item.discount || 0;
-          const gst = item.gst_rate || item.gst_percent || 0;
-          const taxable = (rate * qty) - discount;
-          const tax = taxable * (gst / 100);
-          
+          const gst = item.gst_rate !== undefined ? item.gst_rate : (item.gst_percent || 0);
+          const taxable = item.taxable_value !== undefined ? item.taxable_value : ((rate * qty) - discount);
+          const cgst = item.cgst !== undefined ? item.cgst : (taxable * gst) / 200;
+          const sgst = item.sgst !== undefined ? item.sgst : (taxable * gst) / 200;
+          const igst = item.igst !== undefined ? item.igst : 0;
+          const lineTotal = item.line_total !== undefined ? item.line_total : (taxable + cgst + sgst + igst);
+
           return {
-            product_id: item.product_id || item.id, 
+            product_id: item.product_id,
             sku: item.sku,
+            product_name: item.product_name || item.name,
             name: item.product_name || item.name,
-            hsn_sac: item.hsn_sac,
+            hsn_sac: item.hsn_sac || '',
             selling_price: rate,
             gst_rate: gst,
             quantity: qty,
             discount: discount,
             taxable_amount: taxable,
-            cgst: tax / 2,
-            sgst: tax / 2,
-            igst: 0,
-            line_total: taxable + tax,
+            cgst: cgst,
+            sgst: sgst,
+            igst: igst,
+            line_total: lineTotal,
             unit: item.unit || 'PCS'
           };
         });
-        
+
         setCart(mappedCart);
         setIsLoaded(true);
-      }).catch(err => {
+      })
+      .catch(err => {
+        if (!isMounted) return;
         console.error("Error loading sale:", err);
         setError("Error: " + (err.response?.data?.detail || err.message || String(err)));
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingSale(false);
       });
-    }
-  }, [id, currentCompany, isLoaded]);
 
-  // Auto-save state to localStorage
-  useEffect(() => {
-    const stateToSave = {
-      cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, paymentRemarks, invoicePrefix, invoiceType, selectedWarehouseId
-    };
-    localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(stateToSave));
-  }, [cart, customerInfo, invoiceInfo, paymentMethod, paymentReference, paymentRemarks, invoicePrefix, invoiceType, selectedWarehouseId]);
-
-  const handleClearCart = () => {
-    if (window.confirm("Are you sure you want to clear the entire cart and customer details?")) {
-      setCart([]);
-      setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
-      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', custom_invoice_number: '', custom_invoice_date: '' });
-      setPaymentMethod('Cash');
-      setPaymentReference('');
-      localStorage.removeItem(POS_STORAGE_KEY);
-    }
-  };
+    return () => { isMounted = false; };
+  }, [id]);
 
   // Helper to update nested state
   const updateCustomer = (field, value) => setCustomerInfo(prev => ({ ...prev, [field]: value }));
   const updateInvoice = (field, value) => setInvoiceInfo(prev => ({ ...prev, [field]: value }));
 
+  if (isLoadingSale) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 600, color: '#334155' }}>Loading Invoice #{id}...</div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.posContainer}>
       <div className={styles.header}>
-        <h1>Offline POS ({companyName})</h1>
-        <button onClick={handleClearCart} style={{ background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px', marginLeft: '15px' }}>
-          Clear Cart / Start Fresh
-        </button>
-        {pendingCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button 
-            onClick={async () => {
-              setSyncing(true);
-              try {
-                const result = await posService.syncOffline();
-                setPendingCount(0);
-                alert(`Sync complete: ${result.synced || 0} synced, ${result.failed || 0} failed`);
-              } catch (e) { 
-                alert('Sync failed. Try again later.'); 
-              } finally { 
-                setSyncing(false); 
-              }
-            }}
+            type="button" 
+            onClick={() => navigate(`/sales/${id}/invoice`)}
             style={{ 
-              background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px',
-              padding: '6px 14px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px'
+              background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', 
+              borderRadius: '6px', padding: '6px 14px', cursor: 'pointer', 
+              fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' 
             }}
-            disabled={syncing}
           >
-            <FiRefreshCw size={14} className={syncing ? 'spin' : ''} />
-            {syncing ? 'Syncing...' : `Sync ${pendingCount} Pending`}
+            ← Cancel & Back to Bill
           </button>
-        )}
+          <h1 style={{ margin: 0 }}>Edit Bill #{invoiceInfo.custom_invoice_number || id}</h1>
+        </div>
         {/* Invoice Type Selector */}
         <div className={styles.invoiceTypeSelector}>
           <label>Invoice Type</label>

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 
 from app.models.db import get_db
-from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem, User
+from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem, User, InventoryMovement
 from app.api.dependencies import get_current_company_id, get_current_user
 from app.services.inventory_event_engine import InventoryEventEngine
 from app.services.invoice_number_service import InvoiceNumberService
@@ -702,6 +702,9 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
                     if ri.sale_item_id:
                         item_return_map[ri.sale_item_id] = item_return_map.get(ri.sale_item_id, 0) + ri.returned_quantity
                         
+    sale_mov = db.query(InventoryMovement).filter(InventoryMovement.reference_id == sale.bill_number).first()
+    origin_wh_id = sale_mov.warehouse_id if sale_mov else None
+
     dto_items = []
     for i in (sale.items or []):
         ret_qty = item_return_map.get(i.id, 0)
@@ -713,6 +716,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
             
         dto_items.append({
             "id": i.id,
+            "product_id": i.product_id,
             "sku": i.sku,
             "product_name": i.product_name or (i.product.name if i.product else None),
             "hsn_sac": i.hsn_sac,
@@ -733,6 +737,8 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
 
     return {
         "id": sale.id,
+        "company_id": sale.company_id,
+        "origin_warehouse_id": origin_wh_id,
         "status": sale.status,
         "bill_number": sale.bill_number,
         "invoice_number": sale.invoice_number,
@@ -799,15 +805,21 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
 
 
 @router.get("/sales/{sale_id}")
-def get_sale_invoice(sale_id: int, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+def get_sale_invoice(sale_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
         
-    if sale.company_id != company_id:
-        transfer = db.query(StockTransfer).filter(StockTransfer.invoice_id == sale_id).first()
-        if not transfer or (transfer.from_company_id != company_id and transfer.to_company_id != company_id):
-            raise HTTPException(status_code=404, detail="Sale not found")
+    if current_user.role.upper() not in ["ADMIN", "SUPER_ADMIN"]:
+        from app.models.schema import CompanyUser
+        access = db.query(CompanyUser).filter(
+            CompanyUser.user_id == current_user.id,
+            CompanyUser.company_id == sale.company_id
+        ).first()
+        if not access:
+            transfer = db.query(StockTransfer).filter(StockTransfer.invoice_id == sale_id).first()
+            if not transfer or (transfer.from_company_id != current_user.company_id and transfer.to_company_id != current_user.company_id):
+                raise HTTPException(status_code=403, detail="Not authorized to access this sale")
             
     return {"receipt": _build_invoice_dto(sale, db)}
 
@@ -1052,15 +1064,23 @@ def cancel_sale(
 def update_sale(
     sale_id: int,
     payload: PosCheckoutRequest,
-    company_id: int = Depends(get_bkr_company_id),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
     from app.services.inventory_event_engine import InventoryEventEngine
     
-    sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == company_id).first()
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
+        
+    if user.role.upper() not in ["ADMIN", "SUPER_ADMIN"]:
+        from app.models.schema import CompanyUser
+        access = db.query(CompanyUser).filter(
+            CompanyUser.user_id == user.id,
+            CompanyUser.company_id == sale.company_id
+        ).first()
+        if not access:
+            raise HTTPException(status_code=403, detail="Not authorized to edit this sale")
         
     if sale.status == 'Cancelled':
         raise HTTPException(status_code=400, detail="Cannot edit a cancelled sale")
@@ -1069,6 +1089,8 @@ def update_sale(
     active_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == sale.id, SalesReturn.status != 'Cancelled').all()
     if active_returns:
         raise HTTPException(status_code=400, detail="Cannot edit a sale that has active sales returns. Please cancel the returns first.")
+
+    target_company_id = sale.company_id
 
     # 1. Header Updates
     if payload.custom_invoice_number and payload.custom_invoice_number.strip():
@@ -1081,7 +1103,7 @@ def update_sale(
 
         if new_inv_no != sale.bill_number:
             # Check for uniqueness
-            existing = db.query(Sale).filter(Sale.bill_number == new_inv_no, Sale.company_id == company_id).first()
+            existing = db.query(Sale).filter(Sale.bill_number == new_inv_no, Sale.company_id == target_company_id).first()
             if existing and existing.id != sale.id:
                 raise HTTPException(status_code=400, detail=f"Invoice number {new_inv_no} is already used.")
             sale.bill_number = new_inv_no
@@ -1137,8 +1159,14 @@ def update_sale(
     if payload.origin_warehouse_id:
         default_warehouse = db.query(Warehouse).filter(Warehouse.id == payload.origin_warehouse_id).first()
     else:
-        default_warehouse = _resolve_default_warehouse(db, company_id)
+        sale_mov = db.query(InventoryMovement).filter(InventoryMovement.reference_id == sale.bill_number).first()
+        if sale_mov:
+            default_warehouse = db.query(Warehouse).filter(Warehouse.id == sale_mov.warehouse_id).first()
+        else:
+            default_warehouse = _resolve_default_warehouse(db, target_company_id)
         
+    if not default_warehouse:
+        default_warehouse = _resolve_default_warehouse(db, target_company_id)
     if not default_warehouse:
         raise HTTPException(status_code=400, detail="Warehouse not found for delta processing")
 
@@ -1159,13 +1187,15 @@ def update_sale(
     
     # Process updates and additions
     for req_item in new_items_payload:
-        product = db.query(Product).filter(Product.id == req_item.product_id).first()
+        product = None
+        if req_item.product_id:
+            product = db.query(Product).filter(Product.id == req_item.product_id).first()
+        if not product and req_item.sku:
+            product = db.query(Product).filter(Product.sku == req_item.sku).first()
+            
         if not product:
             continue
             
-        # Is it an existing item that came back from the UI? 
-        # (Assuming the UI passes back the sale_item.id if it existed, we need a way to match them. 
-        # If UI doesn't have sale_item.id, we map by SKU)
         existing_item = next((oi for oi in old_items.values() if oi.sku == (req_item.sku or product.sku)), None)
         
         delta_qty = req_item.quantity
@@ -1173,6 +1203,7 @@ def update_sale(
             delta_qty = req_item.quantity - existing_item.quantity
             
             # Update existing row
+            existing_item.product_id = product.id
             existing_item.quantity = req_item.quantity
             existing_item.selling_price = req_item.selling_price
             existing_item.gst_rate = req_item.gst_rate
@@ -1183,7 +1214,7 @@ def update_sale(
             existing_item.line_total = req_item.line_total
             existing_item.product_name = req_item.product_name or product.name
             existing_item.hsn_sac = req_item.hsn_sac or product.hsn
-            existing_item.unit = product.unit
+            existing_item.unit = req_item.unit or product.unit
             existing_item.discount = req_item.discount or 0.0
             
             del old_items[existing_item.id] # mark as processed
@@ -1203,7 +1234,7 @@ def update_sale(
                 line_total=req_item.line_total,
                 product_name=req_item.product_name or product.name,
                 hsn_sac=req_item.hsn_sac or product.hsn,
-                unit=product.unit,
+                unit=req_item.unit or product.unit,
                 discount=req_item.discount or 0.0
             )
             db.add(new_sale_item)
@@ -1214,14 +1245,18 @@ def update_sale(
             source = "OFFLINE_POS" if delta_qty > 0 else "INVOICE_EDIT"
             InventoryEventEngine.process_event(
                 db=db,
-                company_id=company_id,
+                company_id=target_company_id,
                 product_sku=product.sku,
                 warehouse_id=default_warehouse.id,
                 quantity=abs(delta_qty),
                 event_type=event_type,
                 source=source,
                 reference_id=sale.bill_number,
-                metadata_payload={"sale_id": sale.id, "edit_delta": delta_qty},
+                metadata_payload={
+                    "operation_id": f"EDIT_{sale.id}_{product.sku}_{uuid4().hex[:8]}",
+                    "sale_id": sale.id, 
+                    "edit_delta": delta_qty
+                },
             )
             
             if linked_transfer and dest_warehouse_id:
@@ -1235,7 +1270,12 @@ def update_sale(
                     event_type=dest_event_type,
                     source="INVOICE_EDIT",
                     reference_id=sale.bill_number,
-                    metadata_payload={"sale_id": sale.id, "edit_delta": delta_qty, "linked_transfer": linked_transfer.id},
+                    metadata_payload={
+                        "operation_id": f"EDIT_TRF_{sale.id}_{product.sku}_{uuid4().hex[:8]}",
+                        "sale_id": sale.id, 
+                        "edit_delta": delta_qty, 
+                        "linked_transfer": linked_transfer.id
+                    },
                 )
             
     # Process removals (anything left in old_items was deleted from the UI)
@@ -1243,14 +1283,18 @@ def update_sale(
         if not payload.skip_inventory_update:
             InventoryEventEngine.process_event(
                 db=db,
-                company_id=company_id,
+                company_id=target_company_id,
                 product_sku=oi.sku,
                 warehouse_id=default_warehouse.id,
                 quantity=oi.quantity,
                 event_type="ADD",
                 source="INVOICE_EDIT",
                 reference_id=sale.bill_number,
-                metadata_payload={"sale_id": sale.id, "edit_delta": -oi.quantity},
+                metadata_payload={
+                    "operation_id": f"EDIT_DEL_{sale.id}_{oi.sku}_{uuid4().hex[:8]}",
+                    "sale_id": sale.id, 
+                    "edit_delta": -oi.quantity
+                },
             )
 
             if linked_transfer and dest_warehouse_id:
@@ -1263,7 +1307,12 @@ def update_sale(
                     event_type="TRANSFER_OUT",
                     source="INVOICE_EDIT",
                     reference_id=sale.bill_number,
-                    metadata_payload={"sale_id": sale.id, "edit_delta": -oi.quantity, "linked_transfer": linked_transfer.id},
+                    metadata_payload={
+                        "operation_id": f"EDIT_TRF_DEL_{sale.id}_{oi.sku}_{uuid4().hex[:8]}",
+                        "sale_id": sale.id, 
+                        "edit_delta": -oi.quantity, 
+                        "linked_transfer": linked_transfer.id
+                    },
                 )
         db.delete(oi)
 

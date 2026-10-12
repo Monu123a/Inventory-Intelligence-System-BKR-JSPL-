@@ -6,7 +6,7 @@ import { handleApiError } from '../../utils/errorHandler';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
 import styles from './SalesHistoryPage.module.css';
-import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock } from 'react-icons/fi';
+import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit } from 'react-icons/fi';
 
 const SalesHistoryPage = () => {
   const navigate = useNavigate();
@@ -135,6 +135,15 @@ const SalesHistoryPage = () => {
           >
             <FiEye /> View
           </button>
+          {sale.status !== 'Cancelled' && (!sale.linked_sales_return_ids || sale.linked_sales_return_ids.length === 0) && (
+            <button 
+              className={styles.actionBtn} 
+              title="Edit Invoice"
+              onClick={() => navigate(`/sales/${sale.id}/edit`)}
+            >
+              <FiEdit /> Edit
+            </button>
+          )}
           {sale.linked_sales_return_ids?.length > 0 && (
             <button 
               className={styles.actionBtn} 
