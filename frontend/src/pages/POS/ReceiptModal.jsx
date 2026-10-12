@@ -31,6 +31,12 @@ const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) =>
             <span>Date:</span>
             <span>{formatDate(receipt.sale_date)}</span>
           </div>
+          {(receipt.buyer_order_no || receipt.order_no) && (
+            <div className={styles.row}>
+              <span>Order No:</span>
+              <span className={styles.bold}>{receipt.buyer_order_no || receipt.order_no}</span>
+            </div>
+          )}
           {receipt.customer?.name && (
             <div className={styles.row}>
               <span>Customer:</span>

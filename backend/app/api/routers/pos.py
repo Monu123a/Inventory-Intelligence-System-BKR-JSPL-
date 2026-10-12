@@ -319,6 +319,10 @@ def complete_sale(
             idempotency_key=payload.idempotency_key,
             invoice_number=invoice_number,
             invoice_type=payload.invoice_type,
+            buyer_order_no=payload.buyer_order_no,
+            buyer_order_date=payload.buyer_order_date,
+            destination=payload.destination,
+            payment_terms=payload.payment_terms,
             vehicle_number=payload.vehicle_number,
             lr_rr_number=payload.lr_rr_number,
             terms_of_delivery=payload.terms_of_delivery,
@@ -1090,6 +1094,10 @@ def update_sale(
         sale.created_at = payload.custom_invoice_date
         sale.sale_date = payload.custom_invoice_date
         
+    sale.buyer_order_no = payload.buyer_order_no
+    sale.buyer_order_date = payload.buyer_order_date
+    sale.destination = payload.destination
+    sale.payment_terms = payload.payment_terms
     sale.vehicle_number = payload.vehicle_number
     sale.lr_rr_number = payload.lr_rr_number
     sale.terms_of_delivery = payload.terms_of_delivery

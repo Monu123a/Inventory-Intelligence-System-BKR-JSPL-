@@ -9,7 +9,7 @@ import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
 import InvoicePreviewModal from './InvoicePreviewModal';
 import useCompanyStore from '../../stores/useCompanyStore';
-import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw } from 'react-icons/fi';
+import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw, FiSearch, FiShoppingBag, FiFileText, FiTrash2, FiEye, FiCheckCircle, FiUser } from 'react-icons/fi';
 
 // ---------------------------------------------------------------------------
 // GSTIN validation (basic format: 2-digit state + 10 PAN + 1 entity + 1 Z + 1 check)
@@ -452,6 +452,8 @@ const POSPage = () => {
         state: customerInfo.state,
         state_code: customerInfo.state_code
       } : null,
+      buyer_order_no: invoiceInfo.buyer_order_no,
+      buyer_order_date: invoiceInfo.buyer_order_date,
       payment_terms: invoiceInfo.payment_terms,
       delivery_note: invoiceInfo.delivery_note,
       delivery_note_date: invoiceInfo.delivery_note_date,
@@ -641,7 +643,13 @@ const POSPage = () => {
     if (window.confirm("Are you sure you want to clear the entire cart and customer details?")) {
       setCart([]);
       setCustomerInfo({ name: '', mobile: '', gstin: '', address: '', state: '', state_code: '', place_of_supply: '', email: '', phone: '' });
-      setInvoiceInfo({ payment_terms: '', delivery_note: '', delivery_note_date: '', dispatch_document_number: '', dispatch_through: '', destination: '', vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', custom_invoice_number: '', custom_invoice_date: '' });
+      setInvoiceInfo({ 
+        buyer_order_no: '', buyer_order_date: '',
+        payment_terms: '', delivery_note: '', delivery_note_date: '', 
+        dispatch_document_number: '', dispatch_through: '', destination: '', 
+        vehicle_number: '', lr_rr_number: '', terms_of_delivery: '', 
+        custom_invoice_number: '', custom_invoice_date: '' 
+      });
       setPaymentMethod('Cash');
       setPaymentReference('');
       localStorage.removeItem(POS_STORAGE_KEY);
@@ -654,371 +662,535 @@ const POSPage = () => {
 
   return (
     <div className={styles.posContainer}>
+      {/* Top Header */}
       <div className={styles.header}>
-        <h1>Offline POS ({companyName})</h1>
-        <button onClick={handleClearCart} style={{ background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '14px', marginLeft: '15px' }}>
-          Clear Cart / Start Fresh
-        </button>
-        {pendingCount > 0 && (
-          <button 
-            onClick={async () => {
-              setSyncing(true);
-              try {
-                const result = await posService.syncOffline();
-                setPendingCount(0);
-                alert(`Sync complete: ${result.synced || 0} synced, ${result.failed || 0} failed`);
-              } catch (e) { 
-                alert('Sync failed. Try again later.'); 
-              } finally { 
-                setSyncing(false); 
-              }
-            }}
-            style={{ 
-              background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px',
-              padding: '6px 14px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px'
-            }}
-            disabled={syncing}
-          >
-            <FiRefreshCw size={14} className={syncing ? 'spin' : ''} />
-            {syncing ? 'Syncing...' : `Sync ${pendingCount} Pending`}
-          </button>
-        )}
-        {/* Invoice Type Selector */}
-        <div className={styles.invoiceTypeSelector}>
-          <label>Invoice Type</label>
-          <div className={styles.invoiceTypeBtns}>
-            <button
-              type="button"
-              className={`${styles.typeBtn} ${invoiceType === 'B2C' ? styles.typeBtnActive : ''}`}
-              onClick={() => setInvoiceType('B2C')}
-            >
-              B2C
-            </button>
-            <button
-              type="button"
-              className={`${styles.typeBtn} ${invoiceType === 'B2B' ? styles.typeBtnActive : ''}`}
-              onClick={() => setInvoiceType('B2B')}
-            >
-              B2B
-            </button>
-          </div>
+        <div className={styles.headerLeft}>
+          <h1 className={styles.headerTitle}>
+            <FiShoppingBag /> Offline POS & Billing
+          </h1>
+          <span className={styles.companyBadge}>{companyName}</span>
+          <span style={{ 
+            display: 'inline-flex', alignItems: 'center', gap: '5px', 
+            fontSize: '12px', padding: '3px 10px', borderRadius: '12px',
+            background: navigator.onLine ? '#ecfdf5' : '#fef2f2',
+            color: navigator.onLine ? '#059669' : '#dc2626',
+            fontWeight: 600, border: `1px solid ${navigator.onLine ? '#a7f3d0' : '#fecaca'}`
+          }}>
+            {navigator.onLine ? <FiWifi size={12} /> : <FiWifiOff size={12} />}
+            {navigator.onLine ? 'Online' : 'Offline Queue Active'}
+          </span>
         </div>
 
-        {activeWarehouses.length > 0 && (
-          <div className={styles.invoiceTypeSelector} style={{ marginLeft: '1rem', flex: 1 }}>
-            <label>Billing Warehouse</label>
-            <select 
-              value={selectedWarehouseId} 
-              onChange={e => setSelectedWarehouseId(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', marginTop: '0.25rem' }}
+        <div className={styles.headerActions}>
+          {pendingCount > 0 && (
+            <button 
+              className={styles.syncBtn}
+              onClick={async () => {
+                setSyncing(true);
+                try {
+                  const result = await posService.syncOffline();
+                  setPendingCount(0);
+                  alert(`Sync complete: ${result.synced || 0} synced, ${result.failed || 0} failed`);
+                } catch (e) { 
+                  alert('Sync failed. Try again later.'); 
+                } finally { 
+                  setSyncing(false); 
+                }
+              }}
+              disabled={syncing}
             >
-              {activeWarehouses.map(w => (
-                <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
-              ))}
-            </select>
-          </div>
-        )}
+              <FiRefreshCw size={14} className={syncing ? 'spin' : ''} />
+              {syncing ? 'Syncing...' : `Sync ${pendingCount} Pending Bills`}
+            </button>
+          )}
+
+          <button onClick={handleClearCart} className={styles.clearBtn} title="Clear cart and customer details">
+            <FiRefreshCw size={13} /> Clear / New Bill
+          </button>
+        </div>
       </div>
 
       {error && <div className={styles.errorMsg}>{error}</div>}
 
       <div className={styles.layout}>
+        {/* Main Left Workspace */}
         <div className={styles.mainPanel}>
-          {/* Customer Details - expanded for B2B */}
-          <div className={styles.sectionBlock}>
-            <h2 className={styles.sectionTitle}>Customer Details{invoiceType === 'B2B' ? ' (Required for B2B)' : ' (Optional)'}</h2>
+          
+          {/* Card 1: Bill & Order Details */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>
+                <FiFileText size={16} /> Bill & Order Details
+              </h2>
+              <div className={styles.typeSelector}>
+                <button
+                  type="button"
+                  className={`${styles.typeBtn} ${invoiceType === 'B2C' ? styles.typeBtnActive : ''}`}
+                  onClick={() => setInvoiceType('B2C')}
+                >
+                  B2C Retail
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.typeBtn} ${invoiceType === 'B2B' ? styles.typeBtnActive : ''}`}
+                  onClick={() => setInvoiceType('B2B')}
+                >
+                  B2B Tax Invoice
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.orderMetaGrid}>
+              {/* Billing Warehouse */}
+              {activeWarehouses.length > 0 && (
+                <div className={styles.inputGroup}>
+                  <label>Dispatch Warehouse</label>
+                  <select 
+                    value={selectedWarehouseId} 
+                    onChange={e => setSelectedWarehouseId(e.target.value)}
+                    className={styles.inputField}
+                  >
+                    {activeWarehouses.map(w => (
+                      <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Invoice Series */}
+              <div className={styles.inputGroup}>
+                <label>Bill Series</label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <select 
+                    value={['GST', 'JGST', companyCode].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                    onChange={e => {
+                      if (e.target.value !== 'CUSTOM') {
+                        setInvoicePrefix(e.target.value);
+                      } else {
+                        setInvoicePrefix('');
+                      }
+                    }}
+                    className={styles.inputField}
+                    style={{ width: '100px' }}
+                  >
+                    <option value="GST">GST-</option>
+                    <option value="JGST">JGST-</option>
+                    {companyCode && <option value={companyCode}>{companyCode}/</option>}
+                    <option value="CUSTOM">Custom</option>
+                  </select>
+                  {!['GST', 'JGST', companyCode].includes(invoicePrefix) && (
+                    <input 
+                      type="text" 
+                      value={invoicePrefix} 
+                      onChange={e => setInvoicePrefix(e.target.value.toUpperCase())}
+                      placeholder="Prefix"
+                      className={styles.inputField}
+                      style={{ flex: 1 }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Buyer Order No */}
+              <div className={styles.inputGroup}>
+                <label>Order No. / PO Ref. No.</label>
+                <input
+                  type="text"
+                  value={invoiceInfo.buyer_order_no || ''}
+                  onChange={e => updateInvoice('buyer_order_no', e.target.value)}
+                  placeholder="e.g. PO-9842"
+                  className={`${styles.inputField} ${styles.highlightField}`}
+                />
+              </div>
+
+              {/* Order Date */}
+              <div className={styles.inputGroup}>
+                <label>Order Date</label>
+                <input
+                  type="date"
+                  value={invoiceInfo.buyer_order_date || ''}
+                  onChange={e => updateInvoice('buyer_order_date', e.target.value)}
+                  className={styles.inputField}
+                />
+              </div>
+
+              {/* Manual Bill Date */}
+              <div className={styles.inputGroup}>
+                <label>Bill Date (Optional)</label>
+                <input
+                  type="date"
+                  value={invoiceInfo.custom_invoice_date || ''}
+                  onChange={e => updateInvoice('custom_invoice_date', e.target.value)}
+                  className={styles.inputField}
+                />
+              </div>
+
+              {/* Custom Bill No */}
+              <div className={styles.inputGroup}>
+                <label>Custom Bill No. (Optional)</label>
+                <input
+                  type="text"
+                  value={invoiceInfo.custom_invoice_number || ''}
+                  onChange={e => updateInvoice('custom_invoice_number', e.target.value)}
+                  placeholder="Auto-generated if blank"
+                  className={styles.inputField}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Customer Details */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>
+                <FiUser size={16} /> Customer Information {invoiceType === 'B2B' && <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 500 }}>(Required for B2B)</span>}
+              </h2>
+            </div>
+            
             <div className={styles.formGrid}>
               <div className={styles.inputGroup}>
                 <label>Customer Name {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>
-                <input list="customer-names" value={customerInfo.name} onChange={e => handleCustomerSelect(e.target.value, 'name')} placeholder="Enter name or select from list" />
+                <input 
+                  list="customer-names" 
+                  value={customerInfo.name} 
+                  onChange={e => handleCustomerSelect(e.target.value, 'name')} 
+                  placeholder="Enter name or select existing" 
+                  className={styles.inputField}
+                />
                 <datalist id="customer-names">
                   {customers.map(c => <option key={c.id} value={c.name}>{c.mobile ? `${c.name} - ${c.mobile}` : c.name}</option>)}
                 </datalist>
               </div>
+
               <div className={styles.inputGroup}>
                 <label>Mobile Number</label>
-                <input list="customer-mobiles" 
+                <input 
+                  list="customer-mobiles" 
                   value={customerInfo.mobile} 
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                     handleCustomerSelect(val, 'mobile');
                   }} 
-                  placeholder="10 digit mobile" 
+                  placeholder="10-digit mobile" 
                   pattern="\d{10}"
                   maxLength={10}
+                  className={styles.inputField}
                 />
                 <datalist id="customer-mobiles">
                   {customers.filter(c => c.mobile).map(c => <option key={c.id} value={c.mobile}>{c.name}</option>)}
                 </datalist>
               </div>
+
               <div className={styles.inputGroup}>
                 <label>GSTIN {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>
                 <input
                   value={customerInfo.gstin}
                   onChange={e => updateCustomer('gstin', e.target.value.toUpperCase())}
                   placeholder="e.g. 27AAAAA0000A1Z5"
-                  className={gstinError ? styles.inputError : ''}
+                  className={`${styles.inputField} ${gstinError ? styles.inputError : ''}`}
                   maxLength={15}
                 />
                 {gstinError && <span className={styles.fieldError}>{gstinError}</span>}
               </div>
-              <div className={styles.inputGroup}>
-                <label>Email</label>
-                <input value={customerInfo.email} onChange={e => updateCustomer('email', e.target.value)} placeholder="Email" type="email" />
-              </div>
-              <div className={`${styles.inputGroup} ${styles.fullWidth}`}>
-                <label>Address</label>
-                <input value={customerInfo.address} onChange={e => updateCustomer('address', e.target.value)} placeholder="Full address" />
-              </div>
+
               <div className={styles.inputGroup}>
                 <label>State</label>
-                <select value={customerInfo.state} onChange={e => {
-                  const st = INDIAN_STATES.find(s => s.name === e.target.value);
-                  updateCustomer('state', e.target.value);
-                  if (st) updateCustomer('state_code', st.code);
-                }}>
+                <select 
+                  value={customerInfo.state} 
+                  onChange={e => {
+                    const st = INDIAN_STATES.find(s => s.name === e.target.value);
+                    updateCustomer('state', e.target.value);
+                    if (st) updateCustomer('state_code', st.code);
+                  }}
+                  className={styles.inputField}
+                >
                   <option value="">Select State</option>
                   {INDIAN_STATES.map(s => <option key={s.code} value={s.name}>{s.name}</option>)}
                 </select>
               </div>
+
               <div className={styles.inputGroup}>
                 <label>State Code</label>
-                <input value={customerInfo.state_code} onChange={e => updateCustomer('state_code', e.target.value)} placeholder="e.g. 27" readOnly={!!customerInfo.state} />
+                <input 
+                  value={customerInfo.state_code} 
+                  onChange={e => updateCustomer('state_code', e.target.value)} 
+                  placeholder="e.g. 27" 
+                  readOnly={!!customerInfo.state}
+                  className={styles.inputField} 
+                />
               </div>
+
               <div className={styles.inputGroup}>
                 <label>Place of Supply</label>
-                <select value={customerInfo.place_of_supply} onChange={e => updateCustomer('place_of_supply', e.target.value)}>
+                <select 
+                  value={customerInfo.place_of_supply} 
+                  onChange={e => updateCustomer('place_of_supply', e.target.value)}
+                  className={styles.inputField}
+                >
                   <option value="">Select Place of Supply</option>
                   {INDIAN_STATES.map(s => <option key={s.code} value={s.name}>{s.name}</option>)}
                 </select>
               </div>
+
               <div className={styles.inputGroup}>
-                <label>Phone</label>
+                <label>Phone / Alt Contact</label>
                 <input 
                   value={customerInfo.phone} 
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                     updateCustomer('phone', val);
                   }} 
-                  placeholder="10 digit phone" 
-                  pattern="\d{10}"
-                  maxLength={10}
+                  placeholder="Landline / Alt Phone" 
+                  className={styles.inputField}
+                />
+              </div>
+
+              <div className={styles.inputGroup}>
+                <label>Email Address</label>
+                <input 
+                  value={customerInfo.email} 
+                  onChange={e => updateCustomer('email', e.target.value)} 
+                  placeholder="customer@domain.com" 
+                  type="email" 
+                  className={styles.inputField}
+                />
+              </div>
+
+              <div className={`${styles.inputGroup} ${styles.fullWidth}`}>
+                <label>Full Address</label>
+                <input 
+                  value={customerInfo.address} 
+                  onChange={e => updateCustomer('address', e.target.value)} 
+                  placeholder="Shop / House No, Street, City, Pincode" 
+                  className={styles.inputField}
                 />
               </div>
             </div>
-          </div>
 
-          {/* Invoice & Transport Details */}
-          <CollapsibleSection title="Invoice & Transport Details">
-            <div className={styles.formGrid}>
-              <div className={styles.inputGroup}>
-                <label>Payment Terms</label>
-                <input value={invoiceInfo.payment_terms} onChange={e => updateInvoice('payment_terms', e.target.value)} placeholder="e.g. Net 30" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Delivery Note</label>
-                <input value={invoiceInfo.delivery_note} onChange={e => updateInvoice('delivery_note', e.target.value)} placeholder="Delivery note" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Delivery Note Date</label>
-                <input type="date" value={invoiceInfo.delivery_note_date} onChange={e => updateInvoice('delivery_note_date', e.target.value)} />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Dispatch Doc No.</label>
-                <input value={invoiceInfo.dispatch_document_number} onChange={e => updateInvoice('dispatch_document_number', e.target.value)} placeholder="Document number" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Dispatch Through</label>
-                <input value={invoiceInfo.dispatch_through} onChange={e => updateInvoice('dispatch_through', e.target.value)} placeholder="e.g. Courier" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Destination</label>
-                <input value={invoiceInfo.destination} onChange={e => updateInvoice('destination', e.target.value)} placeholder="Destination city" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Vehicle Number</label>
-                <input value={invoiceInfo.vehicle_number} onChange={e => updateInvoice('vehicle_number', e.target.value)} placeholder="e.g. MH01AB1234" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>LR/RR Number</label>
-                <input value={invoiceInfo.lr_rr_number} onChange={e => updateInvoice('lr_rr_number', e.target.value)} placeholder="LR/RR number" />
-              </div>
-              <div className={styles.inputGroup}>
-                <label>Terms of Delivery</label>
-                <input value={invoiceInfo.terms_of_delivery} onChange={e => updateInvoice('terms_of_delivery', e.target.value)} placeholder="e.g. FOB" />
-              </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* Product Search (preserved) */}
-          <h2 className={styles.sectionTitle}>Add Products</h2>
-          <div className={styles.searchContainer}>
-            <input
-              className={styles.searchInput}
-              placeholder="Search by SKU or Name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              autoFocus
-            />
-            {searchResults.length > 0 && (
-              <div className={styles.searchResults}>
-                {searchResults.map(result => (
-                  <div key={result.id} className={styles.searchItem} onClick={() => addToCart(result)}>
-                    <div className={styles.searchItemMain}>
-                      <span className={styles.itemName}>{result.sku} - {result.name}</span>
-                      <span className={styles.itemMeta}>
-                        {result.hsn_sac && `HSN: ${result.hsn_sac} | `}
-                        Brand: {result.brand} | Cat: {result.category}
-                      </span>
-                    </div>
-                    <div className={`${styles.itemStock} ${result.available_stock < 5 ? styles.low : ''}`}>
-                      Stock: {result.available_stock}
-                    </div>
+            {/* Collapsible Transport Details */}
+            <div style={{ marginTop: '16px' }}>
+              <CollapsibleSection title="Transport, Vehicle & Delivery Details">
+                <div className={styles.formGrid}>
+                  <div className={styles.inputGroup}>
+                    <label>Payment Terms</label>
+                    <input value={invoiceInfo.payment_terms} onChange={e => updateInvoice('payment_terms', e.target.value)} placeholder="e.g. Immediate / Net 30" className={styles.inputField} />
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className={styles.inputGroup}>
+                    <label>Vehicle Number</label>
+                    <input value={invoiceInfo.vehicle_number} onChange={e => updateInvoice('vehicle_number', e.target.value)} placeholder="e.g. CH01AB1234" className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Delivery Note</label>
+                    <input value={invoiceInfo.delivery_note} onChange={e => updateInvoice('delivery_note', e.target.value)} placeholder="Delivery note reference" className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Delivery Note Date</label>
+                    <input type="date" value={invoiceInfo.delivery_note_date} onChange={e => updateInvoice('delivery_note_date', e.target.value)} className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Dispatch Doc No.</label>
+                    <input value={invoiceInfo.dispatch_document_number} onChange={e => updateInvoice('dispatch_document_number', e.target.value)} placeholder="Doc number" className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Dispatch Through</label>
+                    <input value={invoiceInfo.dispatch_through} onChange={e => updateInvoice('dispatch_through', e.target.value)} placeholder="Transport / Courier" className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Destination City</label>
+                    <input value={invoiceInfo.destination} onChange={e => updateInvoice('destination', e.target.value)} placeholder="Destination city" className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>LR / RR Number</label>
+                    <input value={invoiceInfo.lr_rr_number} onChange={e => updateInvoice('lr_rr_number', e.target.value)} placeholder="LR/RR No." className={styles.inputField} />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Terms of Delivery</label>
+                    <input value={invoiceInfo.terms_of_delivery} onChange={e => updateInvoice('terms_of_delivery', e.target.value)} placeholder="e.g. Ex-Godown" className={styles.inputField} />
+                  </div>
+                </div>
+              </CollapsibleSection>
+            </div>
           </div>
 
-          {/* Enhanced Cart Table */}
-          <div className={styles.cartTableContainer}>
-            <table className={styles.cartTable}>
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>HSN</th>
-                  <th>Qty</th>
-                  <th>Unit</th>
-                  <th>Rate (₹)</th>
-                  <th>Disc.</th>
-                  <th>GST %</th>
-                  <th>Taxable</th>
-                  {isInterState ? <th>IGST</th> : <><th>CGST</th><th>SGST</th></>}
-                  <th>Total (₹)</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {cart.map((item, index) => (
-                  <tr key={`${item.sku}-${index}`}>
-                    <td>
-                      <div className={styles.itemName}>{item.sku}</div>
-                      <div className={styles.itemMeta}>{item.product_name || item.name}</div>
-                    </td>
-                    <td className={styles.hsnCell}>
-                      <input
-                        type="text"
-                        value={item.hsn_sac || ''}
-                        placeholder="Write HSN"
-                        onChange={(e) => updateCartItem(index, 'hsn_sac', e.target.value)}
-                        style={{
-                          width: '70px',
-                          padding: '4px',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          fontSize: '0.85rem'
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className={styles.qtyInput}
-                        value={item.quantity}
-                        onChange={(e) => updateCartItem(index, 'quantity', e.target.value)}
-                        min="1"
-                      />
-                    </td>
-                    <td className={styles.unitCell}>{item.unit || 'PCS'}</td>
-                    <td>
-                      <input
-                        type="number"
-                        className={styles.priceInput}
-                        value={item.selling_price}
-                        onChange={(e) => updateCartItem(index, 'selling_price', e.target.value)}
-                        step="0.01"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className={styles.discInput}
-                        value={item.discount}
-                        onChange={(e) => updateCartItem(index, 'discount', e.target.value)}
-                        step="0.01"
-                        min="0"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className={`${styles.gstInput} ${item.gst_needs_confirmation ? styles.gstWarning : ''}`}
-                        value={item.gst_rate}
-                        onChange={(e) => updateCartItem(index, 'gst_rate', e.target.value)}
-                        step="0.1"
-                      />
-                    </td>
-                    <td>₹{(item.taxable_amount || 0).toFixed(2)}</td>
-                    {isInterState ? (
-                      <td>₹{(item.igst || 0).toFixed(2)}</td>
-                    ) : (
-                      <>
-                        <td>₹{(item.cgst || 0).toFixed(2)}</td>
-                        <td>₹{(item.sgst || 0).toFixed(2)}</td>
-                      </>
-                    )}
-                    <td className={styles.lineTotalCell}>₹{(item.line_total || 0).toFixed(2)}</td>
-                    <td>
-                      <button className={styles.removeBtn} onClick={() => removeFromCart(index)}>
-                        <FiX />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {cart.length === 0 && (
+          {/* Card 3: Add Products & Bill Items (Redesigned & Spacious) */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>
+                <FiShoppingBag size={16} /> Products & Bill Items 
+                <span style={{ fontSize: '12px', background: '#e2e8f0', color: '#1e293b', padding: '3px 10px', borderRadius: '12px', fontWeight: 700, marginLeft: '6px' }}>
+                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
+                </span>
+              </h2>
+              {cart.length > 0 && (
+                <button 
+                  onClick={() => setCart([])} 
+                  style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '13px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <FiTrash2 size={13} /> Clear Table
+                </button>
+              )}
+            </div>
+
+            {/* Prominent Search Bar */}
+            <div className={styles.searchSection}>
+              <div className={styles.searchBarWrapper}>
+                <FiSearch className={styles.searchIcon} size={18} />
+                <input
+                  className={styles.searchInput}
+                  placeholder="Scan Barcode or Search by SKU / Product Name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              {/* Floating Dropdown Results */}
+              {searchResults.length > 0 && (
+                <div className={styles.searchResults}>
+                  {searchResults.map(result => (
+                    <div key={result.id} className={styles.searchItem} onClick={() => addToCart(result)}>
+                      <div className={styles.searchItemLeft}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span className={styles.searchSkuBadge}>{result.sku}</span>
+                          <span className={styles.searchItemName}>{result.name}</span>
+                        </div>
+                        <div className={styles.searchItemMeta}>
+                          {result.hsn_sac && <span>HSN: <strong>{result.hsn_sac}</strong></span>}
+                          {result.brand && <span>Brand: {result.brand}</span>}
+                          {result.category && <span>Category: {result.category}</span>}
+                        </div>
+                      </div>
+                      <div className={styles.searchItemRight}>
+                        <span className={styles.searchItemPrice}>₹{(result.item_rate || result.selling_price || 0).toFixed(2)}</span>
+                        <span className={`${styles.searchStockBadge} ${result.available_stock < 5 ? styles.low : ''}`}>
+                          {result.available_stock > 0 ? `✓ Stock: ${result.available_stock}` : 'Out of Stock'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Spacious Cart Table */}
+            <div className={styles.cartTableContainer}>
+              <table className={styles.cartTable}>
+                <thead>
                   <tr>
-                    <td colSpan={isInterState ? 11 : 12} style={{textAlign: 'center', padding: '24px', color: '#666'}}>
-                      Cart is empty. Search products to add.
-                    </td>
+                    <th style={{ width: '28%' }}>Product Details</th>
+                    <th style={{ width: '9%' }}>HSN</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Qty</th>
+                    <th style={{ width: '6%', textAlign: 'center' }}>Unit</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>Rate (₹)</th>
+                    <th style={{ width: '8%', textAlign: 'right' }}>Disc. (₹)</th>
+                    <th style={{ width: '7%', textAlign: 'center' }}>GST %</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>Taxable</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}>{isInterState ? 'IGST (₹)' : 'Taxes (₹)'}</th>
+                    <th style={{ width: '11%', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ width: '4%' }}></th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {cart.map((item, index) => {
+                    const totalTax = isInterState ? (item.igst || 0) : ((item.cgst || 0) + (item.sgst || 0));
+                    return (
+                      <tr key={`${item.sku}-${index}`} className={styles.cartRow}>
+                        <td className={styles.productCell}>
+                          <div className={styles.skuBadge}>{item.sku}</div>
+                          <div className={styles.productTitle}>{item.product_name || item.name}</div>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={item.hsn_sac || ''}
+                            placeholder="HSN"
+                            onChange={(e) => updateCartItem(index, 'hsn_sac', e.target.value)}
+                            className={`${styles.tableInput} ${styles.hsnInput}`}
+                          />
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="number"
+                            className={`${styles.tableInput} ${styles.qtyInput}`}
+                            value={item.quantity}
+                            onChange={(e) => updateCartItem(index, 'quantity', e.target.value)}
+                            min="1"
+                          />
+                        </td>
+                        <td className={styles.unitCell}>{item.unit || 'PCS'}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <input
+                            type="number"
+                            className={`${styles.tableInput} ${styles.priceInput}`}
+                            value={item.selling_price}
+                            onChange={(e) => updateCartItem(index, 'selling_price', e.target.value)}
+                            step="0.01"
+                          />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <input
+                            type="number"
+                            className={`${styles.tableInput} ${styles.discInput}`}
+                            value={item.discount}
+                            onChange={(e) => updateCartItem(index, 'discount', e.target.value)}
+                            step="0.01"
+                            min="0"
+                          />
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="number"
+                            className={`${styles.tableInput} ${styles.gstInput} ${item.gst_needs_confirmation ? styles.gstWarning : ''}`}
+                            value={item.gst_rate}
+                            onChange={(e) => updateCartItem(index, 'gst_rate', e.target.value)}
+                            step="0.1"
+                          />
+                        </td>
+                        <td className={styles.amountCell}>₹{(item.taxable_amount || 0).toFixed(2)}</td>
+                        <td className={styles.amountCell}>₹{totalTax.toFixed(2)}</td>
+                        <td className={styles.totalCell}>₹{Math.round(item.line_total || 0).toLocaleString('en-IN')}</td>
+                        <td>
+                          <button className={styles.removeBtn} onClick={() => removeFromCart(index)} title="Remove Item">
+                            <FiTrash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {cart.length === 0 && (
+                    <tr>
+                      <td colSpan={11}>
+                        <div className={styles.emptyCart}>
+                          <FiShoppingBag size={40} style={{ opacity: 0.4 }} />
+                          <div className={styles.emptyCartTitle}>No products added yet</div>
+                          <div className={styles.emptyCartSub}>Type in the search box above to quickly find and add items to this bill</div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {cart.length > 0 && (
+                <div className={styles.cartFooterBar}>
+                  <span>Total Line Items: <strong>{cart.length}</strong></span>
+                  <span>Total Units: <strong>{cart.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0)}</strong></span>
+                  <span>Amounts are calculated inclusive of item GST</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Summary Panel */}
+        {/* Right Sticky Summary & Checkout Panel */}
         <div className={styles.summaryPanel}>
-          <h2 className={styles.sectionTitle}>Bill Summary</h2>
-
-          <div className={styles.inputGroup} style={{marginBottom: '16px'}}>
-            <label>Payment Method</label>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-              <option value="Cash">Cash</option>
-              <option value="UPI">UPI</option>
-              <option value="Card">Card</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
-              <option value="Credit">Credit</option>
-            </select>
-          </div>
-
-          {paymentMethod !== 'Cash' && (
-            <div className={styles.inputGroup} style={{marginBottom: '16px'}}>
-              <label>Transaction Reference</label>
-              <input
-                value={paymentReference}
-                onChange={e => setPaymentReference(e.target.value)}
-                placeholder={paymentMethod === 'UPI' ? 'UPI Txn ID' : paymentMethod === 'Cheque' ? 'Cheque No.' : 'Reference'}
-              />
-            </div>
-          )}
+          <h2 className={styles.summaryTitle}>Billing Summary</h2>
 
           <div className={styles.summaryRow}>
             <span>Taxable Amount</span>
             <span>₹{totals.taxable.toFixed(2)}</span>
           </div>
+
           {isInterState ? (
             <div className={styles.summaryRow}>
               <span>IGST</span>
@@ -1036,119 +1208,74 @@ const POSPage = () => {
               </div>
             </>
           )}
-          <div className={`${styles.summaryRow} ${styles.total}`}>
-            <span>Grand Total</span>
-            <span>₹{totals.grand.toFixed(2)}</span>
+
+          <div className={styles.summaryRow}>
+            <span>Total Taxes</span>
+            <span>₹{totals.tax.toFixed(2)}</span>
           </div>
 
-                    {/* Invoice Series Dropdown */}
-          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
-            <label>Invoice Series (Prefix)</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <select 
-                value={['GST', 'JGST', companyCode].includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
-                onChange={e => {
-                  if (e.target.value !== 'CUSTOM') {
-                    setInvoicePrefix(e.target.value);
-                  } else {
-                    setInvoicePrefix('');
-                  }
-                }}
-                className={styles.inputField}
-                style={{ width: '120px' }}
-              >
-                <option value="GST">GST-</option>
-                <option value="JGST">JGST-</option>
-                {companyCode && <option value={companyCode}>{companyCode}/</option>}
-                <option value="CUSTOM">Custom</option>
+          {/* Grand Total Banner with whole rounded Rupees */}
+          <div className={styles.grandTotalBanner}>
+            <span className={styles.grandTotalLabel}>Grand Total (Round Off)</span>
+            <span className={styles.grandTotalAmount}>
+              ₹ {Math.round(totals.grand).toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          {/* Payment Section */}
+          <div className={styles.paymentSection}>
+            <div className={styles.inputGroup}>
+              <label>Payment Method</label>
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={styles.inputField}>
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="Card">Card</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Credit">Credit</option>
               </select>
-              {!['GST', 'JGST', companyCode].includes(invoicePrefix) && (
-                <input 
-                  type="text" 
-                  value={invoicePrefix} 
-                  onChange={e => setInvoicePrefix(e.target.value.toUpperCase())}
-                  placeholder="Custom Prefix"
+            </div>
+
+            {paymentMethod !== 'Cash' && (
+              <div className={styles.inputGroup}>
+                <label>{paymentMethod === 'UPI' ? 'UPI UTR / Reference No.' : paymentMethod === 'Cheque' ? 'Cheque Number' : 'Transaction Reference'}</label>
+                <input
+                  value={paymentReference}
+                  onChange={e => setPaymentReference(e.target.value)}
+                  placeholder={paymentMethod === 'UPI' ? 'Enter 12-digit UPI UTR' : paymentMethod === 'Cheque' ? 'Enter Cheque No.' : 'Transaction Reference'}
                   className={styles.inputField}
-                  style={{ flex: 1 }}
                 />
-              )}
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Next bill will automatically be: <strong>{invoicePrefix}-...</strong>
-            </div>
-          </div>
-          
-          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
-             <label>Manual Bill Number (Optional)</label>
-             <input
-               type="text"
-               value={invoiceInfo.custom_invoice_number}
-               onChange={e => updateInvoice('custom_invoice_number', e.target.value)}
-               placeholder="Override auto-generated No."
-               className={styles.inputField}
-             />
-             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-               Leave blank for auto-generation
-             </div>
-          </div>
-
-          <div className={styles.formGroup} style={{ marginTop: '12px' }}>
-             <label>Manual Bill Date (Optional)</label>
-             <input
-               type="date"
-               value={invoiceInfo.custom_invoice_date}
-               onChange={e => updateInvoice('custom_invoice_date', e.target.value)}
-               className={styles.inputField}
-             />
-          </div>
-
-          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
-             <label>Buyer Order No.</label>
-             <input
-               type="text"
-               value={invoiceInfo.buyer_order_no || ''}
-               onChange={e => updateInvoice('buyer_order_no', e.target.value)}
-               placeholder="Order No. / PO No."
-               className={styles.inputField}
-             />
-          </div>
-
-          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
-             <label>Buyer Order Date</label>
-             <input
-               type="date"
-               value={invoiceInfo.buyer_order_date || ''}
-               onChange={e => updateInvoice('buyer_order_date', e.target.value)}
-               className={styles.inputField}
-             />
+              </div>
+            )}
           </div>
 
           {invoiceType === 'B2B' && (
             <div className={styles.b2bNotice}>
-              B2B Invoice — will attempt Tally sync if enabled
+              ✓ B2B Tax Invoice — GSTIN validated and eligible for Tally sync
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          {/* Actions */}
+          <div className={styles.checkoutActions}>
             <button
-              className={styles.checkoutBtn}
-              style={{ flex: 1, background: '#17a2b8' }}
+              className={styles.previewBtn}
               disabled={cart.length === 0 || hasUnconfirmedGst}
               onClick={handlePreview}
             >
-              Preview Bill
+              <FiEye size={16} /> Preview Bill (A4)
             </button>
             <button
               className={styles.checkoutBtn}
-              style={{ flex: 1 }}
               disabled={cart.length === 0 || hasUnconfirmedGst || checkoutMutation.isPending}
               onClick={handleCheckout}
             >
-              {checkoutMutation.isPending ? 'Processing…' : hasUnconfirmedGst ? "Confirm GST Rates" : `Complete Sale`}
+              <FiCheckCircle size={18} />
+              {checkoutMutation.isPending ? 'Processing Sale...' : hasUnconfirmedGst ? "Confirm Highlighted GST" : `Complete Sale`}
             </button>
           </div>
         </div>
       </div>
+
       {previewReceiptData && (
         <InvoicePreviewModal 
           invoice={previewReceiptData} 

@@ -204,6 +204,8 @@ const EditInvoicePage = () => {
 
   // New: Invoice Info
   const [invoiceInfo, setInvoiceInfo] = useState((savedState.invoiceInfo && typeof savedState.invoiceInfo === 'object') ? savedState.invoiceInfo : {
+    buyer_order_no: '',
+    buyer_order_date: '',
     payment_terms: '',
     delivery_note: '',
     delivery_note_date: '',
@@ -435,6 +437,8 @@ const EditInvoicePage = () => {
         state: customerInfo.state,
         state_code: customerInfo.state_code
       } : null,
+      buyer_order_no: invoiceInfo.buyer_order_no,
+      buyer_order_date: invoiceInfo.buyer_order_date,
       payment_terms: invoiceInfo.payment_terms,
       delivery_note: invoiceInfo.delivery_note,
       delivery_note_date: invoiceInfo.delivery_note_date,
@@ -523,6 +527,9 @@ const EditInvoicePage = () => {
       custom_invoice_number: invoiceInfo.custom_invoice_number || null,
       custom_invoice_date: invoiceInfo.custom_invoice_date || null,
 
+      buyer_order_no: invoiceInfo.buyer_order_no || null,
+      buyer_order_date: invoiceInfo.buyer_order_date || null,
+
       payment_terms: invoiceInfo.payment_terms || null,
       delivery_note: invoiceInfo.delivery_note || null,
       delivery_note_date: invoiceInfo.delivery_note_date || null,
@@ -590,6 +597,8 @@ const EditInvoicePage = () => {
         setInvoiceInfo({
           custom_invoice_number: sale.invoice_number || '',
           custom_invoice_date: sale.sale_date || '',
+          buyer_order_no: sale.buyer_order_no || '',
+          buyer_order_date: sale.buyer_order_date || '',
           payment_terms: sale.payment_terms || '',
           delivery_note: sale.delivery_note || '',
           delivery_note_date: sale.delivery_note_date || '',
@@ -1099,6 +1108,27 @@ const EditInvoicePage = () => {
                type="date"
                value={invoiceInfo.custom_invoice_date}
                onChange={e => updateInvoice('custom_invoice_date', e.target.value)}
+               className={styles.inputField}
+             />
+          </div>
+
+          <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+             <label>Buyer Order No. / PO No.</label>
+             <input
+               type="text"
+               value={invoiceInfo.buyer_order_no || ''}
+               onChange={e => updateInvoice('buyer_order_no', e.target.value)}
+               placeholder="Order No. / PO No."
+               className={styles.inputField}
+             />
+          </div>
+
+          <div className={styles.formGroup} style={{ marginTop: '12px' }}>
+             <label>Buyer Order Date</label>
+             <input
+               type="date"
+               value={invoiceInfo.buyer_order_date || ''}
+               onChange={e => updateInvoice('buyer_order_date', e.target.value)}
                className={styles.inputField}
              />
           </div>
