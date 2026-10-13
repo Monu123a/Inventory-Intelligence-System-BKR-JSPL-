@@ -223,12 +223,7 @@ def complete_sale(
         if existing_sale:
             return {
                 "message": "Sale processed successfully (Idempotent response)",
-                "receipt": {
-                    "id": existing_sale.id,
-                    "bill_number": existing_sale.bill_number,
-                    "grand_total": existing_sale.grand_total,
-                    "status": existing_sale.status
-                }
+                "receipt": _build_invoice_dto(existing_sale, db)
             }
 
     if payload.origin_warehouse_id:
@@ -365,12 +360,7 @@ def complete_sale(
             if existing_sale:
                 return {
                     "message": "Sale processed successfully (Idempotent response)",
-                    "receipt": {
-                        "id": existing_sale.id,
-                        "bill_number": existing_sale.bill_number,
-                        "grand_total": existing_sale.grand_total,
-                        "status": existing_sale.status
-                    }
+                    "receipt": _build_invoice_dto(existing_sale, db)
                 }
             raise
 
@@ -514,7 +504,7 @@ def complete_sale(
         logger.info(f"Action: Sale | User: {user.id} | Company: {company_id} | Status: Success | SaleID: {sale.id} | Value: {sale.grand_total}")
         log_metric("sale_completed", 1, {"company_id": company_id})
 
-        receipt = _build_invoice_dto(sale)
+        receipt = _build_invoice_dto(sale, db)
         return {"message": "Sale completed successfully", "receipt": receipt, "tally_sync": tally_result}
         
     except HTTPException:
@@ -682,6 +672,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
     # Fetch returns data if db is provided
     returns_summary = []
     item_return_map = {}
+    origin_wh_id = None
     
     if db:
         returns = db.query(SalesReturn).filter(SalesReturn.sale_id == sale.id, SalesReturn.status != "Cancelled").all()
@@ -702,8 +693,8 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
                     if ri.sale_item_id:
                         item_return_map[ri.sale_item_id] = item_return_map.get(ri.sale_item_id, 0) + ri.returned_quantity
                         
-    sale_mov = db.query(InventoryMovement).filter(InventoryMovement.reference_id == sale.bill_number).first()
-    origin_wh_id = sale_mov.warehouse_id if sale_mov else None
+        sale_mov = db.query(InventoryMovement).filter(InventoryMovement.reference_id == sale.bill_number).first()
+        origin_wh_id = sale_mov.warehouse_id if sale_mov else None
 
     dto_items = []
     for i in (sale.items or []):
