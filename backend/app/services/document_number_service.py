@@ -36,6 +36,9 @@ class DocumentNumberService:
                 if not val:
                     continue
                 val = val.strip()
+                # Skip internal tracking timestamp strings (e.g. JSPL-20261008-110948698692-2DE3E0)
+                if re.search(r'\d{8}-\d{6}', val):
+                    continue
                 m = pattern_strict.match(val) or pattern_prefix.match(val)
                 if m:
                     num_str = m.group(1)
