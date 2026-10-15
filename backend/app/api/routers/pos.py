@@ -270,6 +270,7 @@ def complete_sale(
         from app.models.schema import DocumentTypeEnum
         from app.services.invoice_number_service import _get_fiscal_year_string
         from datetime import datetime
+        import re
         company = db.query(Company).filter(Company.id == company_id).first()
         company_code = company.code if company else "CO"
         prefix = (payload.invoice_prefix or company_code).strip().upper()
@@ -277,9 +278,23 @@ def complete_sale(
         if payload.custom_invoice_number and payload.custom_invoice_number.strip():
             raw_no = payload.custom_invoice_number.strip()
             if prefix and not raw_no.upper().startswith(f"{prefix}-") and not raw_no.upper().startswith(f"{prefix}/"):
-                invoice_number = f"{prefix}-{raw_no}"
+                # Avoid double prefixing if raw_no already starts with a known prefix
+                if '-' in raw_no and raw_no.split('-')[0].upper() in ['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL']:
+                    invoice_number = raw_no
+                else:
+                    invoice_number = f"{prefix}-{raw_no}"
             else:
                 invoice_number = raw_no
+
+            # Keep DocumentSequence in sync with manually entered numbers
+            try:
+                m = re.search(r'(\d+)$', invoice_number)
+                if m:
+                    num_used = int(m.group(1))
+                    fy = _get_fiscal_year_string(datetime.today().date())
+                    DocumentNumberService.sync_sequence_with_number(db, company_id, prefix, fy, num_used)
+            except Exception as e:
+                logger.warning(f"Could not sync sequence with manual invoice number {invoice_number}: {e}")
         else:
             fy = _get_fiscal_year_string(datetime.today().date())
             invoice_number = DocumentNumberService.generate_number(
@@ -826,6 +841,28 @@ def get_invoice_by_number(invoice_number: str, company_id: int = Depends(get_cur
         raise HTTPException(status_code=404, detail="Invoice not found")
         
     return {"receipt": _build_invoice_dto(sale, db)}
+
+
+@router.get("/next-invoice-number")
+def get_next_invoice_number(
+    prefix: str = "GST",
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    from app.services.document_number_service import DocumentNumberService
+    from app.services.invoice_number_service import _get_fiscal_year_string
+    from app.models.schema import DocumentTypeEnum
+    from datetime import datetime
+
+    fy = _get_fiscal_year_string(datetime.today().date())
+    result = DocumentNumberService.get_next_number_preview(
+        db=db,
+        company_id=company_id,
+        document_type=DocumentTypeEnum.SALE,
+        fiscal_year=fy,
+        prefix_override=prefix
+    )
+    return result
 
 
 @router.post("/sales/{sale_id}/retry-tally")

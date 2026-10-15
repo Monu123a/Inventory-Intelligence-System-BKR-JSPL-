@@ -20,6 +20,11 @@ export const posService = {
     return normalizeResponse(res.data);
   },
 
+  getNextInvoiceNumber: async (prefix) => {
+    const res = await api.get('/api/pos/next-invoice-number', { params: { prefix } });
+    return normalizeResponse(res.data);
+  },
+
   getSalesHistory: async (params) => {
     const res = await api.get('/api/pos/history', { params });
     return normalizeResponse(res.data);

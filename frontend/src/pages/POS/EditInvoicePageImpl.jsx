@@ -1091,21 +1091,21 @@ const EditInvoicePage = () => {
               )}
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Next bill will automatically be: <strong>{invoicePrefix}-...</strong>
+              Current series: <strong>{invoicePrefix || 'Default'}</strong>
             </div>
           </div>
           
           <div className={styles.formGroup} style={{ marginTop: '16px' }}>
-             <label>Manual Bill Number (Optional)</label>
+             <label>Invoice Number</label>
              <input
                type="text"
                value={invoiceInfo.custom_invoice_number}
                onChange={e => updateInvoice('custom_invoice_number', e.target.value)}
-               placeholder="Override auto-generated No."
+               placeholder="Invoice No."
                className={styles.inputField}
              />
              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-               Leave blank for auto-generation
+               Keep original number or enter updated invoice number
              </div>
           </div>
 

@@ -156,6 +156,13 @@ const POSPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: nextInvData } = useQuery({
+    queryKey: ['nextInvoiceNumber', currentCompany?.id, invoicePrefix],
+    queryFn: () => posService.getNextInvoiceNumber(invoicePrefix),
+    enabled: !!invoicePrefix,
+  });
+  const autoBillNumber = nextInvData?.formatted_next_number || '';
+
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(savedState.selectedWarehouseId || '');
 
   // Default warehouse selection logic
@@ -417,6 +424,8 @@ const POSPage = () => {
       
       // Regenerate idempotency key for the next operation
       idempotencyKeyRef.current = window.crypto.randomUUID();
+      // Invalidate next invoice number query so the next bill number refreshes immediately
+      queryClient.invalidateQueries({ queryKey: ['nextInvoiceNumber'] });
 
       if (!receipt?.id) return;
 
@@ -436,7 +445,7 @@ const POSPage = () => {
       ? (invoicePrefix && !invoiceInfo.custom_invoice_number.toUpperCase().startsWith(`${invoicePrefix}-`) 
           ? `${invoicePrefix}-${invoiceInfo.custom_invoice_number}` 
           : invoiceInfo.custom_invoice_number)
-      : (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW');
+      : (autoBillNumber || (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW'));
 
     const mockInvoice = {
       company: companySettings ? {
@@ -807,6 +816,11 @@ const POSPage = () => {
                     />
                   )}
                 </div>
+                {invoicePrefix && (
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    Next auto bill: <strong style={{ color: '#0f172a' }}>{autoBillNumber || `${invoicePrefix}-...`}</strong>
+                  </div>
+                )}
               </div>
 
               {/* Buyer Order No */}
@@ -850,7 +864,7 @@ const POSPage = () => {
                   type="text"
                   value={invoiceInfo.custom_invoice_number || ''}
                   onChange={e => updateInvoice('custom_invoice_number', e.target.value)}
-                  placeholder="Auto-generated if blank"
+                  placeholder={autoBillNumber ? `Auto: ${autoBillNumber}` : "Auto-generated if blank"}
                   className={styles.inputField}
                 />
               </div>
