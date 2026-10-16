@@ -69,7 +69,19 @@ export const SalesReport = () => {
       });
     } catch (err) {
       console.error('Accountant report export failed:', err);
-      alert('Failed to export report: ' + (err.response?.data?.detail || err.message));
+      let errorMsg = err.message;
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMsg = parsed.detail || parsed.message || text;
+        } catch {
+          // ignore
+        }
+      } else if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      }
+      alert('Failed to export report: ' + errorMsg);
     } finally {
       setIsExporting(false);
     }

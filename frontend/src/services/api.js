@@ -48,7 +48,7 @@ api.interceptors.response.use(
       return obj;
     };
     
-    if (response.data) {
+    if (response.data && !(response.data instanceof Blob) && !(response.data instanceof ArrayBuffer)) {
       appendZ(response.data);
     }
     return response;

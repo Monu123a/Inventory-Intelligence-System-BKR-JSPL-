@@ -86,9 +86,9 @@ export const useDownloadHistory = ({ search = '', reportTypeFilter = '', page = 
     const paginated = filtered.slice(startIndex, startIndex + limit);
 
     return {
-      data: paginated,
-      totalCount,
-      totalPages: Math.ceil(totalCount / limit)
+      data: paginated || [],
+      totalCount: totalCount || 0,
+      totalPages: Math.max(1, Math.ceil(totalCount / limit))
     };
   }, [rawHistory, search, reportTypeFilter, page, limit]);
 
@@ -98,6 +98,9 @@ export const useDownloadHistory = ({ search = '', reportTypeFilter = '', page = 
     clearHistory,
     removeHistoryItem,
     resetCorruptedHistory,
+    data: processedData?.data || [],
+    totalCount: processedData?.totalCount || 0,
+    totalPages: processedData?.totalPages || 1,
     ...processedData
   };
 };

@@ -3,7 +3,7 @@ import io
 import csv
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any, Tuple, Union
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy import or_, and_, func
 
 from app.models.schema import (
@@ -237,6 +237,8 @@ class SeriesReportService:
             grand_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
 
             # Append Data Rows
+            # Append Data Rows & track column widths simultaneously
+            col_widths = {c: len(str(REPORT_COLUMNS[c-1])) for c in range(1, 48)}
             current_row_idx = 4
             for r in data_rows:
                 ws.append(r)
@@ -259,16 +261,15 @@ class SeriesReportService:
                     if c_idx in (12, 13, 14, 15, 16, 17, 21, 22, 24, 25, 26, 38, 39):
                         cell.alignment = Alignment(horizontal="right")
 
+                    val_len = len(str(r[c_idx-1] or ''))
+                    if val_len > col_widths[c_idx]:
+                        col_widths[c_idx] = val_len
+
                 current_row_idx += 1
 
-            # Auto-fit column widths (with sane caps)
-            for col in ws.columns:
-                max_len = 0
-                col_letter = get_column_letter(col[0].column)
-                for cell in col[2:]: # Check from header downwards
-                    val_str = str(cell.value or '')
-                    if len(val_str) > max_len:
-                        max_len = len(val_str)
+            # Auto-fit column widths using tracked maximums
+            for c_idx, max_len in col_widths.items():
+                col_letter = get_column_letter(c_idx)
                 ws.column_dimensions[col_letter].width = min(max(max_len + 3, 10), 45)
 
             stream = io.BytesIO()
@@ -366,6 +367,9 @@ class SeriesReportService:
                 )
             )
 
+        sales_query = sales_query.options(
+            selectinload(Sale.items).selectinload(SaleItem.product)
+        )
         sales = sales_query.order_by(Sale.sale_date.asc(), Sale.id.asc()).all()
 
         amazon_allocations = []
@@ -586,10 +590,16 @@ class SeriesReportService:
 
         # Process Amazon allocations
         if series_clean in ("AMAZON", "ALL") and amazon_allocations:
+            prod_query = db.query(Product)
+            if company_id:
+                prod_query = prod_query.filter(Product.company_id == company_id)
+            prod_map = {p.sku.upper(): p for p in prod_query.all()}
+            wh_map = {w.id: w for w in db.query(Warehouse).all()}
+
             for alloc in amazon_allocations:
                 sno += 1
-                prod = db.query(Product).filter(Product.sku == alloc.sku, Product.company_id == alloc.company_id).first()
-                wh = db.query(Warehouse).filter(Warehouse.id == alloc.warehouse_id).first() if alloc.warehouse_id else None
+                prod = prod_map.get((alloc.sku or "").upper())
+                wh = wh_map.get(alloc.warehouse_id) if alloc.warehouse_id else None
                 
                 order_id = alloc.order_id
                 item_code = alloc.sku
@@ -707,10 +717,20 @@ class SeriesReportService:
         if date_to:
             query = query.filter(func.coalesce(Purchase.date, Purchase.created_at) <= datetime.combine(date_to, datetime.max.time()))
 
+        query = query.options(
+            selectinload(Purchase.items),
+            selectinload(Purchase.vendor)
+        )
         purchases = query.order_by(func.coalesce(Purchase.date, Purchase.created_at).asc(), Purchase.id.asc()).all()
 
-        # Pre-cache products in memory for O(1) instant lookups
-        prod_map = {prod.sku: prod for prod in db.query(Product).all()}
+        # Pre-cache products, warehouses, and inventory movements in memory for O(1) instant lookups
+        prod_map = {prod.sku.upper(): prod for prod in db.query(Product).all()}
+        wh_map = {w.id: w for w in db.query(Warehouse).all()}
+        mov_query = db.query(InventoryMovement).filter(InventoryMovement.source == "PURCHASE")
+        if company_id:
+            mov_query = mov_query.filter(InventoryMovement.company_id == company_id)
+        movements = mov_query.all()
+        mov_map = {m.reference_id: m for m in movements if m.reference_id}
 
         d_from_str = date_from.strftime("%d/%m/%Y") if date_from else "01/10/2026"
         d_to_str = date_to.strftime("%d/%m/%Y") if date_to else datetime.utcnow().strftime("%d/%m/%Y")
@@ -747,8 +767,8 @@ class SeriesReportService:
             addr3 = addr_parts[2] if len(addr_parts) > 2 else gst_state
 
             # Find warehouse name
-            mov = db.query(InventoryMovement).filter_by(source="PURCHASE", reference_id=p.invoice_number or f"PUR-{p.id}").first()
-            wh = db.query(Warehouse).filter_by(id=mov.warehouse_id).first() if mov else None
+            mov = mov_map.get(bill_no)
+            wh = wh_map.get(mov.warehouse_id) if mov else None
             godown_name = wh.name if wh else "Central Warehouse"
 
             bill_qty = 0
@@ -1108,6 +1128,9 @@ class SeriesReportService:
         if date_to:
             query = query.filter(func.coalesce(SalesReturn.return_date, SalesReturn.created_at) <= datetime.combine(date_to, datetime.max.time()))
 
+        query = query.options(
+            selectinload(SalesReturn.items).selectinload(SalesReturnItem.product)
+        )
         returns = query.order_by(func.coalesce(SalesReturn.return_date, SalesReturn.created_at).asc(), SalesReturn.id.asc()).all()
 
         d_from_str = date_from.strftime("%d/%m/%Y") if date_from else "01/10/2026"

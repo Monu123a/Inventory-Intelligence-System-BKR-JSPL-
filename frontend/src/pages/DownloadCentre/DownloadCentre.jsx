@@ -96,14 +96,16 @@ const DownloadCentre = () => {
   }, []);
 
   const { 
-    data, 
-    totalPages, 
+    data: rawData = [], 
+    totalPages = 1, 
     isError, 
     loadHistory, 
     clearHistory, 
     removeHistoryItem,
     resetCorruptedHistory
   } = useDownloadHistory({ search, reportTypeFilter, page, limit: 15 });
+
+  const historyList = Array.isArray(rawData) ? rawData : [];
 
   const handleSearch = (val) => { setSearch(val); setPage(1); };
 
@@ -153,7 +155,19 @@ const DownloadCentre = () => {
       loadHistory();
     } catch (err) {
       console.error('Export failed:', err);
-      alert('Failed to generate report: ' + (err.response?.data?.detail || err.message));
+      let errorMsg = err.message;
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMsg = parsed.detail || parsed.message || text;
+        } catch {
+          // ignore
+        }
+      } else if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      }
+      alert('Failed to generate report: ' + errorMsg);
     } finally {
       setIsExporting(false);
       setExportFormat(null);
@@ -411,14 +425,14 @@ const DownloadCentre = () => {
           <DataTable>
             <TableHeader columns={columns} />
             <tbody>
-              {data?.length === 0 ? (
+              {historyList.length === 0 ? (
                 <TableRow>
                   <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>
                     No reports downloaded yet. Generate one above to track it here.
                   </td>
                 </TableRow>
               ) : (
-                data.map((row) => (
+                historyList.map((row) => (
                   <TableRow key={row.id}>
                     {columns.map((col) => (
                       <td key={col.key}>

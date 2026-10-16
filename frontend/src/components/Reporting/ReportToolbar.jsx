@@ -73,7 +73,19 @@ export const ReportToolbar = ({
       link.parentNode.removeChild(link);
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Failed to export report.");
+      let errorMsg = err.message;
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMsg = parsed.detail || parsed.message || text;
+        } catch {
+          // ignore
+        }
+      } else if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      }
+      alert("Failed to export report: " + errorMsg);
     } finally {
       setIsExporting(false);
     }
