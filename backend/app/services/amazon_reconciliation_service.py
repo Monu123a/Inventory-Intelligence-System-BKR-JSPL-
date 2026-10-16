@@ -21,7 +21,15 @@ class AmazonReconciliationService:
         Requires strict matching on (order_id, sku, amazon_line_item_id).
         """
         order_id = report_item.get("order_id")
-        sku = str(report_item.get("sku", "")).strip().upper()
+        raw_sku = str(report_item.get("sku", "")).strip().upper()
+        
+        # Normalize SKU by keeping first 6 characters
+        from app.services.amazon_service import AmazonService
+        products = db.query(Product.sku, Product.name).filter(Product.company_id == company_id).all()
+        known_skus = {p.sku.strip().upper(): p.sku for p in products if p.sku}
+        name_to_sku = {p.name.strip().upper(): p.sku for p in products if p.name and p.sku}
+        sku = AmazonService.normalize_amazon_sku(raw_sku, known_skus, name_to_sku=name_to_sku) or raw_sku
+
         line_item_id = report_item.get("amazon_line_item_id")
         shipped_qty = int(report_item.get("shipped_quantity", 0))
         is_return = report_item.get("is_return", False)
@@ -187,8 +195,10 @@ class AmazonReconciliationService:
         wh_code_map = {w.code.strip().upper(): w.id for w in warehouses if w.code}
         central_wh = next((w for w in warehouses if w.warehouse_type == WarehouseType.CENTRAL), warehouses[0] if warehouses else None)
 
-        products = db.query(Product.id, Product.sku).filter(Product.company_id == company_id).all()
-        known_skus = {p.sku.strip().upper(): p.id for p in products if p.sku}
+        products = db.query(Product.id, Product.sku, Product.name).filter(Product.company_id == company_id).all()
+        known_skus = {p.sku.strip().upper(): p.sku for p in products if p.sku}
+        sku_to_id = {p.sku.strip().upper(): p.id for p in products if p.sku}
+        name_to_sku = {p.name.strip().upper(): p.sku for p in products if p.name and p.sku}
 
         counters = {
             "rows_processed": 0,
@@ -205,7 +215,6 @@ class AmazonReconciliationService:
             counters["rows_processed"] += 1
             order_id = str(row[col_map["order_id"]]).strip()
             raw_sku = str(row[col_map["sku"]]).strip()
-            sku = raw_sku.upper()
             
             qty_col = col_map.get("quantity")
             try:
@@ -220,18 +229,26 @@ class AmazonReconciliationService:
             fc_code = str(row[fc_col]).strip().upper() if fc_col and pd.notna(row[fc_col]) else ""
             line_item_id = str(row[col_map["line_item_id"]]).strip() if "line_item_id" in col_map and pd.notna(row[col_map["line_item_id"]]) else "default"
 
-            # Check SKU validity
-            if sku not in known_skus:
-                counters["unknown_skus"].add(sku)
+            # Check SKU validity with 6-char normalization
+            from app.services.amazon_service import AmazonService
+            normalized_sku = AmazonService.normalize_amazon_sku(
+                raw_sku, known_skus, name_to_sku=name_to_sku
+            )
+
+            if not normalized_sku:
+                counters["unknown_skus"].add(raw_sku)
                 dlq = AmazonDLQ(
                     company_id=company_id,
                     dlq_type=DLQType.DATA_MISMATCH,
                     reference_id=order_id,
-                    error_message=f"Unknown SKU in shipment report: {sku}",
-                    payload={"order_id": order_id, "sku": sku, "fc": fc_code, "quantity": shipped_qty}
+                    error_message=f"Unknown SKU in shipment report: {raw_sku}",
+                    payload={"order_id": order_id, "sku": raw_sku, "fc": fc_code, "quantity": shipped_qty}
                 )
                 db.add(dlq)
                 continue
+
+            sku = normalized_sku
+            product_id = sku_to_id.get(sku.upper())
 
             # Resolve target FC warehouse
             target_wh_id = None

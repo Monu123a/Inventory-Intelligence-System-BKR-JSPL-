@@ -1,8 +1,9 @@
 import logging
 import json
 import time
+import re
 from datetime import datetime, timedelta
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -15,6 +16,47 @@ from app.models.schema import (
 logger = logging.getLogger(__name__)
 
 class AmazonService:
+    @staticmethod
+    def normalize_amazon_sku(raw_sku: str, known_skus: dict, name_to_sku: dict = None, title: str = "") -> Optional[str]:
+        """
+        Normalizes Amazon SKUs according to catalog rules:
+        Keeps only the first 6 digits/characters and trims anything past the 1st 6,
+        matching against master products.
+        Falls back to standard 6-character pattern matching in raw_sku, title, or product names.
+        """
+        if not raw_sku:
+            return None
+        clean = str(raw_sku).strip().upper()
+        
+        # 1. Exact match in known catalog
+        if clean in known_skus:
+            return known_skus[clean]
+            
+        # 2. Keep only first 6 digits/characters (trim anything past 1st 6)
+        if len(clean) >= 6:
+            candidate_6 = clean[:6]
+            if candidate_6 in known_skus:
+                return known_skus[candidate_6]
+                
+        # 3. Standard 6-char pattern: 2 alpha + 4 digits (e.g. LG0831)
+        m = re.search(r'\b[A-Z]{2}\d{4}\b', clean)
+        if m and m.group(0) in known_skus:
+            return known_skus[m.group(0)]
+            
+        # 4. Check in item title if present
+        if title:
+            m_title = re.search(r'\b[A-Z]{2}\d{4}\b', title.upper())
+            if m_title and m_title.group(0) in known_skus:
+                return known_skus[m_title.group(0)]
+                
+        # 5. Check if raw_sku is a model number in product names (e.g., 18980-28 -> LG0995)
+        if name_to_sku:
+            for p_name, p_sku in name_to_sku.items():
+                if clean in p_name:
+                    return p_sku
+
+        return None
+
     @staticmethod
     def sync_orders(
         db: Session, 
@@ -112,8 +154,9 @@ class AmazonService:
         afn_warehouse_id = afn_wh.id if afn_wh else mfn_warehouse_id
 
         # Cache products for fast in-memory lookup
-        products = db.query(Product.sku).filter(Product.company_id == company_id).all()
-        known_skus = {p.sku.upper() for p in products if p.sku}
+        products = db.query(Product.sku, Product.name).filter(Product.company_id == company_id).all()
+        known_skus = {p.sku.strip().upper(): p.sku for p in products if p.sku}
+        name_to_sku = {p.name.strip().upper(): p.sku for p in products if p.name and p.sku}
 
         # Status Map
         status_map = {
@@ -185,26 +228,33 @@ class AmazonService:
 
                 # Process order items for new or itemized orders
                 for item in order.get("items", []):
-                    sku = str(item.get("sku", "")).strip().upper()
+                    raw_sku = str(item.get("sku", "")).strip().upper()
                     line_item_id = str(item.get("amazon_line_item_id", "default"))
                     qty = int(item.get("quantity") or 0)
+                    title = str(item.get("title", "")).strip()
 
-                    if not sku:
+                    if not raw_sku:
                         continue
 
-                    if sku not in known_skus:
+                    normalized_sku = AmazonService.normalize_amazon_sku(
+                        raw_sku, known_skus, name_to_sku=name_to_sku, title=title
+                    )
+
+                    if not normalized_sku:
                         # Quarantine in DLQ
                         dlq = AmazonDLQ(
                             company_id=company_id,
                             dlq_type=DLQType.DATA_MISMATCH,
                             reference_id=order_id,
-                            error_message=f"Unknown SKU: {sku}",
+                            error_message=f"Unknown SKU: {raw_sku}",
                             payload={"item": item, "order_id": order_id, "channel": channel}
                         )
                         db.add(dlq)
                         counters["failed"] += 1
-                        counters["unknown_skus"].add(sku)
+                        counters["unknown_skus"].add(raw_sku)
                         continue
+
+                    sku = normalized_sku
 
                     try:
                         with db.begin_nested():

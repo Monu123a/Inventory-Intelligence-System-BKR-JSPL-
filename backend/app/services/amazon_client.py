@@ -17,11 +17,14 @@ class AmazonClient(abc.ABC):
         """
 
 class MockAmazonClient(AmazonClient):
-    def fetch_orders(self, since: datetime = None) -> List[Dict[str, Any]]:
+    def fetch_orders(self, *args, **kwargs) -> List[Dict[str, Any]]:
         """
         Mock client disabled to prevent polluting the production database with fake orders.
         """
         return []
+
+    def request_and_download_shipment_report(self, *args, **kwargs) -> str:
+        return ""
 
 class SPAPIAmazonClient(AmazonClient):
     def __init__(self):
