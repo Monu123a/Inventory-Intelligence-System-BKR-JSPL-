@@ -273,6 +273,7 @@ app.include_router(transfers.router, prefix="/api")
 app.include_router(accounting.router, prefix="/api")
 app.include_router(amazon_returns.router, prefix="/api")
 app.include_router(amazon.router, prefix="/api")
+app.include_router(amazon.router)
 app.include_router(defective_inventory.router, prefix="/api")
 app.include_router(returns_reports.router, prefix="/api")
 
