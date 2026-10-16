@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
@@ -8,8 +8,13 @@ import logging
 
 from app.models.db import get_db
 from app.api.dependencies import get_current_company_id, get_current_user
-from app.models.schema import AmazonLiveAllocation, AmazonSyncLog, AmazonDLQ, User
+from app.models.schema import (
+    AmazonLiveAllocation, AmazonSyncLog, AmazonDLQ, User, 
+    Warehouse, WarehouseExternalMapping, AmazonNetworkType, Inventory
+)
 from app.services.amazon_service import AmazonService
+from app.services.amazon_client import get_amazon_client
+from app.services.amazon_reconciliation_service import AmazonReconciliationService
 
 logger = logging.getLogger(__name__)
 
@@ -194,3 +199,152 @@ def get_amazon_dlq_records(
         }
         for r in records
     ]
+
+
+def run_background_fc_shipment_reconciliation(company_id: int, start_date: datetime, end_date: datetime):
+    from app.models.db import SessionLocal
+    sync_db = SessionLocal()
+    try:
+        logger.info(f"Starting automated SP-API shipment report pull for company {company_id}...")
+        client = get_amazon_client()
+        if not hasattr(client, "request_and_download_shipment_report"):
+            logger.error("Client does not support request_and_download_shipment_report")
+            return
+            
+        doc_content = client.request_and_download_shipment_report(start_date=start_date, end_date=end_date)
+        res = AmazonReconciliationService.reconcile_fc_shipment_report(
+            db=sync_db,
+            company_id=company_id,
+            report_data=doc_content,
+            allow_negative_stock=True
+        )
+        logger.info(f"FC shipment reconciliation completed: {res}")
+    except Exception as e:
+        logger.error(f"FC shipment reconciliation failed: {e}", exc_info=True)
+    finally:
+        sync_db.close()
+
+
+@router.post("/request-fc-shipments")
+def request_fc_shipments(
+    background_tasks: BackgroundTasks,
+    days_back: int = Query(7, description="Number of past days of shipments to reconcile"),
+    async_mode: bool = Query(True, description="Run in background"),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    Requests Amazon Fulfilled Shipments Report via SP-API Reports API, downloads it,
+    and deducts physical inventory from the respective FC warehouses.
+    """
+    from datetime import timedelta
+    start_dt = datetime.utcnow() - timedelta(days=days_back)
+    end_dt = datetime.utcnow()
+
+    if async_mode:
+        background_tasks.add_task(run_background_fc_shipment_reconciliation, company_id, start_dt, end_dt)
+        return {
+            "message": f"Amazon Fulfilled Shipments Report requested for the past {days_back} days. Processing and FC inventory deduction running in background.",
+            "status": "IN_PROGRESS"
+        }
+
+    try:
+        client = get_amazon_client()
+        doc_content = client.request_and_download_shipment_report(start_date=start_dt, end_date=end_dt)
+        res = AmazonReconciliationService.reconcile_fc_shipment_report(
+            db=db,
+            company_id=company_id,
+            report_data=doc_content,
+            allow_negative_stock=True
+        )
+        return {
+            "message": "FC shipment reconciliation completed successfully",
+            "details": res
+        }
+    except Exception as e:
+        logger.error(f"Manual FC shipment reconciliation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-fc-shipments")
+async def upload_fc_shipments(
+    file: UploadFile = File(...),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    Manual upload of an Amazon Fulfilled Shipments Report or Settlement Report (CSV, TSV, XLSX).
+    Parses FC codes and deducts inventory from the respective FC warehouses.
+    """
+    content = await file.read()
+    try:
+        if file.filename.endswith(".xlsx") or file.filename.endswith(".xls"):
+            import pandas as pd
+            import io
+            df = pd.read_excel(io.BytesIO(content))
+            res = AmazonReconciliationService.reconcile_fc_shipment_report(db, company_id, df)
+        else:
+            res = AmazonReconciliationService.reconcile_fc_shipment_report(db, company_id, content)
+
+        return {
+            "message": "Shipment report processed successfully",
+            "details": res
+        }
+    except Exception as e:
+        logger.error(f"Failed processing uploaded shipment file: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed processing file: {str(e)}")
+
+
+@router.get("/fc-inventory-summary")
+def get_fc_inventory_summary(
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns live physical stock, available units, and active soft allocations across all Amazon FCs.
+    """
+    fc_warehouses = db.query(Warehouse).join(
+        WarehouseExternalMapping, Warehouse.id == WarehouseExternalMapping.warehouse_id
+    ).filter(
+        Warehouse.company_id == company_id,
+        WarehouseExternalMapping.amazon_network == AmazonNetworkType.AFN
+    ).order_by(Warehouse.code.asc()).all()
+
+    summary = []
+    for wh in fc_warehouses:
+        total_skus = db.query(func.count(Inventory.id)).filter(
+            Inventory.company_id == company_id,
+            Inventory.warehouse_id == wh.id,
+            Inventory.current_qty > 0
+        ).scalar() or 0
+
+        physical_units = db.query(func.sum(Inventory.current_qty)).filter(
+            Inventory.company_id == company_id,
+            Inventory.warehouse_id == wh.id
+        ).scalar() or 0
+
+        available_units = db.query(func.sum(Inventory.available_qty)).filter(
+            Inventory.company_id == company_id,
+            Inventory.warehouse_id == wh.id
+        ).scalar() or 0
+
+        # Active allocations assigned to this FC
+        active_allocs = db.query(func.sum(AmazonLiveAllocation.allocated_qty - AmazonLiveAllocation.reconciled_qty)).filter(
+            AmazonLiveAllocation.company_id == company_id,
+            AmazonLiveAllocation.warehouse_id == wh.id,
+            AmazonLiveAllocation.closed == False
+        ).scalar() or 0
+
+        summary.append({
+            "warehouse_id": wh.id,
+            "fc_code": wh.code,
+            "name": wh.name,
+            "total_skus": total_skus,
+            "physical_units": int(physical_units),
+            "available_units": int(available_units),
+            "active_allocations": int(active_allocs)
+        })
+
+    return summary

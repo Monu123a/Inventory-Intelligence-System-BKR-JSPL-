@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import Button from '../../components/forms/Button';
@@ -12,7 +12,10 @@ import {
   FiBox, 
   FiLayers, 
   FiShield,
-  FiSearch
+  FiSearch,
+  FiTruck,
+  FiUploadCloud,
+  FiFileText
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -21,10 +24,14 @@ import styles from './Amazon.module.css';
 
 const AmazonLiveInventory = () => {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [networkFilter, setNetworkFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState('allocations');
   const [backfillMode, setBackfillMode] = useState(false);
+  const [reportDaysBack, setReportDaysBack] = useState(7);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // 1. Fetch Sync Telemetry & Health Status
   const { 
@@ -64,7 +71,17 @@ const AmazonLiveInventory = () => {
     refetchInterval: isSyncInProgress ? 5000 : false,
   });
 
-  // 4. Trigger Sync Mutation
+  // 4. Fetch FC Inventory Summary
+  const {
+    data: fcSummaries = [],
+    isLoading: loadingFcSummary,
+    refetch: refetchFcSummary
+  } = useQuery({
+    queryKey: ['amazon', 'fc-summary'],
+    queryFn: amazonService.getFcInventorySummary,
+  });
+
+  // 5. Trigger Orders Sync Mutation
   const syncMutation = useMutation({
     mutationFn: (options) => amazonService.triggerSync(options),
     onSuccess: (data) => {
@@ -78,6 +95,38 @@ const AmazonLiveInventory = () => {
     }
   });
 
+  // 6. Request FC Shipment Report Mutation (SP-API)
+  const requestShipmentsMutation = useMutation({
+    mutationFn: (params) => amazonService.requestFcShipments(params),
+    onSuccess: (data) => {
+      toast.success(data?.message || 'Amazon shipment report requested!');
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'fc-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'live-inventory'] });
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.detail || 'Failed to request Amazon shipment report');
+    }
+  });
+
+  // 7. Upload FC Shipment Report Mutation
+  const uploadShipmentsMutation = useMutation({
+    mutationFn: (formData) => amazonService.uploadFcShipments(formData),
+    onSuccess: (data) => {
+      const details = data?.details || {};
+      const breakdown = details.fc_breakdown || {};
+      const breakdownStr = Object.entries(breakdown).map(([fc, qty]) => `${fc}: ${qty}`).join(', ');
+      toast.success(`Deducted ${details.units_deducted || 0} units across FCs (${breakdownStr || 'None'})!`);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'fc-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'live-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['amazon', 'dlq'] });
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.detail || 'Failed processing uploaded shipment report');
+    }
+  });
+
   const handleSyncClick = () => {
     syncMutation.mutate({
       backfill: backfillMode,
@@ -85,10 +134,32 @@ const AmazonLiveInventory = () => {
     });
   };
 
+  const handleRequestShipmentsClick = () => {
+    requestShipmentsMutation.mutate({
+      days_back: reportDaysBack,
+      async_mode: true
+    });
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleProcessUploadedFile = () => {
+    if (!selectedFile) return;
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    uploadShipmentsMutation.mutate(formData);
+  };
+
   const handleRefreshAll = () => {
     refetchStatus();
     refetchAllocations();
     refetchDlq();
+    refetchFcSummary();
   };
 
   // Filter allocations
@@ -101,7 +172,6 @@ const AmazonLiveInventory = () => {
 
   // Calculate totals
   const totalSoftReserved = allocations.reduce((acc, curr) => acc + (curr.pending_qty || 0), 0);
-  const totalReconciled = allocations.reduce((acc, curr) => acc + (curr.reconciled_qty || 0), 0);
 
   const allocationColumns = [
     { key: 'sku', label: 'SKU' },
@@ -110,6 +180,15 @@ const AmazonLiveInventory = () => {
     { key: 'reconciled_qty', label: 'Reconciled (Shipped)' },
     { key: 'pending_qty', label: 'Soft Reserved (Active)' },
     { key: 'active_orders', label: 'Open Orders' },
+  ];
+
+  const fcColumns = [
+    { key: 'fc_code_badge', label: 'FC Warehouse' },
+    { key: 'name', label: 'Facility Name' },
+    { key: 'total_skus', label: 'Active SKUs' },
+    { key: 'physical_units', label: 'Physical Stock (Current)' },
+    { key: 'active_allocations', label: 'Active AFN Reservations' },
+    { key: 'available_units', label: 'Available Units' },
   ];
 
   const dlqColumns = [
@@ -139,10 +218,10 @@ const AmazonLiveInventory = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827', fontWeight: 600 }}>
-              Live SP-API Inventory Synchronization
+              Live SP-API Inventory Synchronization & FC Deduction
             </h2>
             <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.875rem', color: '#6b7280' }}>
-              Two-phase soft allocation engine protecting offline POS and B2B orders from overselling.
+              Two-phase soft allocation engine protecting offline POS, with automated FC-wise shipment deduction.
             </p>
           </div>
 
@@ -212,21 +291,21 @@ const AmazonLiveInventory = () => {
               <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#6b7280' }}>units</span>
             </div>
             <div className={styles.metricSubtitle}>
-              Across {syncStatus?.active_orders_count ?? allocations.reduce((acc, c) => acc + (c.active_orders || 0), 0)} open Amazon orders
+              Across {syncStatus?.active_orders_count ?? 0} open Amazon orders
             </div>
           </div>
 
           <div className={styles.metricCard}>
             <div className={styles.metricHeader}>
-              <span>Last Sync Telemetry</span>
-              <FiLayers color="#0284c7" />
+              <span>Amazon Fulfillment Centers</span>
+              <FiTruck color="#0284c7" />
             </div>
             <div className={styles.metricValue}>
-              {syncStatus?.orders_processed ?? 0}
-              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#6b7280' }}>processed</span>
+              {fcSummaries.length}
+              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#6b7280' }}>FC warehouses</span>
             </div>
             <div className={styles.metricSubtitle}>
-              {syncStatus?.skipped_duplicates ?? 0} skipped (known) • {syncStatus?.failed_items ?? 0} quarantined
+              BLR8, BOM7, MAA4, DEL4 & more
             </div>
           </div>
 
@@ -249,16 +328,15 @@ const AmazonLiveInventory = () => {
         <div className={styles.infoBanner}>
           <FiShield size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
-            <strong>How Soft Allocation Protects Your Inventory:</strong>
+            <strong>Automated Two-Phase Inventory Engine:</strong>
             <div style={{ marginTop: '0.25rem', lineHeight: 1.4 }}>
-              When a buyer places an order on Amazon, stock is immediately soft-reserved in <code>AmazonLiveAllocation</code>, 
-              reducing the available stock displayed in Offline POS and B2B order entry. 
-              Once the Amazon Settlement or Dispatch report arrives, the reserved quantity is permanently deducted from physical warehouse inventory.
+              1. <strong>Live Orders (SP-API Orders):</strong> Immediately soft-reserves stock to protect offline POS from overselling.<br />
+              2. <strong>Shipment Reports (SP-API Reports):</strong> Identifies the exact physical Amazon FC (<code>BLR8</code>, <code>BOM7</code>, etc.) and permanently deducts inventory from that specific FC warehouse ledger.
             </div>
           </div>
         </div>
 
-        {/* Tabs for Allocations vs DLQ */}
+        {/* Tabs for Allocations vs FC Reconciliation vs DLQ */}
         <Card noPadding>
           <div className={styles.tabsContainer} style={{ padding: '0 1rem', margin: 0 }}>
             <button
@@ -270,6 +348,14 @@ const AmazonLiveInventory = () => {
               <span className={styles.tabCount}>{filteredAllocations.length}</span>
             </button>
             <button
+              className={`${styles.tabButton} ${activeTab === 'fc_reconciliation' ? styles.tabButtonActive : ''}`}
+              onClick={() => setActiveTab('fc_reconciliation')}
+            >
+              <FiTruck />
+              <span>FC Inventory & Shipment Deduction</span>
+              <span className={styles.tabCount}>{fcSummaries.length}</span>
+            </button>
+            <button
               className={`${styles.tabButton} ${activeTab === 'dlq' ? styles.tabButtonActive : ''}`}
               onClick={() => setActiveTab('dlq')}
             >
@@ -279,6 +365,7 @@ const AmazonLiveInventory = () => {
             </button>
           </div>
 
+          {/* TAB 1: ALLOCATIONS */}
           {activeTab === 'allocations' && (
             <>
               {/* Filter and Search Bar */}
@@ -364,6 +451,148 @@ const AmazonLiveInventory = () => {
             </>
           )}
 
+          {/* TAB 2: FC RECONCILIATION */}
+          {activeTab === 'fc_reconciliation' && (
+            <div>
+              {/* Action Controls for Automated Pull & File Upload */}
+              <div className={styles.actionGrid}>
+                {/* Action 1: Automated SP-API Pull */}
+                <div className={styles.actionCard}>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#111827', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FiCloudLightning color="#2563eb" />
+                      <span>Request Amazon Shipment Report</span>
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.8125rem', color: '#6b7280', lineHeight: 1.4 }}>
+                      Calls Amazon SP-API Reports to fetch the <code>GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL</code> file, 
+                      matches physical FCs (<code>BLR8</code>, <code>BOM7</code>, etc.), and permanently deducts inventory.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1rem' }}>
+                    <select
+                      value={reportDaysBack}
+                      onChange={(e) => setReportDaysBack(Number(e.target.value))}
+                      className={styles.filterSelect}
+                      style={{ flex: 1 }}
+                    >
+                      <option value={7}>Past 7 Days</option>
+                      <option value={14}>Past 14 Days</option>
+                      <option value={30}>Past 30 Days</option>
+                      <option value={60}>Past 60 Days</option>
+                    </select>
+
+                    <Button
+                      variant="primary"
+                      onClick={handleRequestShipmentsClick}
+                      isLoading={requestShipmentsMutation.isPending}
+                      disabled={requestShipmentsMutation.isPending}
+                    >
+                      Request & Deduct
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Action 2: Manual File Upload */}
+                <div className={styles.actionCard}>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#111827', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FiUploadCloud color="#059669" />
+                      <span>Upload Amazon Report File (.csv / .tsv)</span>
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.8125rem', color: '#6b7280', lineHeight: 1.4 }}>
+                      Already downloaded an Amazon Fulfilled Shipments or Settlement Report from Seller Central? 
+                      Upload it here for instant FC-wise deduction.
+                    </p>
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleFileUpload} 
+                      accept=".csv,.tsv,.txt,.xlsx,.xls"
+                      style={{ fontSize: '0.8125rem', flex: 1 }}
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={handleProcessUploadedFile}
+                      disabled={!selectedFile || uploadShipmentsMutation.isPending}
+                      isLoading={uploadShipmentsMutation.isPending}
+                    >
+                      <FiFileText style={{ marginRight: '0.375rem' }} />
+                      Process File
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* FC Warehouses Live Stock Table */}
+              <div style={{ padding: '0 1rem 0.5rem 1rem' }}>
+                <h4 style={{ margin: '1rem 0 0.5rem 0', color: '#374151', fontSize: '0.9375rem' }}>
+                  Registered Amazon Fulfillment Centers (Physical Inventory)
+                </h4>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <DataTable>
+                  <TableHeader columns={fcColumns} />
+                  <tbody>
+                    {loadingFcSummary ? (
+                      <tr>
+                        <td colSpan={fcColumns.length} style={{ textAlign: 'center', padding: '2.5rem', color: '#6b7280' }}>
+                          Loading FC inventory summaries...
+                        </td>
+                      </tr>
+                    ) : fcSummaries.length === 0 ? (
+                      <tr>
+                        <td colSpan={fcColumns.length} style={{ textAlign: 'center', padding: '2.5rem', color: '#6b7280' }}>
+                          No Amazon FC warehouses mapped yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      fcSummaries.map((fc, idx) => {
+                        const rowData = {
+                          ...fc,
+                          fc_code_badge: (
+                            <span style={{ 
+                              padding: '0.25rem 0.5rem', 
+                              backgroundColor: '#e0e7ff', 
+                              color: '#3730a3', 
+                              borderRadius: '0.25rem',
+                              fontWeight: 700 
+                            }}>
+                              {fc.fc_code}
+                            </span>
+                          ),
+                          name: <span style={{ fontWeight: 500, color: '#111827' }}>{fc.name}</span>,
+                          total_skus: <span>{fc.total_skus} SKUs</span>,
+                          physical_units: (
+                            <span style={{ fontWeight: 600, color: fc.physical_units < 0 ? '#dc2626' : '#111827' }}>
+                              {fc.physical_units} units
+                            </span>
+                          ),
+                          active_allocations: (
+                            <span style={{ color: '#d97706', fontWeight: 600 }}>
+                              {fc.active_allocations} reserved
+                            </span>
+                          ),
+                          available_units: (
+                            <span style={{ fontWeight: 700, color: fc.available_units < 0 ? '#dc2626' : '#059669' }}>
+                              {fc.available_units} units
+                            </span>
+                          )
+                        };
+                        return <TableRow key={idx} row={rowData} columns={fcColumns} />;
+                      })
+                    )}
+                  </tbody>
+                </DataTable>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: DLQ */}
           {activeTab === 'dlq' && (
             <div>
               {/* Isolation Rule Notice */}
@@ -399,13 +628,13 @@ const AmazonLiveInventory = () => {
                       </tr>
                     ) : (
                       dlqRecords.map((item, idx) => {
-                        const payloadItem = item.payload?.item || {};
+                        const payloadItem = item.payload?.item || item.payload || {};
                         const rowData = {
                           order_id: (
                             <div>
                               <strong style={{ color: '#111827' }}>{item.order_id}</strong>
                               <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                                Channel: {item.payload?.channel || 'Unknown'}
+                                Channel: {item.payload?.channel || 'Unknown'} {item.payload?.fc ? `(FC: ${item.payload.fc})` : ''}
                               </div>
                             </div>
                           ),

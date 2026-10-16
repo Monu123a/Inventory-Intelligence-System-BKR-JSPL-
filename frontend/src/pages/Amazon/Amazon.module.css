@@ -223,6 +223,38 @@
   user-select: none;
 }
 
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.actionCard {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.uploadZone {
+  border: 2px dashed #d1d5db;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.uploadZone:hover {
+  border-color: #2563eb;
+  background-color: #eff6ff;
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
@@ -231,3 +263,4 @@
     opacity: 0.5;
   }
 }
+

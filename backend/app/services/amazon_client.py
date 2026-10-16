@@ -26,11 +26,13 @@ class MockAmazonClient(AmazonClient):
 class SPAPIAmazonClient(AmazonClient):
     def __init__(self):
         try:
-            from sp_api.api import Orders
+            from sp_api.api import Orders, Reports
             self.Orders = Orders
+            self.Reports = Reports
         except ImportError:
             logger.error("sp-api-python package is not installed. Run: pip install python-amazon-sp-api")
             self.Orders = None
+            self.Reports = None
             
         self.credentials = dict(
             refresh_token=os.getenv("LWA_REFRESH_TOKEN"),
@@ -172,6 +174,52 @@ class SPAPIAmazonClient(AmazonClient):
         except Exception as e:
             logger.error(f"Failed to fetch orders from SP-API: {e}", exc_info=True)
             return []
+
+    def request_and_download_shipment_report(self, start_date: datetime, end_date: datetime = None) -> str:
+        """
+        Requests Amazon Fulfilled Shipments Report (GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL),
+        polls until processingStatus == 'DONE', and downloads the report document content (CSV/TSV string).
+        """
+        if not self.Reports:
+            raise RuntimeError("SP-API Reports library not available")
+
+        import time
+        from sp_api.base import Marketplaces
+        marketplace = getattr(Marketplaces, self.marketplace, Marketplaces.IN)
+        reports_api = self.Reports(credentials=self.credentials, marketplace=marketplace)
+
+        end_dt = end_date or datetime.utcnow()
+        logger.info(f"Requesting Amazon Fulfilled Shipments Report from {start_date} to {end_dt}...")
+        
+        create_res = reports_api.create_report(
+            reportType="GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL",
+            dataStartTime=start_date.isoformat(),
+            dataEndTime=end_dt.isoformat()
+        )
+        report_id = (create_res.payload or {}).get("reportId")
+        if not report_id:
+            raise RuntimeError(f"Failed to create report: {create_res}")
+
+        logger.info(f"Report created with ID: {report_id}. Waiting for Amazon processing...")
+        max_attempts = 40
+        for attempt in range(max_attempts):
+            time.sleep(10)
+            rep_res = reports_api.get_report(report_id)
+            payload = rep_res.payload or {}
+            status = payload.get("processingStatus")
+            logger.info(f"Report {report_id} status: {status} (attempt {attempt + 1}/{max_attempts})")
+
+            if status == "DONE":
+                doc_id = payload.get("reportDocumentId")
+                logger.info(f"Report ready! Downloading document {doc_id}...")
+                doc_res = reports_api.get_report_document(doc_id, download=True)
+                doc_payload = doc_res.payload or {}
+                return doc_payload.get("document", "")
+            elif status in ("CANCELLED", "FATAL"):
+                raise RuntimeError(f"Amazon report processing failed with status: {status}")
+
+        raise TimeoutError("Timed out waiting for Amazon to generate shipment report.")
+
 
 def get_amazon_client() -> AmazonClient:
     client_type = os.getenv("AMAZON_CLIENT", "mock").lower()
