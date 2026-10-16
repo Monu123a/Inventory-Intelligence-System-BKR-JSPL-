@@ -67,12 +67,19 @@ def _resolve_default_warehouse(db: Session, company_id: int) -> Warehouse:
             return vshb
         raise HTTPException(status_code=400, detail="JSPL POS requires the 'VSHB' warehouse, but it was not found or is inactive.")
 
-    preferred_codes = {"DEFAULT", f"{company_code}-DEFAULT", f"{company_code}_DEFAULT", "MAIN", "POS"}
+    preferred_codes = {
+        "DEFAULT", f"{company_code}-DEFAULT", f"{company_code}_DEFAULT",
+        "MAIN", "POS", "CENTRAL", f"{company_code}_CENTRAL", f"{company_code}-CENTRAL", "BKR_CENTRAL"
+    }
     for warehouse in warehouses:
         code = (warehouse.code or "").strip().upper()
         name = (warehouse.name or "").strip().lower()
-        if code in preferred_codes or "default" in name or "main" in name or "pos" in name:
+        if code in preferred_codes or "default" in name or "main" in name or "pos" in name or "central" in name or "central" in code.lower():
             return warehouse
+
+    # If no preferred code matched, return the first active warehouse
+    if warehouses:
+        return warehouses[0]
 
     raise HTTPException(
         status_code=400,
@@ -1002,7 +1009,7 @@ def cancel_sale(
             CompanyUser.user_id == current_user.id,
             CompanyUser.company_id == sale.company_id
         ).first()
-        if not access and sale.company_id != current_user.company_id:
+        if not access:
             raise HTTPException(status_code=403, detail="Not authorized to cancel this sale")
         
     if sale.status == 'Cancelled':
@@ -1013,47 +1020,69 @@ def cancel_sale(
     if active_returns:
         raise HTTPException(status_code=400, detail="Cannot cancel a sale that has active returns. Please cancel the returns first.")
 
-    # Find associated inventory movements
+    # Find associated inventory movements to revert stock
     movements = db.query(InventoryMovement).filter(
         InventoryMovement.reference_id.in_([sale.bill_number, sale.invoice_number]),
-        InventoryMovement.source == 'OFFLINE_POS'
+        InventoryMovement.source.in_(['OFFLINE_POS', 'INVOICE_EDIT'])
     ).all()
     
+    # Calculate net quantity deducted per (product_id, warehouse_id)
+    net_deductions = {}
     for mov in movements:
-        # Revert inventory
-        inv = db.query(Inventory).filter_by(
-            product_id=mov.product_id,
-            warehouse_id=mov.warehouse_id
-        ).first()
-        
-        if inv:
-            inv._allow_mutation = True
-            inv.current_qty -= mov.qty_changed # Subtracting negative deduction restores inventory
-            inv.available_qty = inv.current_qty - (inv.reserved_qty or 0)
-            inv._allow_mutation = False
-            
-            # Log the cancellation movement
-            new_mov = InventoryMovement(
-                product_id=mov.product_id,
-                warehouse_id=mov.warehouse_id,
-                movement_type='IN',
-                qty_changed=-mov.qty_changed,
-                reference_id=sale.bill_number,
-                source='SALE_CANCELLED',
-                notes=f'Reverted due to sale cancellation ({sale.bill_number})'
-            )
-            db.add(new_mov)
+        key = (mov.product_id, mov.warehouse_id)
+        net_deductions[key] = net_deductions.get(key, 0) + mov.qty_changed
+
+    has_reverted = False
+    for (prod_id, wh_id), total_delta in net_deductions.items():
+        if total_delta < 0:
+            qty_to_restore = abs(total_delta)
+            prod = db.query(Product).filter(Product.id == prod_id).first()
+            if prod:
+                InventoryEventEngine.process_event(
+                    db=db,
+                    company_id=sale.company_id,
+                    product_sku=prod.sku,
+                    warehouse_id=wh_id,
+                    quantity=qty_to_restore,
+                    event_type="ADD",
+                    source="SALE_CANCELLED",
+                    reference_id=f"CANCEL_{sale.bill_number}",
+                    user_id=current_user.id,
+                    metadata_payload={"sale_id": sale.id, "prod_id": prod_id, "warehouse_id": wh_id, "line_id": f"{prod_id}_{wh_id}"}
+                )
+                has_reverted = True
+
+    # Fallback to sale items if no movements were recorded
+    if not has_reverted:
+        default_wh = _resolve_default_warehouse(db, sale.company_id)
+        for item in (sale.items or []):
+            if item.quantity > 0:
+                sku = item.sku or (item.product.sku if item.product else None)
+                if sku:
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=sale.company_id,
+                        product_sku=sku,
+                        warehouse_id=default_wh.id,
+                        quantity=item.quantity,
+                        event_type="ADD",
+                        source="SALE_CANCELLED",
+                        reference_id=f"CANCEL_{sale.bill_number}",
+                        user_id=current_user.id,
+                        metadata_payload={"sale_id": sale.id, "item_id": item.id, "line_id": str(item.id)}
+                    )
             
     sale.status = 'Cancelled'
     
     # Audit log
     AuditLogService.log(
-        db=db,
+        db,
         company_id=sale.company_id,
         entity_type="Sale",
         entity_id=sale.id,
         event_type="SALE_CANCELLED",
-        message=f"Cancelled sale {sale.bill_number} and reverted inventory"
+        message=f"Cancelled sale {sale.bill_number} and reverted inventory",
+        metadata={"bill_number": sale.bill_number, "user_id": current_user.id}
     )
     
     db.commit()

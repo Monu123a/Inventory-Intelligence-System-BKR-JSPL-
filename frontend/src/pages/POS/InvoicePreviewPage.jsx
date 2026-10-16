@@ -79,6 +79,27 @@ export default function InvoicePreviewPage() {
     }
   };
 
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancelBill = async () => {
+    if (!invoice?.id) return;
+    if (!window.confirm(`Are you sure you want to cancel bill ${invoice.invoice_number || invoice.bill_number}? This will permanently void the sale and revert inventory stock.`)) {
+      return;
+    }
+    setCancelling(true);
+    try {
+      await posService.cancelSale(invoice.id);
+      await queryClient.invalidateQueries({ queryKey: ['sale', saleId] });
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      alert(`Sale ${invoice.invoice_number || invoice.bill_number} successfully cancelled and inventory reverted.`);
+    } catch (err) {
+      handleApiError(err, 'Failed to cancel sale');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -199,25 +220,20 @@ export default function InvoicePreviewPage() {
         </div>
 
         <div className={styles.toolbarRight}>
-          {invoice.status !== 'Cancelled' && (
+          {invoice.status !== 'Cancelled' ? (
             <button 
               className={styles.actionButton} 
               style={{ color: '#ef4444', borderColor: '#ef4444' }}
-              onClick={() => {
-                if(window.confirm('Are you sure you want to cancel this bill? This will automatically revert the inventory.')) {
-                  posService.cancelSale(invoice.id).then(() => {
-                    queryClient.invalidateQueries(['sale', saleId]);
-                    queryClient.invalidateQueries(['sales']);
-                    queryClient.invalidateQueries(['inventory']);
-                    alert('Sale successfully cancelled and inventory reverted.');
-                  }).catch(err => {
-                    alert('Failed to cancel sale: ' + (err.response?.data?.detail || err.message));
-                  });
-                }
-              }}
+              onClick={handleCancelBill}
+              disabled={cancelling}
             >
-              <FiXCircle style={{ marginRight: '4px' }} /> Cancel Bill
+              <FiXCircle style={{ marginRight: '4px' }} className={cancelling ? styles.spin : ''} />
+              {cancelling ? 'Cancelling...' : 'Cancel Bill'}
             </button>
+          ) : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', color: '#dc2626', background: '#fee2e2', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px' }}>
+              <FiXCircle style={{ marginRight: '5px' }} /> Bill Cancelled (Void)
+            </span>
           )}
           {invoice.status !== 'Cancelled' && (!invoice.related_returns || invoice.related_returns.length === 0) && (
             <button className={styles.actionButton} onClick={() => navigate(`/sales/${invoice.id}/edit`)}>

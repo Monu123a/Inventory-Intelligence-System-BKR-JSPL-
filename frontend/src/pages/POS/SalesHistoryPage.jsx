@@ -25,6 +25,7 @@ const SalesHistoryPage = () => {
   const limit = 20;
 
   const [retryingId, setRetryingId] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['sales', skip, limit, search, status, invoiceType, returnStatus, tallyStatus, startDate, endDate],
@@ -93,13 +94,16 @@ const SalesHistoryPage = () => {
     if (!window.confirm(`Are you sure you want to cancel bill ${billRef}? This will permanently void the sale and revert stock back to inventory.`)) {
       return;
     }
+    setCancellingId(sale.id);
     try {
       await posService.cancelSale(sale.id);
       alert(`Sale ${billRef} cancelled successfully and inventory restored.`);
-      queryClient.invalidateQueries({ queryKey: ['sales'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await queryClient.invalidateQueries({ queryKey: ['inventory'] });
     } catch (err) {
       handleApiError(err, `Failed to cancel sale ${billRef}`);
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -170,8 +174,10 @@ const SalesHistoryPage = () => {
               style={{ color: '#dc2626', borderColor: '#fca5a5' }}
               title="Cancel Bill"
               onClick={() => handleCancelSale(sale)}
+              disabled={cancellingId === sale.id}
             >
-              <FiXCircle /> Cancel
+              <FiXCircle className={cancellingId === sale.id ? styles.spinning : ''} />
+              {cancellingId === sale.id ? ' Cancelling...' : ' Cancel'}
             </button>
           )}
           {sale.linked_sales_return_ids?.length > 0 && (
