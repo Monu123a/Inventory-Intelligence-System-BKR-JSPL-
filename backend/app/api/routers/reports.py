@@ -99,3 +99,51 @@ def download_report(filename: str, company_id: int = Depends(get_current_company
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(filepath, filename=safe_filename)
+
+from app.services.series_report_service import SeriesReportService
+from fastapi import Response
+from datetime import date
+
+@router.get("/series-wise/list")
+def get_series_list(
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    """Returns detected invoice and order series available for filtering."""
+    series = SeriesReportService.get_detected_series(db, company_id=company_id)
+    return {"data": series}
+
+@router.get("/series-wise/export")
+def export_series_wise_sales_report(
+    series: str = Query("GST", description="Series name: GST, AMAZON, BKR, JGST, ALL, or custom prefix"),
+    date_from: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    format: str = Query("csv", pattern="^(csv|excel)$"),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Generates and downloads the exact 47-column Series-Wise Accountant Sales Report.
+    """
+    try:
+        content, filename, media_type, row_count = SeriesReportService.generate_series_sales_report(
+            db=db,
+            company_id=company_id,
+            series=series,
+            date_from=date_from,
+            date_to=date_to,
+            file_format=format
+        )
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Row-Count": str(row_count)
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate series report: {str(e)}")
+

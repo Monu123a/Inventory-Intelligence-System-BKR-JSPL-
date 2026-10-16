@@ -54,5 +54,22 @@ export const reportsService = {
   },
   downloadReport: (endpoint) => {
     window.open(endpoint, '_blank');
+  },
+  getSeriesList: async () => {
+    const response = await api.get('/api/reports/series-wise/list');
+    return normalizeResponse(response.data);
+  },
+  downloadSeriesReport: async ({ series = 'GST', dateFrom, dateTo, format = 'csv' }) => {
+    const params = {
+      series,
+      format,
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {})
+    };
+    const response = await api.get('/api/reports/series-wise/export', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
   }
 };

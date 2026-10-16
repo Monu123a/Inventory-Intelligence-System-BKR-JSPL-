@@ -564,6 +564,33 @@ def export_detailed_sales(
     
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=detailed_sales_report.csv"})
 
+@router.get("/sales/series-export")
+def export_series_sales(
+    series: str = Query("GST"),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    format: str = Query("csv", pattern="^(csv|excel)$"),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    from app.services.series_report_service import SeriesReportService
+    content, filename, media_type, row_count = SeriesReportService.generate_series_sales_report(
+        db=db,
+        company_id=company_id,
+        series=series,
+        date_from=date_from,
+        date_to=date_to,
+        file_format=format
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Row-Count": str(row_count)
+        }
+    )
+
 @router.get("/inventory/export")
 def export_inventory(
     search: Optional[str] = Query(None),
