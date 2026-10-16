@@ -15,6 +15,7 @@ export const API_ROUTES = {
   WAREHOUSE_INVENTORY: '/api/warehouse-inventory',
   DELIVERY_CHALLANS: '/api/delivery-challans',
   AMAZON_RETURNS: '/api/amazon-returns',
+  AMAZON: '/api/amazon',
   DAMAGE_CLAIMS: '/api/damage-claims',
   INVENTORY: {
     BASE: '/api/inventory',
