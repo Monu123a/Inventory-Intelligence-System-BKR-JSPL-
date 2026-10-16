@@ -183,6 +183,8 @@ class PurchaseService:
         purchase.invoice_number = request.invoice_number if request.invoice_number else None
         purchase.notes = request.notes
         
+        old_total = float(purchase.total_amount or 0.0)
+        
         # Delete old items
         db.query(PurchaseItem).filter_by(purchase_id=purchase.id).delete()
         
@@ -225,12 +227,22 @@ class PurchaseService:
             new_items.append(p_item)
             
         purchase.total_amount = total_amount
+        
+        # Update payment status if total changed
+        paid = float(purchase.amount_paid or 0.0)
+        if paid >= total_amount and total_amount > 0:
+            purchase.payment_status = "PAID"
+        elif paid > 0:
+            purchase.payment_status = "PARTIAL"
+        else:
+            purchase.payment_status = "UNPAID"
+            
         db.flush()
         
         # Re-apply inventory if status is RECEIVED
         if purchase.status == "RECEIVED":
             mov = db.query(InventoryMovement).filter_by(source="PURCHASE", reference_id=purchase.invoice_number or f"PUR-{purchase.id}").first()
-            wh_id = mov.warehouse_id if mov else PurchaseService.get_default_warehouse(db, purchase.company_id)
+            wh_id = request.warehouse_id or (mov.warehouse_id if mov else PurchaseService.get_default_warehouse(db, purchase.company_id))
             for p_item in new_items:
                 InventoryEventEngine.process_event(
                     db=db,
@@ -244,6 +256,19 @@ class PurchaseService:
                     user_id=operator_id,
                     metadata_payload={"operation": "EDIT_REAPPLY"}
                 )
+            
+            # Adjust vendor balance for the diff
+            diff = total_amount - old_total
+            if vendor and diff != 0:
+                vendor.payable_balance = float(vendor.payable_balance or 0.0) + diff
+                vt = VendorTransaction(
+                    vendor_id=vendor.id,
+                    transaction_type='INVOICE',
+                    amount=diff,
+                    ref_purchase_id=purchase.id,
+                    notes=f"Adjustment from bill edit for {purchase.invoice_number or purchase.id}"
+                )
+                db.add(vt)
                 
         return {"id": purchase.id, "status": purchase.status, "total_amount": total_amount}
 

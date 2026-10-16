@@ -73,6 +73,7 @@ const ReturnRecommendations = lazy(() => import('./pages/WarehouseLogistics/Retu
 const UserManualPage = lazy(() => import('./pages/Help/UserManualPage'));
 
 const CreatePurchase = lazy(() => import('./pages/Purchases/CreatePurchase'));
+const EditPurchase = lazy(() => import('./pages/Purchases/EditPurchase'));
 const PurchasesList = lazy(() => import('./pages/Purchases/PurchasesList'));
 const VendorsPage = lazy(() => import('./pages/Vendors/VendorsPage'));
 
@@ -101,6 +102,7 @@ const App = () => {
                 <Route path={ROUTES.DOWNLOAD_CENTRE} element={<DownloadCentre />} />
                 <Route path="/purchases/create" element={<CreatePurchase />} />
                 <Route path="/purchases/list" element={<PurchasesList />} />
+                <Route path="/purchases/:id/edit" element={<EditPurchase />} />
                 <Route path="/vendors" element={<VendorsPage />} />
                 <Route path={ROUTES.SETTINGS} element={<Settings />} />
                 <Route path={ROUTES.HELP} element={<UserManualPage />} />

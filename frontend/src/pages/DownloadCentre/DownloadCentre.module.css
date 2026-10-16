@@ -248,6 +248,53 @@
   cursor: not-allowed;
 }
 
+.categoryTabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+}
+
+.categoryTab {
+  background: none;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.categoryTab:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
+}
+
+.categoryTabActive {
+  color: #1d4ed8;
+  background-color: #eff6ff;
+  font-weight: 600;
+}
+
+.vendorSelect {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  color: #1e293b;
+  background: #ffffff;
+  outline: none;
+  min-width: 200px;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -256,3 +303,4 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+

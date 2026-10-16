@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
@@ -9,16 +9,54 @@ import { ConfirmationDialog } from '../../components/Modal/ConfirmationDialog';
 import { DownloadHistoryModal } from './components/DownloadHistoryModal';
 import { useDownloadHistory, saveDownloadMetadata } from '../../hooks/useDownloadHistory';
 import { reportsService } from '../../services/reports';
-import { FiRefreshCw, FiTrash2, FiEye, FiDownload, FiFileText, FiCalendar, FiCheck } from 'react-icons/fi';
+import api from '../../services/api';
+import { 
+  FiRefreshCw, FiTrash2, FiEye, FiDownload, FiFileText, 
+  FiCheck, FiShoppingBag, FiTruck, FiRotateCcw, FiLayers
+} from 'react-icons/fi';
 import styles from './DownloadCentre.module.css';
 
 const REPORTS = [
   { id: 'ACCOUNTANT_SALES', label: 'Accountant Sales (Series-Wise)' },
+  { id: 'ACCOUNTANT_PURCHASES', label: 'Accountant Purchase Register' },
+  { id: 'ACCOUNTANT_AMAZON_RETURNS', label: 'Accountant Amazon Returns' },
+  { id: 'ACCOUNTANT_SALES_RETURNS', label: 'Accountant POS Returns' },
   { id: 'LOW_STOCK', label: 'Low Stock' },
   { id: 'NEGATIVE_STOCK', label: 'Negative Stock' },
   { id: 'DAILY_REPLENISHMENT', label: 'Daily Replenishment' },
   { id: 'WAREHOUSE_SUMMARY', label: 'Warehouse Summary' },
   { id: 'INVENTORY_VALUATION', label: 'Inventory Valuation' }
+];
+
+const REPORT_CATEGORIES = [
+  { 
+    id: 'sales', 
+    label: 'Sales (Series-Wise)', 
+    icon: FiFileText,
+    title: 'Series-Wise Sales Reports (Accountant 47-Column Format)',
+    desc: 'Official tax-formatted sales reports for GST series, Amazon series, and retail series with automatic bill subtotals and grand totals.'
+  },
+  { 
+    id: 'purchases', 
+    label: 'Purchase Register', 
+    icon: FiShoppingBag,
+    title: 'Vendor Purchase Register (Accountant 47-Column Format)',
+    desc: 'Comprehensive vendor purchase register with bill-wise GST split (CGST/SGST/IGST), unit costs, payment status, and bill subtotals.'
+  },
+  { 
+    id: 'amazon_returns', 
+    label: 'Amazon Returns', 
+    icon: FiTruck,
+    title: 'Amazon Customer Returns Register (Accountant 47-Column Format)',
+    desc: 'Amazon SP-API return shipments, FC inspection reports, and reverse logistics in official accountant 47-column format.'
+  },
+  { 
+    id: 'sales_returns', 
+    label: 'POS Sales Returns', 
+    icon: FiRotateCcw,
+    title: 'Offline POS Returns & Credit Notes (Accountant 47-Column Format)',
+    desc: 'Retail counter sales returns, customer credit notes, and tax reversals formatted for your accountant.'
+  }
 ];
 
 const SERIES_PRESETS = [
@@ -38,6 +76,9 @@ const DownloadCentre = () => {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
 
+  // Active Category State
+  const [selectedCategory, setSelectedCategory] = useState('sales');
+
   // Series Report Generator State
   const [selectedSeries, setSelectedSeries] = useState('GST');
   const [customSeries, setCustomSeries] = useState('');
@@ -45,6 +86,14 @@ const DownloadCentre = () => {
   const [dateTo, setDateTo] = useState('2027-03-31');
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState(null);
+
+  // Vendor list for Purchases category
+  const [vendors, setVendors] = useState([]);
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+
+  useEffect(() => {
+    api.get('/api/vendors/').then(res => setVendors(res.data || [])).catch(() => {});
+  }, []);
 
   const { 
     data, 
@@ -58,20 +107,22 @@ const DownloadCentre = () => {
 
   const handleSearch = (val) => { setSearch(val); setPage(1); };
 
-  const handleDownloadSeriesReport = async (format) => {
-    const finalSeries = selectedSeries === 'CUSTOM' ? (customSeries.trim() || 'GST') : selectedSeries;
+  const handleDownloadReport = async (format) => {
     setIsExporting(true);
     setExportFormat(format);
     try {
+      const finalSeries = selectedSeries === 'CUSTOM' ? (customSeries.trim() || 'GST') : selectedSeries;
       const response = await reportsService.downloadSeriesReport({
+        reportType: selectedCategory,
         series: finalSeries,
+        vendorId: selectedVendorId ? parseInt(selectedVendorId) : undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
         format
       });
 
       const contentDisposition = response.headers['content-disposition'] || '';
-      let filename = `Accountant_Sales_${finalSeries}_${format === 'excel' ? 'xlsx' : 'csv'}`;
+      let filename = `Accountant_${selectedCategory}_${format === 'excel' ? 'xlsx' : 'csv'}`;
       const match = contentDisposition.match(/filename="?([^"]+)"?/);
       if (match && match[1]) {
         filename = match[1];
@@ -90,8 +141,9 @@ const DownloadCentre = () => {
       link.click();
       link.parentNode.removeChild(link);
 
+      const typeLabel = `ACCOUNTANT_${selectedCategory.toUpperCase()}${selectedCategory === 'sales' ? `_${finalSeries}` : ''}`;
       saveDownloadMetadata({
-        reportType: `ACCOUNTANT_SALES_${finalSeries}`,
+        reportType: typeLabel,
         filename,
         rowCount: response.headers['x-row-count'] ? parseInt(response.headers['x-row-count']) : undefined,
         fileFormat: format.toUpperCase(),
@@ -120,6 +172,9 @@ const DownloadCentre = () => {
       setDateTo('');
     }
   };
+
+  const currentCategoryObj = REPORT_CATEGORIES.find(c => c.id === selectedCategory) || REPORT_CATEGORIES[0];
+  const CategoryIcon = currentCategoryObj.icon;
 
   const columns = [
     { key: 'reportType', label: 'Report Type', render: (val) => <span className={styles.typeText}>{val.replace(/_/g, ' ')}</span> },
@@ -168,20 +223,41 @@ const DownloadCentre = () => {
         </>
       }
     >
-      {/* Series-Wise Sales Report Generator Card */}
+      {/* Universal Accountant Report Hub */}
       <Card noPadding style={{ marginBottom: '24px', overflow: 'visible' }}>
         <div className={styles.seriesSection}>
+          
+          {/* Category Tabs */}
+          <div className={styles.categoryTabs}>
+            {REPORT_CATEGORIES.map(cat => {
+              const Icon = cat.icon;
+              const isActive = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`${styles.categoryTab} ${isActive ? styles.categoryTabActive : ''}`}
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  <Icon size={16} />
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Header with Title and Export Buttons */}
           <div className={styles.seriesHeader}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ background: '#dbeafe', color: '#1d4ed8', padding: '8px', borderRadius: '8px', display: 'flex' }}>
-                <FiFileText size={20} />
+              <div style={{ background: '#dbeafe', color: '#1d4ed8', padding: '10px', borderRadius: '8px', display: 'flex' }}>
+                <CategoryIcon size={22} />
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0f172a' }}>
-                  Series-Wise Sales Reports (Accountant 47-Column Format)
+                  {currentCategoryObj.title}
                 </h3>
                 <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-                  Download official tax-formatted reports for GST series, Amazon series, and retail series with automatic bill subtotals.
+                  {currentCategoryObj.desc}
                 </p>
               </div>
             </div>
@@ -190,9 +266,9 @@ const DownloadCentre = () => {
               <button 
                 type="button"
                 className={styles.btnDownloadCsv}
-                onClick={() => handleDownloadSeriesReport('csv')}
+                onClick={() => handleDownloadReport('csv')}
                 disabled={isExporting}
-                title="Download in standard 47-column CSV format"
+                title="Download in standard 47-column CSV format with bill totals"
               >
                 <FiDownload className={isExporting && exportFormat === 'csv' ? styles.spin : ''} />
                 {isExporting && exportFormat === 'csv' ? 'Generating CSV...' : 'Download CSV'}
@@ -200,9 +276,9 @@ const DownloadCentre = () => {
               <button 
                 type="button"
                 className={styles.btnDownloadExcel}
-                onClick={() => handleDownloadSeriesReport('excel')}
+                onClick={() => handleDownloadReport('excel')}
                 disabled={isExporting}
-                title="Download styled Microsoft Excel workbook with formulas"
+                title="Download styled Microsoft Excel workbook with formulas and bill totals"
               >
                 <FiFileText className={isExporting && exportFormat === 'excel' ? styles.spin : ''} />
                 {isExporting && exportFormat === 'excel' ? 'Generating Excel...' : 'Download Excel (.xlsx)'}
@@ -210,35 +286,53 @@ const DownloadCentre = () => {
             </div>
           </div>
 
-          {/* Series Pills */}
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Select Invoice / Order Series
+          {/* Conditional Options: Series Pills for Sales, or Vendor Select for Purchases */}
+          {selectedCategory === 'sales' && (
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Select Invoice / Order Series
+              </div>
+              <div className={styles.seriesPills}>
+                {SERIES_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`${styles.pillBtn} ${selectedSeries === preset.id ? styles.pillBtnActive : ''}`}
+                    onClick={() => setSelectedSeries(preset.id)}
+                  >
+                    {selectedSeries === preset.id && <FiCheck style={{ marginRight: '4px', verticalAlign: 'middle' }} />}
+                    {preset.label}
+                  </button>
+                ))}
+                {selectedSeries === 'CUSTOM' && (
+                  <input
+                    type="text"
+                    className={styles.customInput}
+                    placeholder="Enter prefix (e.g. GST-)"
+                    value={customSeries}
+                    onChange={(e) => setCustomSeries(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </div>
             </div>
-            <div className={styles.seriesPills}>
-              {SERIES_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={`${styles.pillBtn} ${selectedSeries === preset.id ? styles.pillBtnActive : ''}`}
-                  onClick={() => setSelectedSeries(preset.id)}
-                >
-                  {selectedSeries === preset.id && <FiCheck style={{ marginRight: '4px', verticalAlign: 'middle' }} />}
-                  {preset.label}
-                </button>
-              ))}
-              {selectedSeries === 'CUSTOM' && (
-                <input
-                  type="text"
-                  className={styles.customInput}
-                  placeholder="Enter prefix (e.g. GST-)"
-                  value={customSeries}
-                  onChange={(e) => setCustomSeries(e.target.value)}
-                  autoFocus
-                />
-              )}
+          )}
+
+          {selectedCategory === 'purchases' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span className={styles.label}>Filter by Vendor:</span>
+              <select 
+                className={styles.vendorSelect}
+                value={selectedVendorId}
+                onChange={e => setSelectedVendorId(e.target.value)}
+              >
+                <option value="">All Vendors (Consolidated Register)</option>
+                {vendors.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
             </div>
-          </div>
+          )}
 
           {/* Controls: Date Range & Presets */}
           <div className={styles.controlsRow}>
@@ -318,38 +412,55 @@ const DownloadCentre = () => {
             <TableHeader columns={columns} />
             <tbody>
               {data?.length === 0 ? (
-                <tr><td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>No download history available.</td></tr>
+                <TableRow>
+                  <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>
+                    No reports downloaded yet. Generate one above to track it here.
+                  </td>
+                </TableRow>
               ) : (
-                data?.map((row) => (
-                  <TableRow key={row.id} row={row} columns={columns} />
+                data.map((row) => (
+                  <TableRow key={row.id}>
+                    {columns.map((col) => (
+                      <td key={col.key}>
+                        {col.render ? col.render(row[col.key], row) : row[col.key]}
+                      </td>
+                    ))}
+                  </TableRow>
                 ))
               )}
             </tbody>
           </DataTable>
-
-          {totalPages > 1 && (
-            <TablePagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
-          )}
         </div>
+
+        {totalPages > 1 && (
+          <TablePagination 
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        )}
       </Card>
 
-      <DownloadHistoryModal 
-        isOpen={!!selectedRecord} 
-        onClose={() => setSelectedRecord(null)} 
-        record={selectedRecord}
-      />
+      {/* View Metadata Modal */}
+      {selectedRecord && (
+        <DownloadHistoryModal
+          record={selectedRecord}
+          onClose={() => setSelectedRecord(null)}
+        />
+      )}
 
-      <ConfirmationDialog 
+      {/* Confirm Clear Modal */}
+      <ConfirmationDialog
         isOpen={isConfirmClearOpen}
-        onClose={() => setIsConfirmClearOpen(false)}
+        title="Clear Download History"
+        message="Are you sure you want to clear your local download history? This action cannot be undone."
+        confirmLabel="Clear All"
+        cancelLabel="Cancel"
         onConfirm={() => {
           clearHistory();
           setIsConfirmClearOpen(false);
         }}
-        title="Clear Download History"
-        message="Are you sure you want to clear your entire download history? This action cannot be undone."
-        confirmText="Clear History"
-        isDanger={true}
+        onCancel={() => setIsConfirmClearOpen(false)}
       />
     </PageContainer>
   );

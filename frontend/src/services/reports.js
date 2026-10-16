@@ -59,10 +59,12 @@ export const reportsService = {
     const response = await api.get('/api/reports/series-wise/list');
     return normalizeResponse(response.data);
   },
-  downloadSeriesReport: async ({ series = 'GST', dateFrom, dateTo, format = 'csv' }) => {
+  downloadSeriesReport: async ({ reportType = 'sales', series = 'GST', vendorId, dateFrom, dateTo, format = 'csv' }) => {
     const params = {
+      report_type: reportType,
       series,
       format,
+      ...(vendorId ? { vendor_id: vendorId } : {}),
       ...(dateFrom ? { date_from: dateFrom } : {}),
       ...(dateTo ? { date_to: dateTo } : {})
     };

@@ -184,24 +184,31 @@ def get_purchase(
     for item in p.items:
         items.append({
             "id": item.id,
+            "product_id": item.product_id,
             "product_sku": item.product_sku,
             "description": item.description,
             "qty": item.qty,
             "unit_cost": item.unit_cost,
             "gst_pct": item.gst_pct,
+            "hsn": item.hsn,
             "line_total": item.line_total
         })
         
     return {
         "id": p.id,
-        "vendor_name": p.vendor.name if p.vendor else None,
+        "vendor_id": p.vendor_id,
+        "vendor_name": p.vendor.name if p.vendor else p.vendor_name,
         "invoice_number": p.invoice_number,
+        "date": (p.date or p.created_at).isoformat() if (p.date or p.created_at) else None,
+        "payment_terms": p.payment_terms,
+        "eway_bill": p.eway_bill,
+        "vehicle_number": p.vehicle_number,
         "status": p.status,
         "total_amount": p.total_amount,
-        "amount_paid": p.amount_paid,
+        "amount_paid": float(p.amount_paid or 0.0),
         "payment_status": p.payment_status,
         "payment_method": p.payment_method,
-        "created_at": p.created_at,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
         "notes": p.notes,
         "items": items
     }

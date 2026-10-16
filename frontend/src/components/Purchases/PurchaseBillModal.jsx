@@ -31,8 +31,17 @@ export const PurchaseBillModal = ({ isOpen, onClose, purchase }) => {
         data={purchase.items}
       />
       
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-        <button onClick={onClose} style={{ padding: '8px 16px', background: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Close</button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+        <button 
+          onClick={() => {
+            onClose();
+            window.location.href = `/purchases/${purchase.id}/edit`;
+          }} 
+          style={{ padding: '8px 16px', background: '#eab308', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+        >
+          Edit Bill
+        </button>
+        <button onClick={onClose} style={{ padding: '8px 16px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Close</button>
       </div>
     </Modal>
   );
