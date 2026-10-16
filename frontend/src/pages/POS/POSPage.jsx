@@ -249,15 +249,14 @@ const POSPage = () => {
     }
   }, [searchData, debouncedSearchTerm]);
 
-  // Determine if inter-state (IGST) or intra-state (CGST+SGST)
-  // Compare company state code with place of supply state code
-  const companyStateCode = '27'; // Default BKR state code (Maharashtra) — will come from settings later
-  const isInterState = customerInfo.place_of_supply &&
-    customerInfo.place_of_supply !== '' &&
-    (() => {
-      const found = INDIAN_STATES.find(s => s.name === customerInfo.place_of_supply);
-      return found ? found.code !== companyStateCode : false;
-    })();
+  // Determine if inter-state (IGST) or intra-state (CGST+SGST/UTGST)
+  const sellerStateCode = companySettings?.state_code || (companySettings?.gstin ? companySettings.gstin.substring(0, 2) : '04');
+  const buyerStateCode = customerInfo.state_code || (customerInfo.gstin ? customerInfo.gstin.substring(0, 2) : '') || (() => {
+    const found = INDIAN_STATES.find(s => s.name === customerInfo.place_of_supply || s.name === customerInfo.state);
+    return found ? found.code : '';
+  })();
+  const isInterState = Boolean(buyerStateCode && buyerStateCode !== sellerStateCode);
+  const isUnionTerritory = ['04', '35', '38', '31', '26'].includes(sellerStateCode);
 
   // ---------------------------------------------------------------------------
   // GSTIN auto-fill state code when GSTIN changes
@@ -913,17 +912,19 @@ const POSPage = () => {
                 </datalist>
               </div>
 
-              <div className={styles.inputGroup}>
-                <label>GSTIN {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>
-                <input
-                  value={customerInfo.gstin}
-                  onChange={e => updateCustomer('gstin', e.target.value.toUpperCase())}
-                  placeholder="e.g. 27AAAAA0000A1Z5"
-                  className={`${styles.inputField} ${gstinError ? styles.inputError : ''}`}
-                  maxLength={15}
-                />
-                {gstinError && <span className={styles.fieldError}>{gstinError}</span>}
-              </div>
+              {invoiceType === 'B2B' && (
+                <div className={styles.inputGroup}>
+                  <label>GSTIN <span className={styles.required}>*</span></label>
+                  <input
+                    value={customerInfo.gstin}
+                    onChange={e => updateCustomer('gstin', e.target.value.toUpperCase())}
+                    placeholder="e.g. 27AAAAA0000A1Z5"
+                    className={`${styles.inputField} ${gstinError ? styles.inputError : ''}`}
+                    maxLength={15}
+                  />
+                  {gstinError && <span className={styles.fieldError}>{gstinError}</span>}
+                </div>
+              )}
 
               <div className={styles.inputGroup}>
                 <label>State</label>

@@ -19,7 +19,7 @@ const InvoiceParties = ({ company, customer, shipping }) => {
         <div className={styles.partyName}>{customer?.name}</div>
         <div className={styles.partyDetail}>{customer?.address}</div>
         <div className={styles.partyDetail}>{customer?.state} {customer?.state_code ? `(Code: ${customer.state_code})` : ''}</div>
-        <div className={styles.partyDetail}><strong>GSTIN:</strong> {customer?.gstin}</div>
+        {customer?.gstin && <div className={styles.partyDetail}><strong>GSTIN:</strong> {customer.gstin}</div>}
         {customer?.place_of_supply && <div className={styles.partyDetail}><strong>Place of Supply:</strong> {customer.place_of_supply}</div>}
         {(customer?.phone || customer?.mobile) && <div className={styles.partyDetail}><strong>Phone:</strong> {customer.phone || customer.mobile}</div>}
       </div>

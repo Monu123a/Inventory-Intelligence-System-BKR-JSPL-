@@ -167,7 +167,7 @@ def search_products(q: str = "", warehouse_id: Optional[int] = None, company_id:
     if warehouse_id:
         default_warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
         if not default_warehouse:
-            raise HTTPException(status_code=400, detail="Specified warehouse not found")
+            default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
     else:
         default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
 
@@ -1031,19 +1031,30 @@ def cancel_sale(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    sale = db.query(Sale).filter(Sale.id == sale_id, Sale.company_id == current_user.company_id).first()
+    sale = db.query(Sale).filter(Sale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
+        
+    if current_user.role.upper() not in ["ADMIN", "SUPER_ADMIN"]:
+        from app.models.schema import CompanyUser
+        access = db.query(CompanyUser).filter(
+            CompanyUser.user_id == current_user.id,
+            CompanyUser.company_id == sale.company_id
+        ).first()
+        if not access and sale.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Not authorized to cancel this sale")
         
     if sale.status == 'Cancelled':
         raise HTTPException(status_code=400, detail="Sale is already cancelled")
         
-    if sale.return_status and sale.return_status != 'None':
-        raise HTTPException(status_code=400, detail="Cannot cancel a sale that has returns. Please process a full return instead.")
+    # Check if sale has active returns
+    active_returns = db.query(SalesReturn).filter(SalesReturn.sale_id == sale.id, SalesReturn.status != 'Cancelled').all()
+    if active_returns:
+        raise HTTPException(status_code=400, detail="Cannot cancel a sale that has active returns. Please cancel the returns first.")
 
     # Find associated inventory movements
     movements = db.query(InventoryMovement).filter(
-        InventoryMovement.reference_id == sale.bill_number,
+        InventoryMovement.reference_id.in_([sale.bill_number, sale.invoice_number]),
         InventoryMovement.source == 'OFFLINE_POS'
     ).all()
     
@@ -1056,7 +1067,7 @@ def cancel_sale(
         
         if inv:
             inv._allow_mutation = True
-            inv.current_qty -= mov.qty_changed # Subtracting a negative deduction adds it back
+            inv.current_qty -= mov.qty_changed # Subtracting negative deduction restores inventory
             inv.available_qty = inv.current_qty - (inv.reserved_qty or 0)
             inv._allow_mutation = False
             
@@ -1068,22 +1079,21 @@ def cancel_sale(
                 qty_changed=-mov.qty_changed,
                 reference_id=sale.bill_number,
                 source='SALE_CANCELLED',
-                notes='Reverted due to sale cancellation'
+                notes=f'Reverted due to sale cancellation ({sale.bill_number})'
             )
             db.add(new_mov)
             
     sale.status = 'Cancelled'
     
-    # Add audit log
-    log = AuditLog(
-        user_id=current_user.id,
-        company_id=current_user.company_id,
-        action="CANCEL",
+    # Audit log
+    AuditLogService.log(
+        db=db,
+        company_id=sale.company_id,
         entity_type="Sale",
         entity_id=sale.id,
-        details=f"Cancelled sale {sale.bill_number} and reverted inventory"
+        event_type="SALE_CANCELLED",
+        message=f"Cancelled sale {sale.bill_number} and reverted inventory"
     )
-    db.add(log)
     
     db.commit()
     return {"message": "Sale cancelled successfully", "sale_id": sale.id, "status": "Cancelled"}

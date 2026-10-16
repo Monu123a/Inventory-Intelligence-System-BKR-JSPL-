@@ -6,7 +6,7 @@ import { handleApiError } from '../../utils/errorHandler';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
 import styles from './SalesHistoryPage.module.css';
-import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit } from 'react-icons/fi';
+import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit, FiXCircle } from 'react-icons/fi';
 
 const SalesHistoryPage = () => {
   const navigate = useNavigate();
@@ -88,6 +88,21 @@ const SalesHistoryPage = () => {
     return <span className={`${styles.returnBadge} ${styles.returnNone}`}>None</span>;
   };
 
+  const handleCancelSale = async (sale) => {
+    const billRef = sale.invoice_number || sale.bill_number;
+    if (!window.confirm(`Are you sure you want to cancel bill ${billRef}? This will permanently void the sale and revert stock back to inventory.`)) {
+      return;
+    }
+    try {
+      await posService.cancelSale(sale.id);
+      alert(`Sale ${billRef} cancelled successfully and inventory restored.`);
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    } catch (err) {
+      handleApiError(err, `Failed to cancel sale ${billRef}`);
+    }
+  };
+
   const columns = [
     { key: 'sale_date', label: 'Date', render: (val) => formatDate(val) },
     { 
@@ -97,6 +112,11 @@ const SalesHistoryPage = () => {
         <>
           <div className={styles.billNumber}>{sale.bill_number}</div>
           {sale.invoice_number && <div className={styles.invoiceNumber}>{sale.invoice_number}</div>}
+          {sale.status === 'Cancelled' && (
+            <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 'bold', color: '#dc2626', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px', marginTop: '2px' }}>
+              Cancelled
+            </span>
+          )}
         </>
       )
     },
@@ -142,6 +162,16 @@ const SalesHistoryPage = () => {
               onClick={() => navigate(`/sales/${sale.id}/edit`)}
             >
               <FiEdit /> Edit
+            </button>
+          )}
+          {sale.status !== 'Cancelled' && (!sale.linked_sales_return_ids || sale.linked_sales_return_ids.length === 0) && (
+            <button 
+              className={styles.actionBtn} 
+              style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+              title="Cancel Bill"
+              onClick={() => handleCancelSale(sale)}
+            >
+              <FiXCircle /> Cancel
             </button>
           )}
           {sale.linked_sales_return_ids?.length > 0 && (

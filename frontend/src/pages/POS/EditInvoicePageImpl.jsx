@@ -9,7 +9,7 @@ import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
 import InvoicePreviewModal from './InvoicePreviewModal';
 import useCompanyStore from '../../stores/useCompanyStore';
-import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw } from 'react-icons/fi';
+import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw, FiSearch } from 'react-icons/fi';
 
 // ---------------------------------------------------------------------------
 // GSTIN validation (basic format: 2-digit state + 10 PAN + 1 entity + 1 Z + 1 check)
@@ -225,15 +225,14 @@ const EditInvoicePage = () => {
     }
   }, [searchData, debouncedSearchTerm]);
 
-  // Determine if inter-state (IGST) or intra-state (CGST+SGST)
-  // Compare company state code with place of supply state code
-  const companyStateCode = '27'; // Default BKR state code (Maharashtra) — will come from settings later
-  const isInterState = customerInfo.place_of_supply &&
-    customerInfo.place_of_supply !== '' &&
-    (() => {
-      const found = INDIAN_STATES.find(s => s.name === customerInfo.place_of_supply);
-      return found ? found.code !== companyStateCode : false;
-    })();
+  // Determine if inter-state (IGST) or intra-state (CGST+SGST/UTGST)
+  const sellerStateCode = companySettings?.state_code || (companySettings?.gstin ? companySettings.gstin.substring(0, 2) : '04');
+  const buyerStateCode = customerInfo.state_code || (customerInfo.gstin ? customerInfo.gstin.substring(0, 2) : '') || (() => {
+    const found = INDIAN_STATES.find(s => s.name === customerInfo.place_of_supply || s.name === customerInfo.state);
+    return found ? found.code : '';
+  })();
+  const isInterState = Boolean(buyerStateCode && buyerStateCode !== sellerStateCode);
+  const isUnionTerritory = ['04', '35', '38', '31', '26'].includes(sellerStateCode);
 
   // ---------------------------------------------------------------------------
   // GSTIN auto-fill state code when GSTIN changes
@@ -282,22 +281,23 @@ const EditInvoicePage = () => {
       sku: product.sku,
       product_name: product.name,
       name: product.name,
-      hsn_sac: product.hsn_sac || '',
-      unit: product.unit || 'PCS',
-      available_stock: product.available_stock,
+      hsn_sac: product.hsn_sac || product.hsn || '',
+      gst_rate: initialGst,
       quantity: 1,
       selling_price: initialPrice,
+      rate: initialPrice,
       discount: 0,
-      gst_rate: initialGst,
-      gst_needs_confirmation: product.default_gst_rate === null,
       taxable_amount: taxable,
       cgst: isInterState ? 0 : gstAmount / 2,
       sgst: isInterState ? 0 : gstAmount / 2,
       igst: isInterState ? gstAmount : 0,
       line_total: taxable + gstAmount,
+      available_stock: product.available_stock,
+      unit: product.unit || 'PCS',
+      gst_needs_confirmation: false,
     };
 
-    setCart([...cart, newItem]);
+    setCart(prev => [...prev, newItem]);
   };
 
   const removeFromCart = (index) => {
@@ -753,17 +753,19 @@ const EditInvoicePage = () => {
                   maxLength={10}
                 />
               </div>
-              <div className={styles.inputGroup}>
-                <label>GSTIN {invoiceType === 'B2B' && <span className={styles.required}>*</span>}</label>
-                <input
-                  value={customerInfo.gstin}
-                  onChange={e => updateCustomer('gstin', e.target.value.toUpperCase())}
-                  placeholder="e.g. 27AAAAA0000A1Z5"
-                  className={gstinError ? styles.inputError : ''}
-                  maxLength={15}
-                />
-                {gstinError && <span className={styles.fieldError}>{gstinError}</span>}
-              </div>
+              {invoiceType === 'B2B' && (
+                <div className={styles.inputGroup}>
+                  <label>GSTIN <span className={styles.required}>*</span></label>
+                  <input
+                    value={customerInfo.gstin}
+                    onChange={e => updateCustomer('gstin', e.target.value.toUpperCase())}
+                    placeholder="e.g. 27AAAAA0000A1Z5"
+                    className={gstinError ? styles.inputError : ''}
+                    maxLength={15}
+                  />
+                  {gstinError && <span className={styles.fieldError}>{gstinError}</span>}
+                </div>
+              )}
               <div className={styles.inputGroup}>
                 <label>Email</label>
                 <input value={customerInfo.email} onChange={e => updateCustomer('email', e.target.value)} placeholder="Email" type="email" />
@@ -852,29 +854,39 @@ const EditInvoicePage = () => {
             </div>
           </CollapsibleSection>
 
-          {/* Product Search (preserved) */}
-          <h2 className={styles.sectionTitle}>Add Products</h2>
-          <div className={styles.searchContainer}>
-            <input
-              className={styles.searchInput}
-              placeholder="Search by SKU or Name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              autoFocus
-            />
+          {/* Prominent Search Bar */}
+          <div className={styles.searchSection}>
+            <div className={styles.searchBarWrapper}>
+              <FiSearch className={styles.searchIcon} size={18} />
+              <input
+                className={styles.searchInput}
+                placeholder="Scan Barcode or Search by SKU / Product Name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            {/* Floating Dropdown Results */}
             {searchResults.length > 0 && (
               <div className={styles.searchResults}>
-                {(searchResults || []).map(result => (
+                {searchResults.map(result => (
                   <div key={result.id} className={styles.searchItem} onClick={() => addToCart(result)}>
-                    <div className={styles.searchItemMain}>
-                      <span className={styles.itemName}>{result.sku} - {result.name}</span>
-                      <span className={styles.itemMeta}>
-                        {result.hsn_sac && `HSN: ${result.hsn_sac} | `}
-                        Brand: {result.brand} | Cat: {result.category}
-                      </span>
+                    <div className={styles.searchItemLeft}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className={styles.searchSkuBadge}>{result.sku}</span>
+                        <span className={styles.searchItemName}>{result.name}</span>
+                      </div>
+                      <div className={styles.searchItemMeta}>
+                        {(result.hsn_sac || result.hsn) && <span>HSN: <strong>{result.hsn_sac || result.hsn}</strong></span>}
+                        {result.brand && <span>Brand: <strong>{result.brand}</strong></span>}
+                      </div>
                     </div>
-                    <div className={`${styles.itemStock} ${result.available_stock < 5 ? styles.low : ''}`}>
-                      Stock: {result.available_stock}
+                    <div className={styles.searchItemRight}>
+                      <span className={styles.searchItemPrice}>₹{Number(result.default_price || 0).toFixed(2)}</span>
+                      <span className={`${styles.searchStockBadge} ${result.available_stock < 5 ? styles.low : ''}`}>
+                        Stock: {result.available_stock}
+                      </span>
                     </div>
                   </div>
                 ))}

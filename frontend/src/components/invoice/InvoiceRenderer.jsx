@@ -48,6 +48,7 @@ const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
 
         <InvoiceSummary 
           company={invoice.company} 
+          customer={invoice.customer}
           items={invoice.items} 
           totals={invoice.totals} 
         />

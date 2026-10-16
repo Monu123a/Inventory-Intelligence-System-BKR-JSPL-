@@ -3,7 +3,7 @@ import { normalizeResponse } from '../utils/normalizeResponse';
 
 export const posService = {
   cancelSale: async (saleId) => {
-    const response = await api.post(`/pos/sales/${saleId}/cancel`);
+    const response = await api.post(`/api/pos/sales/${saleId}/cancel`);
     return response.data;
   },
 

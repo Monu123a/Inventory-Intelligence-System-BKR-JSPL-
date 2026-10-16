@@ -25,7 +25,6 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items }) => {
       
       <div className={styles.titleBox}>
         <h2 className={styles.invoiceTitle}>{invoiceTitle}</h2>
-        <div className={styles.invoiceType}>{invoiceType}</div>
       </div>
       
       <div className={styles.eInvoiceSection}>

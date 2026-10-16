@@ -52,21 +52,6 @@ const InvoiceItems = ({ items, totals }) => {
             <td className={styles.textRight}>{formatCurrency(item.taxable_value)}</td>
           </tr>
         ))}
-        
-        <tr className={styles.totalsRow}>
-          <td colSpan="4" className={styles.textRight}>Total</td>
-          <td className={styles.textCenter}>
-            {items?.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0)}
-          </td>
-          <td className={styles.textCenter}>
-            {items?.reduce((sum, item) => sum + parseFloat(item.returned_quantity || 0), 0)}
-          </td>
-          <td className={styles.textCenter}>
-            {items?.reduce((sum, item) => sum + parseFloat(item.remaining_quantity ?? item.quantity), 0)}
-          </td>
-          <td colSpan="4" className={styles.textRight}>Taxable Amount</td>
-          <td className={styles.textRight}>{formatCurrency(totals?.taxable_amount)}</td>
-        </tr>
       </tbody>
     </table>
   );

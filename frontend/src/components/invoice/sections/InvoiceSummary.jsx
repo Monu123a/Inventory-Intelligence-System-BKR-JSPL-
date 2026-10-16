@@ -9,148 +9,165 @@ const formatCurrency = (val) => {
   });
 };
 
-const InvoiceSummary = ({ company, items, totals }) => {
-  const hasIGST = items?.some(item => parseFloat(item.igst || 0) > 0);
+const InvoiceSummary = ({ company, customer, items = [], totals }) => {
+  // Determine state codes
+  const sellerStateCode = company?.state_code || (company?.gstin ? company.gstin.substring(0, 2) : '04');
+  const buyerStateCode = customer?.state_code || (customer?.gstin ? customer.gstin.substring(0, 2) : '');
+  
+  // Check if items have IGST or place of supply is interstate
+  const itemsHaveIGST = items.some(item => parseFloat(item.igst || 0) > 0);
+  const isInterState = itemsHaveIGST || Boolean(buyerStateCode && buyerStateCode !== sellerStateCode);
+  const isUT = ['04', '35', '38', '31', '26'].includes(sellerStateCode) || (company?.state && company.state.toUpperCase().includes('CHANDIGARH'));
 
-  const gstSummary = items?.reduce((acc, item) => {
-    const rate = item.gst_rate || 0;
-    const hsn = item.hsn_sac || '';
-    const key = `${hsn}-${rate}`;
+  // Calculate totals from items
+  const totalSoldQty = items.reduce((sum, item) => sum + parseFloat(item.remaining_quantity ?? item.quantity ?? 0), 0);
+  const totalTaxable = totals?.taxable_amount ?? items.reduce((sum, item) => sum + parseFloat(item.taxable_value || item.taxable_amount || 0), 0);
+  
+  const totalCGST = items.reduce((sum, item) => sum + parseFloat(item.cgst || 0), 0);
+  const totalSGST = items.reduce((sum, item) => sum + parseFloat(item.sgst || 0), 0);
+  const totalIGST = items.reduce((sum, item) => sum + parseFloat(item.igst || 0), 0);
+  
+  const rawTotalTax = isInterState ? totalIGST : (totalCGST + totalSGST);
+  const rawGrandTotal = totalTaxable + rawTotalTax;
+  const roundedGrandTotal = totals?.grand_total ? Math.round(totals.grand_total) : Math.round(rawGrandTotal);
+  const roundOff = parseFloat((roundedGrandTotal - rawGrandTotal).toFixed(2));
 
-    if (!acc[key]) {
-      acc[key] = { taxable_value: 0, cgst: 0, sgst: 0, igst: 0, total_tax: 0, hsn: hsn, rate: rate };
-    }
-    acc[key].taxable_value += parseFloat(item.taxable_value || 0);
-    acc[key].cgst += parseFloat(item.cgst || 0);
-    acc[key].sgst += parseFloat(item.sgst || 0);
-    acc[key].igst += parseFloat(item.igst || 0);
-    acc[key].total_tax += parseFloat(item.cgst || 0) + parseFloat(item.sgst || 0) + parseFloat(item.igst || 0);
-    return acc;
-  }, {});
+  // Compute GST Slabs: 0 (Taxfree), 5, 12, 18, 28
+  const slabs = {
+    0: { taxable: 0, sgst_utgst: 0, cgst: 0, igst: 0 },
+    5: { taxable: 0, sgst_utgst: 0, cgst: 0, igst: 0 },
+    12: { taxable: 0, sgst_utgst: 0, cgst: 0, igst: 0 },
+    18: { taxable: 0, sgst_utgst: 0, cgst: 0, igst: 0 },
+    28: { taxable: 0, sgst_utgst: 0, cgst: 0, igst: 0 },
+  };
 
-  const gstSummaryEntries = Object.values(gstSummary || {}).sort((a, b) => (a.hsn || '').localeCompare(b.hsn || ''));
+  items.forEach(item => {
+    const rate = Math.round(parseFloat(item.gst_rate || 0));
+    const taxable = parseFloat(item.taxable_value || item.taxable_amount || 0);
+    const itemCgst = parseFloat(item.cgst || 0);
+    const itemSgst = parseFloat(item.sgst || 0);
+    const itemIgst = parseFloat(item.igst || 0);
 
-  const totalTaxAmount = gstSummaryEntries.reduce((sum, vals) => sum + vals.total_tax, 0);
+    const targetKey = slabs[rate] !== undefined ? rate : 18;
+    slabs[targetKey].taxable += taxable;
+    slabs[targetKey].cgst += itemCgst;
+    slabs[targetKey].sgst_utgst += itemSgst;
+    slabs[targetKey].igst += itemIgst;
+  });
+
+  const isJspl = (company?.name || '').toUpperCase().includes('JAGAN') || (company?.name || '').toUpperCase().includes('JSPL');
+  const bankDetails = company?.bank_details || {};
+  
+  const bankInfo = {
+    name: isJspl ? 'JAGAN SHOPSMART PVT LTD' : (company?.name || 'B K RAMAN AND CO'),
+    accountNumber: (bankDetails.account_no || bankDetails.account_number || (isJspl ? '50200075992904' : '41836801381')).trim(),
+    branch: (bankDetails.branch || (isJspl ? 'CHD- INDUSTRIAL AREA PH-II' : 'Industrial Area, Phase-2, Chandigarh')).trim(),
+    accountType: (bankDetails.account_type || 'CURRENT ACCOUNT').trim(),
+    ifsc: (bankDetails.ifsc || (isJspl ? 'HDFC0001417' : 'SBIN0007501')).trim()
+  };
+
+  const sgstUtgstLabel = isUT ? 'ADD UTGST' : 'ADD SGST';
+  const gridSgstUtgstCol = isUT ? 'UTGST' : 'GST';
 
   return (
-    <div className={styles.summaryContainer}>
-      <div className={styles.amountChargeable} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-        Amount Chargeable (in words)<br/>
-        <strong>INR {totals?.grand_total ? amountInWords(totals.grand_total) : ''}</strong>
-        </div>
-        <div style={{ textAlign: "right", fontSize: "1.1em" }}>
-          Amount Chargeable: <strong>₹{totals?.grand_total ? formatCurrency(totals.grand_total) : "0.00"}</strong>
-        </div>
-      </div>
-
-      {gstSummaryEntries.length > 0 && (
-        <table className={styles.gstSummaryTable}>
-          <thead>
+    <div className={styles.summaryContainerModern}>
+      {/* Upper totals section matching Image 2 */}
+      <table className={styles.upperTotalsTable}>
+        <tbody>
+          <tr>
+            <td className={styles.emptyLeftCell}></td>
+            <td className={styles.totalsLabelCell}>TOTAL</td>
+            <td className={styles.totalsQtyCell}>{totalSoldQty}</td>
+            <td className={styles.totalsValueCell}>{formatCurrency(totalTaxable)}</td>
+          </tr>
+          {isInterState ? (
             <tr>
-              <th rowSpan="2" className={styles.textCenter}>HSN/SAC</th>
-              <th rowSpan="2" className={styles.textRight}>Taxable Value</th>
-              {hasIGST ? (
-                <th colSpan="2" className={styles.textCenter}>IGST</th>
-              ) : (
-                <>
-                  <th colSpan="2" className={styles.textCenter}>CGST</th>
-                  <th colSpan="2" className={styles.textCenter}>SGST/UTGST</th>
-                </>
-              )}
-              <th rowSpan="2" className={styles.textRight}>Total Tax Amount</th>
+              <td className={styles.emptyLeftCell}></td>
+              <td colSpan="2" className={styles.totalsLabelCell}>ADD IGST</td>
+              <td className={styles.totalsValueCell}>{formatCurrency(totalIGST)}</td>
             </tr>
-            <tr>
-              {hasIGST ? (
-                <>
-                  <th className={styles.textCenter}>Rate</th>
-                  <th className={styles.textRight}>Amount</th>
-                </>
-              ) : (
-                <>
-                  <th className={styles.textCenter}>Rate</th>
-                  <th className={styles.textRight}>Amount</th>
-                  <th className={styles.textCenter}>Rate</th>
-                  <th className={styles.textRight}>Amount</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {gstSummaryEntries.map((vals, idx) => (
-              <tr key={idx}>
-                <td className={styles.textCenter}>{vals.hsn}</td>
-                <td className={styles.textRight}>{formatCurrency(vals.taxable_value)}</td>
-                {hasIGST ? (
-                  <>
-                    <td className={styles.textCenter}>{vals.rate}%</td>
-                    <td className={styles.textRight}>{formatCurrency(vals.igst)}</td>
-                  </>
-                ) : (
-                  <>
-                    <td className={styles.textCenter}>{Number(vals.rate)/2}%</td>
-                    <td className={styles.textRight}>{formatCurrency(vals.cgst)}</td>
-                    <td className={styles.textCenter}>{Number(vals.rate)/2}%</td>
-                    <td className={styles.textRight}>{formatCurrency(vals.sgst)}</td>
-                  </>
-                )}
-                <td className={styles.textRight}>{formatCurrency(vals.total_tax)}</td>
+          ) : (
+            <>
+              <tr>
+                <td className={styles.emptyLeftCell}></td>
+                <td colSpan="2" className={styles.totalsLabelCell}>{sgstUtgstLabel}</td>
+                <td className={styles.totalsValueCell}>{formatCurrency(totalSGST)}</td>
               </tr>
-            ))}
-            <tr className={styles.totalsRow}>
-              <td className={styles.textRight}>Total</td>
-              <td className={styles.textRight}>{formatCurrency(totals?.taxable_amount)}</td>
-              {hasIGST ? (
-                <>
-                  <td></td>
-                  <td className={styles.textRight}>{formatCurrency(items?.reduce((sum, item) => sum + parseFloat(item.igst || 0), 0))}</td>
-                </>
-              ) : (
-                <>
-                  <td></td>
-                  <td className={styles.textRight}>{formatCurrency(items?.reduce((sum, item) => sum + parseFloat(item.cgst || 0), 0))}</td>
-                  <td></td>
-                  <td className={styles.textRight}>{formatCurrency(items?.reduce((sum, item) => sum + parseFloat(item.sgst || 0), 0))}</td>
-                </>
-              )}
-              <td className={styles.textRight}>{formatCurrency(totalTaxAmount)}</td>
-            </tr>
-          </tbody>
-        </table>
-      )}
-
-      <div className={styles.taxAmountWords}>
-        Tax Amount (in words) : <strong>INR {amountInWords(totalTaxAmount)}</strong>
-      </div>
-
-      <div className={styles.footerLayout}>
-        <div className={styles.footerLeft}>
-          {company?.bank_details && (
-            <div className={styles.bankSection}>
-              <div className={styles.bankTitle}>Bank Details</div>
-              <div><strong>Bank Name:</strong> {company.bank_details.bank_name}</div>
-              <div><strong>Account No:</strong> {company.bank_details.account_no}</div>
-              <div><strong>IFSC Code:</strong> {company.bank_details.ifsc}</div>
-              <div><strong>Branch:</strong> {company.bank_details.branch}</div>
-              {company.bank_details.upi && <div><strong>UPI:</strong> {company.bank_details.upi}</div>}
-            </div>
+              <tr>
+                <td className={styles.emptyLeftCell}></td>
+                <td colSpan="2" className={styles.totalsLabelCell}>ADD CGST</td>
+                <td className={styles.totalsValueCell}>{formatCurrency(totalCGST)}</td>
+              </tr>
+            </>
           )}
-          <div className={styles.declarationSection}>
-            <div className={styles.declarationTitle}>Declaration</div>
-            <div>We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
+          <tr>
+            <td className={styles.wordsCell}>
+              <strong>Rs.: </strong>{amountInWords(roundedGrandTotal)} Only
+            </td>
+            <td colSpan="2" className={styles.totalsLabelCell}>Round Off</td>
+            <td className={styles.totalsValueCell}>{roundOff >= 0 ? formatCurrency(roundOff) : formatCurrency(roundOff)}</td>
+          </tr>
+          <tr className={styles.netAmountRow}>
+            <td className={styles.emptyLeftCell}></td>
+            <td colSpan="2" className={styles.netAmountLabel}>Net Amount</td>
+            <td className={styles.netAmountValue}>{formatCurrency(roundedGrandTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Double Divider Line matching Image 2 */}
+      <div className={styles.doubleDivider}></div>
+
+      {/* Lower section with GST Matrix on left and Bank Details on right */}
+      <div className={styles.lowerSectionGrid}>
+        <div className={styles.lowerLeftBlock}>
+          <table className={styles.gstMatrixTable}>
+            <tbody>
+              <tr>
+                <td className={styles.gstMatrixLabel}>GST SALE TAXFREE :</td>
+                <td className={styles.gstMatrixTaxable}>{slabs[0].taxable > 0 ? formatCurrency(slabs[0].taxable) : ''}</td>
+                <td colSpan="6"></td>
+              </tr>
+              {[5, 12, 18, 28].map(rate => {
+                const slab = slabs[rate];
+                const halfRate = rate / 2;
+                return (
+                  <tr key={rate}>
+                    <td className={styles.gstMatrixLabel}>GST SALE {rate}% :</td>
+                    <td className={styles.gstMatrixTaxable}>{slab.taxable > 0 ? formatCurrency(slab.taxable) : ''}</td>
+                    <td className={styles.gstMatrixTag}>{gridSgstUtgstCol} {halfRate}%:</td>
+                    <td className={styles.gstMatrixVal}>{!isInterState && slab.sgst_utgst > 0 ? formatCurrency(slab.sgst_utgst) : ''}</td>
+                    <td className={styles.gstMatrixTag}>CGST {halfRate}%:</td>
+                    <td className={styles.gstMatrixVal}>{!isInterState && slab.cgst > 0 ? formatCurrency(slab.cgst) : ''}</td>
+                    <td className={styles.gstMatrixTag}>IGST {rate}%:</td>
+                    <td className={styles.gstMatrixVal}>{isInterState && slab.igst > 0 ? formatCurrency(slab.igst) : ''}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className={styles.termsAndConditions}>
+            <div className={styles.termsTitle}>Terms & Conditions:-</div>
+            <div>1. GOODS ONCE SOLD WILL NOT BE TAKEN BACK.</div>
           </div>
         </div>
-        
-        <div className={styles.footerRight}>
-          <div className={styles.signCompany}>for {company?.name}</div>
-          <div className={styles.signSpace}></div>
-          <div className={styles.signLabel}>Authorised Signatory</div>
+
+        <div className={styles.lowerRightBlock}>
+          <div className={styles.bankDetailBox}>
+            <div className={styles.bankDetailTitle}>OUR BANK DETAIL</div>
+            <div className={styles.bankDetailRow}><strong>Bank Details-</strong>{bankInfo.name}</div>
+            <div className={styles.bankDetailRow}><strong>Account Number:</strong> {bankInfo.accountNumber}</div>
+            <div className={styles.bankDetailRow}><strong>Branch:</strong> {bankInfo.branch}</div>
+            <div className={styles.bankDetailRow}><strong>Account Type:</strong> {bankInfo.accountType}</div>
+            <div className={styles.bankDetailRow}><strong>IFSC CODE :</strong> {bankInfo.ifsc}</div>
+          </div>
+          <div className={styles.signatureBox}>
+            <div className={styles.forCompanyTitle}>For {bankInfo.name}</div>
+            <div className={styles.signSpacer}></div>
+            <div className={styles.signLabel}>Authorised Signatory</div>
+          </div>
         </div>
-      </div>
-      
-      <div className={styles.footerDisclaimer}>
-        <div>SUBJECT TO {company?.state?.toUpperCase()} JURISDICTION</div>
-        <div>This is a Computer Generated Invoice</div>
       </div>
     </div>
   );
