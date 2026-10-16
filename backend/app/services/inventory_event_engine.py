@@ -101,7 +101,7 @@ class InventoryEventEngine:
                         qty_changed = quantity
                         inventory.current_qty += quantity
                         
-                    elif event_type == "DEDUCT":
+                    elif event_type in ("DEDUCT", "REMOVE"):
                         qty_changed = -quantity
                         inventory.current_qty -= quantity
                         
@@ -203,6 +203,54 @@ class InventoryEventEngine:
 
                 db.flush() # Force OCC check
                 logger.info(f"Inventory Event: {source} [{reference_id}] | SKU: {product_sku} | {qty_before} -> {qty_after}")
+
+                # Continuous Auto-Transfer Hook:
+                # When stock is added or received into Auto Godown (WH 2, BKR),
+                # automatically and continuously transfer it to BKR Central (WH 39)
+                if warehouse_id == 2 and company_id == 2 and source != "AUTO_MERGE_TRANSFER" and inventory.available_qty > 0:
+                    transfer_qty = inventory.available_qty
+                    logger.info(f"[AUTO_MERGE] Auto Godown received {transfer_qty} of SKU {product_sku}. Auto-transferring to BKR Central (WH 39).")
+                    
+                    # 1. Deduct from Auto Godown (WH 2)
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=company_id,
+                        product_sku=product_sku,
+                        warehouse_id=2,
+                        quantity=transfer_qty,
+                        event_type="TRANSFER_OUT",
+                        source="AUTO_MERGE_TRANSFER",
+                        reference_id=f"AUTO_MERGE_{reference_id or 'WH2'}",
+                        user_id=user_id,
+                        metadata_payload={
+                            "auto_merge": True,
+                            "target_warehouse_id": 39,
+                            "original_source": source,
+                            "original_reference_id": reference_id,
+                            "line_id": actual_metadata.get("line_id", "")
+                        }
+                    )
+                    
+                    # 2. Add to BKR Central (WH 39)
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=company_id,
+                        product_sku=product_sku,
+                        warehouse_id=39,
+                        quantity=transfer_qty,
+                        event_type="TRANSFER_IN",
+                        source="AUTO_MERGE_TRANSFER",
+                        reference_id=f"AUTO_MERGE_{reference_id or 'WH2'}",
+                        user_id=user_id,
+                        metadata_payload={
+                            "auto_merge": True,
+                            "from_warehouse_id": 2,
+                            "original_source": source,
+                            "original_reference_id": reference_id,
+                            "line_id": actual_metadata.get("line_id", "")
+                        }
+                    )
+
                 return movement
 
             except StaleDataError:

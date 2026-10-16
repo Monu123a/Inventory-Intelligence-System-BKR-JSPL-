@@ -178,6 +178,19 @@ def search_products(q: str = "", warehouse_id: Optional[int] = None, company_id:
     else:
         default_warehouse = _resolve_default_bkr_warehouse(db, company_id)
 
+    # If warehouse is BKR Central (39) or Auto Godown (2), combine their inventory for unified billing
+    wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
+
+    inv_subquery = (
+        db.query(
+            Inventory.product_id,
+            func.sum(func.coalesce(Inventory.available_qty, 0)).label("combined_available_stock")
+        )
+        .filter(Inventory.warehouse_id.in_(wh_ids), Inventory.company_id == company_id)
+        .group_by(Inventory.product_id)
+        .subquery()
+    )
+
     results = db.query(
         Product.id,
         Product.sku,
@@ -188,10 +201,10 @@ def search_products(q: str = "", warehouse_id: Optional[int] = None, company_id:
         Product.category,
         Product.item_rate.label("default_price"),
         Product.default_gst_rate,
-        func.coalesce(Inventory.available_qty, 0).label("available_stock")
+        func.coalesce(inv_subquery.c.combined_available_stock, 0).label("available_stock")
     ).outerjoin(
-        Inventory, 
-        (Inventory.product_id == Product.id) & (Inventory.warehouse_id == default_warehouse.id)
+        inv_subquery, 
+        Product.id == inv_subquery.c.product_id
     ).filter(
         Product.company_id == company_id,
         Product.status == "Active",
@@ -247,17 +260,31 @@ def complete_sale(
             for item in payload.items:
                 required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
 
-            for product_id, total_qty in required_quantities.items():
-                inv = db.query(Inventory).filter(
-                    Inventory.product_id == product_id,
-                    Inventory.warehouse_id == default_warehouse.id,
-                    Inventory.company_id == company_id
-                ).with_for_update().first() # Lock row
+            wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
 
-                if not inv or inv.available_qty < total_qty:
-                    product = db.query(Product).filter(Product.id == product_id).first()
-                    sku_name = product.sku if product else str(product_id)
-                    raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
+            for product_id, total_qty in required_quantities.items():
+                if len(wh_ids) > 1:
+                    invs = db.query(Inventory).filter(
+                        Inventory.product_id == product_id,
+                        Inventory.warehouse_id.in_(wh_ids),
+                        Inventory.company_id == company_id
+                    ).with_for_update().all()
+                    combined_available = sum(inv.available_qty or 0 for inv in invs)
+                    if combined_available < total_qty:
+                        product = db.query(Product).filter(Product.id == product_id).first()
+                        sku_name = product.sku if product else str(product_id)
+                        raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name} (Requested: {total_qty}, Combined Available: {combined_available})")
+                else:
+                    inv = db.query(Inventory).filter(
+                        Inventory.product_id == product_id,
+                        Inventory.warehouse_id == default_warehouse.id,
+                        Inventory.company_id == company_id
+                    ).with_for_update().first() # Lock row
+
+                    if not inv or inv.available_qty < total_qty:
+                        product = db.query(Product).filter(Product.id == product_id).first()
+                        sku_name = product.sku if product else str(product_id)
+                        raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
         # 2. Generate Invoice Number (sequence-based or prefixed custom)
         from app.services.document_number_service import DocumentNumberService
@@ -404,17 +431,54 @@ def complete_sale(
             # Use the verified DB product SKU, not the client-supplied SKU
             # Deduct from Inventory using Event Engine (if not skipped)
             if not payload.skip_inventory_update and product:
-                InventoryEventEngine.process_event(
-                    db=db,
-                    company_id=company_id,
-                    product_sku=product.sku,
-                    warehouse_id=default_warehouse.id,
-                    quantity=item.quantity,
-                    event_type="SALE",
-                    source="OFFLINE_POS",
-                    reference_id=bill_number,
-                    metadata_payload={"sale_id": sale.id}
-                )
+                wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
+                if len(wh_ids) > 1:
+                    qty_needed = item.quantity
+                    central_inv = db.query(Inventory).filter(
+                        Inventory.product_id == product.id,
+                        Inventory.warehouse_id == 39,
+                        Inventory.company_id == company_id
+                    ).first()
+                    central_avail = max(0, central_inv.available_qty if central_inv else 0)
+                    qty_from_39 = min(qty_needed, central_avail)
+                    qty_from_2 = qty_needed - qty_from_39
+
+                    if qty_from_39 > 0:
+                        InventoryEventEngine.process_event(
+                            db=db,
+                            company_id=company_id,
+                            product_sku=product.sku,
+                            warehouse_id=39,
+                            quantity=qty_from_39,
+                            event_type="SALE",
+                            source="OFFLINE_POS",
+                            reference_id=bill_number,
+                            metadata_payload={"sale_id": sale.id}
+                        )
+                    if qty_from_2 > 0:
+                        InventoryEventEngine.process_event(
+                            db=db,
+                            company_id=company_id,
+                            product_sku=product.sku,
+                            warehouse_id=2,
+                            quantity=qty_from_2,
+                            event_type="SALE",
+                            source="OFFLINE_POS",
+                            reference_id=bill_number,
+                            metadata_payload={"sale_id": sale.id}
+                        )
+                else:
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=company_id,
+                        product_sku=product.sku,
+                        warehouse_id=default_warehouse.id,
+                        quantity=item.quantity,
+                        event_type="SALE",
+                        source="OFFLINE_POS",
+                        reference_id=bill_number,
+                        metadata_payload={"sale_id": sale.id}
+                    )
 
         if commit:
             db.commit()
@@ -1269,23 +1333,67 @@ def update_sale(
             
         # Apply Inventory Delta
         if delta_qty != 0 and not payload.skip_inventory_update:
-            event_type = "SALE" if delta_qty > 0 else "ADD"
-            source = "OFFLINE_POS" if delta_qty > 0 else "INVOICE_EDIT"
-            InventoryEventEngine.process_event(
-                db=db,
-                company_id=target_company_id,
-                product_sku=product.sku,
-                warehouse_id=default_warehouse.id,
-                quantity=abs(delta_qty),
-                event_type=event_type,
-                source=source,
-                reference_id=sale.bill_number,
-                metadata_payload={
-                    "operation_id": f"EDIT_{sale.id}_{product.sku}_{uuid4().hex[:8]}",
-                    "sale_id": sale.id, 
-                    "edit_delta": delta_qty
-                },
-            )
+            wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
+            if len(wh_ids) > 1 and delta_qty > 0:
+                central_inv = db.query(Inventory).filter(
+                    Inventory.product_id == product.id,
+                    Inventory.warehouse_id == 39,
+                    Inventory.company_id == target_company_id
+                ).first()
+                central_avail = max(0, central_inv.available_qty if central_inv else 0)
+                qty_from_39 = min(delta_qty, central_avail)
+                qty_from_2 = delta_qty - qty_from_39
+                if qty_from_39 > 0:
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=target_company_id,
+                        product_sku=product.sku,
+                        warehouse_id=39,
+                        quantity=qty_from_39,
+                        event_type="SALE",
+                        source="OFFLINE_POS",
+                        reference_id=sale.bill_number,
+                        metadata_payload={
+                            "operation_id": f"EDIT_{sale.id}_{product.sku}_{uuid4().hex[:8]}",
+                            "sale_id": sale.id, 
+                            "edit_delta": qty_from_39
+                        },
+                    )
+                if qty_from_2 > 0:
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=target_company_id,
+                        product_sku=product.sku,
+                        warehouse_id=2,
+                        quantity=qty_from_2,
+                        event_type="SALE",
+                        source="OFFLINE_POS",
+                        reference_id=sale.bill_number,
+                        metadata_payload={
+                            "operation_id": f"EDIT_WH2_{sale.id}_{product.sku}_{uuid4().hex[:8]}",
+                            "sale_id": sale.id, 
+                            "edit_delta": qty_from_2
+                        },
+                    )
+            else:
+                event_type = "SALE" if delta_qty > 0 else "ADD"
+                source = "OFFLINE_POS" if delta_qty > 0 else "INVOICE_EDIT"
+                wh_target = 39 if default_warehouse.id in (39, 2) else default_warehouse.id
+                InventoryEventEngine.process_event(
+                    db=db,
+                    company_id=target_company_id,
+                    product_sku=product.sku,
+                    warehouse_id=wh_target,
+                    quantity=abs(delta_qty),
+                    event_type=event_type,
+                    source=source,
+                    reference_id=sale.bill_number,
+                    metadata_payload={
+                        "operation_id": f"EDIT_{sale.id}_{product.sku}_{uuid4().hex[:8]}",
+                        "sale_id": sale.id, 
+                        "edit_delta": delta_qty
+                    },
+                )
             
             if linked_transfer and dest_warehouse_id:
                 dest_event_type = "TRANSFER_IN" if delta_qty > 0 else "TRANSFER_OUT"
@@ -1309,11 +1417,12 @@ def update_sale(
     # Process removals (anything left in old_items was deleted from the UI)
     for oi in old_items.values():
         if not payload.skip_inventory_update:
+            wh_target = 39 if default_warehouse.id in (39, 2) else default_warehouse.id
             InventoryEventEngine.process_event(
                 db=db,
                 company_id=target_company_id,
                 product_sku=oi.sku,
-                warehouse_id=default_warehouse.id,
+                warehouse_id=wh_target,
                 quantity=oi.quantity,
                 event_type="ADD",
                 source="INVOICE_EDIT",

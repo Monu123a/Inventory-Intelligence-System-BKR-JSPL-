@@ -63,7 +63,10 @@ class MovementResponse(BaseModel):
 def get_inventory(warehouse_id: Optional[int] = None, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
     query = db.query(Inventory).options(joinedload(Inventory.product)).filter(Inventory.company_id == company_id)
     if warehouse_id:
-        query = query.filter(Inventory.warehouse_id == warehouse_id)
+        if warehouse_id in (39, 2):
+            query = query.filter(Inventory.warehouse_id.in_([39, 2]))
+        else:
+            query = query.filter(Inventory.warehouse_id == warehouse_id)
     return query.all()
 
 class GlobalMovementResponse(MovementResponse):

@@ -474,17 +474,52 @@ class FCDispatchService:
                         ))
 
                     # Deduct from Source
-                    InventoryEventEngine.process_event(
-                        db=db,
-                        company_id=company_id,
-                        product_sku=it.sku,
-                        warehouse_id=source_warehouse.id,
-                        quantity=it.quantity,
-                        event_type="TRANSFER_OUT",
-                        source="FC_DISPATCH_OUT",
-                        reference_id=dispatch_num,
-                        metadata_payload={"dispatch_id": dispatch.id}
-                    )
+                    wh_ids = [39, 2] if source_warehouse.id in (39, 2) else [source_warehouse.id]
+                    if len(wh_ids) > 1:
+                        central_inv = db.query(Inventory).filter(
+                            Inventory.product_id == it.product_id,
+                            Inventory.warehouse_id == 39,
+                            Inventory.company_id == company_id
+                        ).first()
+                        central_avail = max(0, central_inv.available_qty if central_inv else 0)
+                        qty_from_39 = min(it.quantity, central_avail)
+                        qty_from_2 = it.quantity - qty_from_39
+                        if qty_from_39 > 0:
+                            InventoryEventEngine.process_event(
+                                db=db,
+                                company_id=company_id,
+                                product_sku=it.sku,
+                                warehouse_id=39,
+                                quantity=qty_from_39,
+                                event_type="TRANSFER_OUT",
+                                source="FC_DISPATCH_OUT",
+                                reference_id=dispatch_num,
+                                metadata_payload={"dispatch_id": dispatch.id}
+                            )
+                        if qty_from_2 > 0:
+                            InventoryEventEngine.process_event(
+                                db=db,
+                                company_id=company_id,
+                                product_sku=it.sku,
+                                warehouse_id=2,
+                                quantity=qty_from_2,
+                                event_type="TRANSFER_OUT",
+                                source="FC_DISPATCH_OUT",
+                                reference_id=dispatch_num,
+                                metadata_payload={"dispatch_id": dispatch.id}
+                            )
+                    else:
+                        InventoryEventEngine.process_event(
+                            db=db,
+                            company_id=company_id,
+                            product_sku=it.sku,
+                            warehouse_id=source_warehouse.id,
+                            quantity=it.quantity,
+                            event_type="TRANSFER_OUT",
+                            source="FC_DISPATCH_OUT",
+                            reference_id=dispatch_num,
+                            metadata_payload={"dispatch_id": dispatch.id}
+                        )
                     
                     # Add to Dest FC
                     InventoryEventEngine.process_event(

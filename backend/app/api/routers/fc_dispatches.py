@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from app.models.db import get_db
 from app.api.dependencies import get_current_user, get_current_company_id
 from app.services.fc_dispatch_service import FCDispatchService, FCDispatchBatchRequest
 from app.services.fc_scheduler import generate_45_day_return_recommendations
-from app.models.schema import User, FCDispatch, Warehouse, Inventory
+from app.models.schema import User, FCDispatch, Warehouse, Inventory, Product
 
 router = APIRouter(prefix="/fc-dispatches", tags=["FC Dispatches"])
 
@@ -100,25 +101,34 @@ def get_dispatch_inventory(
         if not source_warehouse:
             return []
             
-        # Fetch inventory for the resolved warehouse
-        inventory_records = db.query(Inventory).options(joinedload(Inventory.product)).filter(
-            Inventory.warehouse_id == source_warehouse.id,
+        # For BKR Central (39) or Auto Godown (2), pool inventory
+        wh_ids = [39, 2] if source_warehouse.id in (39, 2) else [source_warehouse.id]
+
+        inventory_records = db.query(
+            Inventory.product_id,
+            func.sum(Inventory.available_qty).label("total_available_qty")
+        ).filter(
+            Inventory.warehouse_id.in_(wh_ids),
             Inventory.company_id == source_warehouse.company_id,
             Inventory.available_qty > 0
-        ).all()
-        
+        ).group_by(Inventory.product_id).all()
+
+        prod_ids = [r.product_id for r in inventory_records if r.total_available_qty > 0]
+        products_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(prod_ids)).all()} if prod_ids else {}
+
         return [
             {
-                "id": inv.product.id,
-                "sku": inv.product.sku,
-                "name": inv.product.name,
-                "hsn": inv.product.hsn,
-                "currentStock": inv.available_qty,
-                "item_rate": inv.product.item_rate or 0.0,
-                "gst_rate": inv.product.default_gst_rate or 0.0,
-                "recommended": int(inv.available_qty * 0.1) if inv.available_qty > 10 else 1 # Dummy logic for wizard
+                "id": p.id,
+                "sku": p.sku,
+                "name": p.name,
+                "hsn": p.hsn,
+                "currentStock": r.total_available_qty,
+                "item_rate": p.item_rate or 0.0,
+                "gst_rate": p.default_gst_rate or 0.0,
+                "recommended": int(r.total_available_qty * 0.1) if r.total_available_qty > 10 else 1
             }
-            for inv in inventory_records if inv.product
+            for r in inventory_records
+            if (p := products_map.get(r.product_id)) and r.total_available_qty > 0
         ]
     except HTTPException:
         raise
