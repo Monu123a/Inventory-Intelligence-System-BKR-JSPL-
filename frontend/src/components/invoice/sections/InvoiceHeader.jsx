@@ -6,11 +6,23 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
   const hasOnlyZeroGst = items?.length > 0 && items.every(item => parseFloat(item.gst_rate || 0) === 0);
   const invoiceTitle = hasOnlyZeroGst ? 'BILL OF SUPPLY' : 'TAX INVOICE';
   
-  const irn = einvoice?.irn || tallyData?.irn;
+  const rawIrn = einvoice?.irn || tallyData?.irn;
+  const irn = rawIrn ? String(rawIrn) : '';
   const ackNo = einvoice?.ack_no || tallyData?.ack_no;
   const ackDate = einvoice?.ack_date || tallyData?.ack_date;
-  const qrCodeData = einvoice?.qr_code_data || tallyData?.qr_code_data || irn;
+  const rawQr = einvoice?.qr_code_data || tallyData?.qr_code_data || irn;
+  const qrCodeData = typeof rawQr === 'string' ? rawQr : (rawQr ? JSON.stringify(rawQr) : '');
   const hasEInvoice = Boolean(irn && einvoice?.status !== 'CANCELLED');
+
+  const formattedAckDate = React.useMemo(() => {
+    if (!ackDate) return '';
+    try {
+      const d = new Date(ackDate);
+      return isNaN(d.getTime()) ? String(ackDate) : d.toLocaleDateString('en-IN');
+    } catch {
+      return String(ackDate);
+    }
+  }, [ackDate]);
 
   return (
     <div className={styles.header}>
@@ -39,8 +51,8 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
               <div style={{ wordBreak: 'break-all', maxWidth: '170px', fontFamily: 'monospace', fontSize: '8px' }}>
                 <strong>IRN:</strong> {irn.length > 28 ? `${irn.substring(0, 16)}...${irn.substring(irn.length - 8)}` : irn}
               </div>
-              <div><strong>Ack No:</strong> {ackNo}</div>
-              {ackDate && <div><strong>Ack Dt:</strong> {new Date(ackDate).toLocaleDateString('en-IN')}</div>}
+              {ackNo && <div><strong>Ack No:</strong> {ackNo}</div>}
+              {formattedAckDate && <div><strong>Ack Dt:</strong> {formattedAckDate}</div>}
             </div>
             {qrCodeData && (
               <div style={{ padding: '2px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', display: 'flex' }}>

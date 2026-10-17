@@ -1243,6 +1243,7 @@ class ServiceInvoiceItem(Base):
     invoice = relationship("ServiceInvoice", back_populates="items")
 
 from sqlalchemy.dialects.postgresql import JSONB
+JSONB_COMPAT = JSON().with_variant(JSONB, "postgresql")
 
 
 class OfflineSale(Base):
@@ -1252,7 +1253,7 @@ class OfflineSale(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    payload = Column(JSONB, nullable=False)
+    payload = Column(JSONB_COMPAT, nullable=False)
     status = Column(String, default="PENDING", nullable=False)  # PENDING / SYNCED / FAILED
     idempotency_key = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1269,7 +1270,7 @@ class AdminApprovalRequest(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     request_type = Column(String, nullable=False)
-    payload = Column(JSONB, nullable=False)
+    payload = Column(JSONB_COMPAT, nullable=False)
     payload_hash = Column(String, index=True)
     expires_at = Column(DateTime)
 
@@ -1280,8 +1281,8 @@ class AdminApprovalRequest(Base):
     approver_id = Column(Integer, ForeignKey("users.id"), index=True)
     approved_at = Column(DateTime)
     admin_comment = Column(String)
-    before_snapshot = Column(JSONB)
-    after_snapshot = Column(JSONB)
+    before_snapshot = Column(JSONB_COMPAT)
+    after_snapshot = Column(JSONB_COMPAT)
     idempotency_key = Column(String, unique=True, index=True)
     priority = Column(Integer, default=10)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1298,7 +1299,7 @@ class AdminApprovalEvent(Base):
     approval_request_id = Column(Integer, ForeignKey("admin_approval_requests.id"), nullable=False)
     event_type = Column(String, nullable=False)
     actor_id = Column(Integer, ForeignKey("users.id"))
-    data = Column(JSONB)
+    data = Column(JSONB_COMPAT)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -1397,7 +1398,7 @@ class OfflinePurchase(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     operator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    payload = Column(JSONB, nullable=False)
+    payload = Column(JSONB_COMPAT, nullable=False)
     status = Column(String, default="PENDING", nullable=False, index=True)
     idempotency_key = Column(String, nullable=False)
     error_message = Column(String, nullable=True)

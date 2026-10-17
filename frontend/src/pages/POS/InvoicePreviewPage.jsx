@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
+import { einvoiceService } from '../../services/einvoice';
 import { handleApiError } from '../../utils/errorHandler';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
 import { downloadInvoicePdf } from '../../services/invoicePdfService';
@@ -100,6 +101,25 @@ export default function InvoicePreviewPage() {
     }
   };
 
+  const [generatingIrn, setGeneratingIrn] = useState(false);
+
+  const handleGenerateEInvoice = async () => {
+    if (!invoice?.id) return;
+    setGeneratingIrn(true);
+    try {
+      const isRetry = (invoice.einvoice?.status === 'FAILED') || (invoice.einvoice_status === 'FAILED');
+      const res = await einvoiceService.generateIRN(invoice.id, isRetry);
+      await queryClient.invalidateQueries({ queryKey: ['sale', saleId] });
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      const irnDisplay = res?.irn ? (String(res.irn).length > 16 ? `${String(res.irn).substring(0, 16)}...` : String(res.irn)) : 'Active';
+      alert(`E-Invoice IRN Generated Successfully!\nIRN: ${irnDisplay}\nAck No: ${res?.ack_no || '-'}`);
+    } catch (err) {
+      handleApiError(err, 'Failed to generate E-Invoice IRN');
+    } finally {
+      setGeneratingIrn(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -183,6 +203,7 @@ export default function InvoicePreviewPage() {
   const isB2b = invoice.invoice_type === 'B2B' || invoice.customer?.gstin;
   const tallyStatus = invoice.tally?.status || 'PENDING';
   const showRetry = isB2b && (tallyStatus === 'FAILED' || tallyStatus === 'PENDING');
+  const einvoiceStatus = invoice.einvoice?.status || invoice.einvoice_status || 'NOT_GENERATED';
 
   return (
     <div className={styles.container}>
@@ -195,27 +216,49 @@ export default function InvoicePreviewPage() {
         
         <div className={styles.toolbarCenter}>
           {isB2b && (
-            <div className={styles.tallyStatusWrapper}>
-              <span className={`${styles.badge} ${styles[tallyStatus.toLowerCase()]}`}>
-                {tallyStatus === 'SUCCESS' && <FiCheckCircle />}
-                {tallyStatus === 'FAILED' && <FiAlertCircle />}
-                {tallyStatus === 'PENDING' && <FiRefreshCw />}
-                Tally: {tallyStatus}
-              </span>
-              {showRetry && (
-                <button 
-                  className={styles.retryButton} 
-                  onClick={handleRetryTally}
-                  disabled={retryingTally}
-                >
-                  <FiRefreshCw className={retryingTally ? styles.spin : ''} />
-                  Retry Sync
+            <>
+              <div className={styles.tallyStatusWrapper}>
+                <span className={`${styles.badge} ${styles[tallyStatus.toLowerCase()]}`}>
+                  {tallyStatus === 'SUCCESS' && <FiCheckCircle />}
+                  {tallyStatus === 'FAILED' && <FiAlertCircle />}
+                  {tallyStatus === 'PENDING' && <FiRefreshCw />}
+                  Tally: {tallyStatus}
+                </span>
+                {showRetry && (
+                  <button 
+                    className={styles.retryButton} 
+                    onClick={handleRetryTally}
+                    disabled={retryingTally}
+                  >
+                    <FiRefreshCw className={retryingTally ? styles.spin : ''} />
+                    Retry Sync
+                  </button>
+                )}
+                <button className={styles.actionButton} onClick={handlePreviewTally}>
+                  <FiFileText /> Preview Tally
                 </button>
-              )}
-              <button className={styles.actionButton} onClick={handlePreviewTally}>
-                <FiFileText /> Preview Tally
-              </button>
-            </div>
+              </div>
+
+              <div className={styles.tallyStatusWrapper} style={{ marginLeft: '8px' }}>
+                <span className={`${styles.badge} ${einvoiceStatus === 'GENERATED' ? styles.success : (einvoiceStatus === 'FAILED' ? styles.failed : styles.pending)}`}>
+                  {einvoiceStatus === 'GENERATED' && <FiCheckCircle />}
+                  {einvoiceStatus === 'FAILED' && <FiAlertCircle />}
+                  {einvoiceStatus !== 'GENERATED' && einvoiceStatus !== 'FAILED' && <FiRefreshCw />}
+                  IRN: {einvoiceStatus === 'GENERATED' ? 'Active' : (einvoiceStatus === 'FAILED' ? 'Failed' : 'Not Generated')}
+                </span>
+                {einvoiceStatus !== 'GENERATED' && invoice.status !== 'Cancelled' && (
+                  <button 
+                    className={styles.retryButton} 
+                    onClick={handleGenerateEInvoice}
+                    disabled={generatingIrn}
+                    title="Generate Government IRN and Signed QR Code"
+                  >
+                    <FiRefreshCw className={generatingIrn ? styles.spin : ''} />
+                    {generatingIrn ? 'Generating...' : (einvoiceStatus === 'FAILED' ? 'Retry IRN' : 'Gen IRN')}
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
 

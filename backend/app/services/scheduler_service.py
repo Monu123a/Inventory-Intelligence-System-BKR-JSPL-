@@ -48,9 +48,16 @@ def _release_scheduler_lock():
         return
 
     try:
-        fcntl.flock(_scheduler_lock_handle.fileno(), fcntl.LOCK_UN)
+        if hasattr(_scheduler_lock_handle, "closed") and not _scheduler_lock_handle.closed:
+            fcntl.flock(_scheduler_lock_handle.fileno(), fcntl.LOCK_UN)
+    except Exception:
+        pass
     finally:
-        _scheduler_lock_handle.close()
+        try:
+            if hasattr(_scheduler_lock_handle, "closed") and not _scheduler_lock_handle.closed:
+                _scheduler_lock_handle.close()
+        except Exception:
+            pass
         _scheduler_lock_handle = None
 
 def execute_job_with_logging(job_name: str, func, company_id: int = None):

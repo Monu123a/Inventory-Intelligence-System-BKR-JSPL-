@@ -217,13 +217,16 @@ def build_einvoice_payload(sale: Sale, db: Optional[Session] = None) -> Dict[str
     origin_wh_id = getattr(sale, "origin_warehouse_id", None)
     if origin_wh_id and db:
         wh = db.query(Warehouse).filter(Warehouse.id == origin_wh_id).first()
-        if wh and wh.address and wh.address.strip():
+        if wh and getattr(wh, "address", None) and str(wh.address).strip():
+            hub = getattr(wh, "hub", None)
+            hub_city = getattr(hub, "city", None) if hub else None
+            hub_stcd = getattr(hub, "state_code", None) if hub else None
             payload["DispDtls"] = {
-                "Nm": wh.name[:100],
-                "Addr1": wh.address[:100],
-                "Loc": (wh.hub.city if wh.hub and wh.hub.city else "Warehouse")[:50],
+                "Nm": clean_str(getattr(wh, "name", "Warehouse"), default="Warehouse", max_len=100),
+                "Addr1": clean_str(wh.address, default="Warehouse Address", max_len=100),
+                "Loc": clean_str(hub_city, default="Warehouse", max_len=50),
                 "Pin": clean_pin(wh.address),
-                "Stcd": clean_state_code(wh.hub.state_code if wh.hub else seller_state_code)
+                "Stcd": clean_state_code(hub_stcd or seller_state_code)
             }
 
     return payload

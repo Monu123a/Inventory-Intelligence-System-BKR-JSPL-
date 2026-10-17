@@ -92,10 +92,16 @@ class EInvoiceService:
             }
 
         except Exception as e:
-            sale.einvoice_status = "FAILED"
-            sale.einvoice_error_message = str(e)
-            db.commit()
-            logger.error(f"Failed to generate IRN for Sale {sale.id}: {str(e)}")
+            try:
+                db.rollback()
+                sale = db.query(Sale).filter(Sale.id == sale_id).first()
+                if sale:
+                    sale.einvoice_status = "FAILED"
+                    sale.einvoice_error_message = str(e)
+                    db.commit()
+            except Exception as inner_e:
+                logger.warning(f"Could not persist failure status for sale {sale_id}: {inner_e}")
+            logger.error(f"Failed to generate IRN for Sale {sale_id}: {str(e)}")
             raise e
 
     @staticmethod

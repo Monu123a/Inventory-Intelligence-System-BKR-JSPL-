@@ -120,7 +120,8 @@ const SalesHistoryPage = () => {
     try {
       setGeneratingIrnId(sale.id);
       const res = await einvoiceService.generateIRN(sale.id, isRetry);
-      alert(`E-Invoice IRN Generated Successfully!\nIRN: ${res.irn.substring(0, 16)}...\nAck No: ${res.ack_no}`);
+      const irnText = res?.irn ? (String(res.irn).length > 16 ? `${String(res.irn).substring(0, 16)}...` : String(res.irn)) : 'Generated';
+      alert(`E-Invoice IRN Generated Successfully!\nIRN: ${irnText}\nAck No: ${res?.ack_no || '-'}`);
       queryClient.invalidateQueries({ queryKey: ['sales'] });
     } catch (err) {
       handleApiError(err, 'Failed to generate E-Invoice IRN');

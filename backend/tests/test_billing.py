@@ -41,10 +41,11 @@ def setup_billing_data(db_session, seeded_company_context):
     inv = Inventory(
         company_id=company.id,
         product_id=product.id,
-        warehouse_id=warehouse.id,
-        current_qty=50,
-        available_qty=50
+        warehouse_id=warehouse.id
     )
+    inv._allow_mutation = True
+    inv.current_qty = 50
+    inv.available_qty = 50
     db_session.add(inv)
     db_session.commit()
 
