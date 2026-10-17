@@ -231,7 +231,7 @@ const DownloadCentre = () => {
           <Button variant="secondary" onClick={loadHistory}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
-          <Button variant="secondary" onClick={() => setIsConfirmClearOpen(true)} disabled={data.length === 0}>
+          <Button variant="secondary" onClick={() => setIsConfirmClearOpen(true)} disabled={historyList.length === 0}>
             <FiTrash2 style={{ marginRight: '8px' }} /> Clear History
           </Button>
         </>

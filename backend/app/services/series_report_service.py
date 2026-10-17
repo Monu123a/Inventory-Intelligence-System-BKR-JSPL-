@@ -376,8 +376,14 @@ class SeriesReportService:
         if series_clean in ("AMAZON", "ALL"):
             alloc_query = db.query(AmazonLiveAllocation)
             if company_id:
-                alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
-            amazon_allocations = alloc_query.order_by(AmazonLiveAllocation.id.asc()).all()
+                has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
+                if has_allocs:
+                    alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
+            if date_from:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(date_from, datetime.min.time()))
+            if date_to:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(date_to, datetime.max.time()))
+            amazon_allocations = alloc_query.order_by(AmazonLiveAllocation.created_at.asc(), AmazonLiveAllocation.id.asc()).all()
 
         d_from_str = date_from.strftime("%d/%m/%Y") if date_from else "01/10/2026"
         d_to_str = date_to.strftime("%d/%m/%Y") if date_to else datetime.utcnow().strftime("%d/%m/%Y")
@@ -624,9 +630,10 @@ class SeriesReportService:
                 godown_name = wh.name if wh else (alloc.amazon_network_at_allocation.value if alloc.amazon_network_at_allocation else "Amazon AFN")
                 hsn_desc = prod.category if prod and prod.category else "Other"
 
+                alloc_dt = alloc.created_at.strftime("%d/%m/%Y") if alloc.created_at else datetime.utcnow().strftime("%d/%m/%Y")
                 row = [
                     sno, order_id, item_code, item_name, hsn_code, group_tax,
-                    datetime.utcnow().strftime("%d/%m/%Y"), "",
+                    alloc_dt, "",
                     wh.name.split()[-1] if wh and " " in wh.name else "Karnataka",
                     "Amazon Retail Customer", pack_size, qty, rate_unit, gross_amt,
                     "", "", igst if igst > 0 else "",

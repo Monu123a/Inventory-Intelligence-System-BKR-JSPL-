@@ -55,15 +55,19 @@ const InvoiceSummary = ({ company, customer, items = [], totals }) => {
     slabs[targetKey].igst += itemIgst;
   });
 
-  const isJspl = (company?.name || '').toUpperCase().includes('JAGAN') || (company?.name || '').toUpperCase().includes('JSPL');
+  const coNameUpper = (company?.name || company?.legal_name || '').toUpperCase();
+  const coCodeUpper = (company?.code || '').toUpperCase();
+  const isJspl = coCodeUpper === 'JSPL' || coNameUpper.includes('SHOPSMART') || (coNameUpper.includes('JAGAN') && !coNameUpper.includes('RAMAN'));
   const bankDetails = company?.bank_details || {};
   
   const bankInfo = {
-    name: isJspl ? 'JAGAN SHOPSMART PVT LTD' : (company?.name || 'B K RAMAN AND CO'),
+    name: isJspl ? 'JAGAN SHOPSMART PVT LTD' : (bankDetails.account_name || 'B.K. RAMAN & CO (CA)'),
     accountNumber: (bankDetails.account_no || bankDetails.account_number || (isJspl ? '50200075992904' : '41836801381')).trim(),
-    branch: (bankDetails.branch || (isJspl ? 'CHD- INDUSTRIAL AREA PH-II' : 'Industrial Area, Phase-2, Chandigarh')).trim(),
+    branch: (bankDetails.branch || (isJspl ? 'CHD- INDUSTRIAL AREA PH-II' : 'Industrial Area, Phase-2')).trim(),
     accountType: (bankDetails.account_type || 'CURRENT ACCOUNT').trim(),
-    ifsc: (bankDetails.ifsc || (isJspl ? 'HDFC0001417' : 'SBIN0007501')).trim()
+    ifsc: (bankDetails.ifsc || (isJspl ? 'HDFC0001417' : 'SBIN0007501')).trim(),
+    bankName: (bankDetails.bank_name || (isJspl ? 'HDFC Bank Ltd' : 'State Bank Of India')).trim(),
+    city: (bankDetails.city || 'Chandigarh').trim()
   };
 
   const sgstUtgstLabel = isUT ? 'ADD UTGST' : 'ADD SGST';
@@ -154,19 +158,40 @@ const InvoiceSummary = ({ company, customer, items = [], totals }) => {
         </div>
 
         <div className={styles.lowerRightBlock}>
-          <div className={styles.bankDetailBox}>
-            <div className={styles.bankDetailTitle}>OUR BANK DETAIL</div>
-            <div className={styles.bankDetailRow}><strong>Bank Details-</strong>{bankInfo.name}</div>
-            <div className={styles.bankDetailRow}><strong>Account Number:</strong> {bankInfo.accountNumber}</div>
-            <div className={styles.bankDetailRow}><strong>Branch:</strong> {bankInfo.branch}</div>
-            <div className={styles.bankDetailRow}><strong>Account Type:</strong> {bankInfo.accountType}</div>
-            <div className={styles.bankDetailRow}><strong>IFSC CODE :</strong> {bankInfo.ifsc}</div>
-          </div>
-          <div className={styles.signatureBox}>
-            <div className={styles.forCompanyTitle}>For {bankInfo.name}</div>
-            <div className={styles.signSpacer}></div>
-            <div className={styles.signLabel}>Authorised Signatory</div>
-          </div>
+          {isJspl ? (
+            <>
+              <div className={styles.bankDetailBox}>
+                <div className={styles.bankDetailTitle}>OUR BANK DETAIL</div>
+                <div className={styles.bankDetailRow}><strong>Bank Details-</strong>{bankInfo.name}</div>
+                <div className={styles.bankDetailRow}><strong>Account Number:</strong> {bankInfo.accountNumber}</div>
+                <div className={styles.bankDetailRow}><strong>Branch:</strong> {bankInfo.branch}</div>
+                <div className={styles.bankDetailRow}><strong>Account Type:</strong> {bankInfo.accountType}</div>
+                <div className={styles.bankDetailRow}><strong>IFSC CODE :</strong> {bankInfo.ifsc}</div>
+              </div>
+              <div className={styles.signatureBox}>
+                <div className={styles.forCompanyTitle}>For {bankInfo.name}</div>
+                <div className={styles.signSpacer}></div>
+                <div className={styles.signLabel}>Authorised Signatory</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.bankDetailBox}>
+                <div style={{ fontWeight: 700, fontSize: '10.5px', marginBottom: '2px' }}>
+                  {bankInfo.name}
+                </div>
+                <div className={styles.bankDetailRow}>A/c No- {bankInfo.accountNumber}</div>
+                <div className={styles.bankDetailRow}>Ifsc - {bankInfo.ifsc}</div>
+                <div className={styles.bankDetailRow}>Bank - {bankInfo.bankName}</div>
+                <div className={styles.bankDetailRow}>{bankInfo.branch}</div>
+                <div className={styles.bankDetailRow}>{bankInfo.city}</div>
+              </div>
+              <div className={styles.signatureBox}>
+                <div className={styles.signSpacer}></div>
+                <div className={styles.signLabel}>AUTH. SIGNATURY.</div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
