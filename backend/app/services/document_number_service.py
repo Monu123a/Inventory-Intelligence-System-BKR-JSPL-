@@ -23,7 +23,8 @@ class DocumentNumberService:
         from app.models.schema import Sale
         prefix_clean = prefix.strip().upper()
         sales = db.query(Sale.bill_number, Sale.invoice_number).filter(
-            Sale.company_id == company_id
+            Sale.company_id == company_id,
+            Sale.status != "Cancelled"
         ).all()
 
         pattern_strict = re.compile(rf'^{re.escape(prefix_clean)}(?:/[0-9\-]+)?[-/]?(\d+)$', re.IGNORECASE)
