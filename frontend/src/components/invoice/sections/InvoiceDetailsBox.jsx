@@ -60,38 +60,42 @@ const InvoiceDetailsBox = ({ invoice }) => {
 
       {/* Column 2: Bill Info & Transport */}
       <div className={styles.partyColMeta}>
-        <div className={styles.metaRowLine}>
-          <span className={styles.metaKey}>BILL NO.</span>
-          <span className={styles.metaSep}>:</span>
-          <span className={styles.metaValBold}>{billNo}</span>
-        </div>
-        <div className={styles.metaRowLine}>
-          <span className={styles.metaKey}>DATE</span>
-          <span className={styles.metaSep}>:</span>
-          <span className={styles.metaVal}>{billDate}</span>
-        </div>
-        <div className={styles.metaRowLine}>
-          <span className={styles.metaKey}>PAY MODE</span>
-          <span className={styles.metaSep}>:</span>
-          <span className={styles.metaVal}>{payMode}</span>
-        </div>
-        {orderNo && (
-          <div className={styles.metaRowLine}>
-            <span className={styles.metaKey}>ORDER No.</span>
-            <span className={styles.metaSep}>:</span>
-            <span className={styles.metaVal}>{orderNo}</span>
-          </div>
-        )}
-        <div className={styles.metaRowLine}>
-          <span className={styles.metaKey}>TRANSPORT MODE</span>
-          <span className={styles.metaSep}>:-</span>
-          <span className={styles.metaVal}>{transportMode}</span>
-        </div>
-        <div className={styles.metaRowLine}>
-          <span className={styles.metaKey}>LUT NO</span>
-          <span className={styles.metaSep}>:</span>
-          <span className={styles.metaVal}>{lutNo}</span>
-        </div>
+        <table className={styles.metaMiniTable}>
+          <tbody>
+            <tr>
+              <td className={styles.metaMiniKey}>BILL NO.</td>
+              <td className={styles.metaMiniSep}>:</td>
+              <td className={styles.metaMiniValBold}>{billNo}</td>
+            </tr>
+            <tr>
+              <td className={styles.metaMiniKey}>DATE</td>
+              <td className={styles.metaMiniSep}>:</td>
+              <td className={styles.metaMiniVal}>{billDate}</td>
+            </tr>
+            <tr>
+              <td className={styles.metaMiniKey}>PAY MODE</td>
+              <td className={styles.metaMiniSep}>:</td>
+              <td className={styles.metaMiniVal}>{payMode}</td>
+            </tr>
+            {orderNo ? (
+              <tr>
+                <td className={styles.metaMiniKey}>ORDER No.</td>
+                <td className={styles.metaMiniSep}>:</td>
+                <td className={styles.metaMiniVal}>{orderNo}</td>
+              </tr>
+            ) : null}
+            <tr>
+              <td className={styles.metaMiniKey}>TRANSPORT MODE</td>
+              <td className={styles.metaMiniSep}>:-</td>
+              <td className={styles.metaMiniVal}>{transportMode}</td>
+            </tr>
+            <tr>
+              <td className={styles.metaMiniKey}>LUT NO</td>
+              <td className={styles.metaMiniSep}>:</td>
+              <td className={styles.metaMiniVal}>{lutNo}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* Column 3: Shipped to */}
