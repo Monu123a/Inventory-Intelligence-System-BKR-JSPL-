@@ -6,10 +6,11 @@ import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import Button from '../../components/forms/Button';
 import { SearchBar } from '../../components/forms/SearchBar';
 import { ProductFormModal } from './components/ProductFormModal';
+import { BulkProductImportModal } from './components/BulkProductImportModal';
 import { ConfirmationDialog } from '../../components/Modal/ConfirmationDialog';
 import { useProducts, useCreateProduct, useUpdateProduct, useBulkUpdateProducts, useProductFilters, useDeleteProduct } from '../../hooks/useProducts';
 import { useAuthStore } from '../../stores/authStore';
-import { FiPlus, FiEdit2, FiRefreshCw, FiCheckSquare, FiXSquare, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiRefreshCw, FiCheckSquare, FiXSquare, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import AdminPasswordModal from '../../components/common/AdminPasswordModal';
 import styles from './Products.module.css';
 
@@ -22,6 +23,7 @@ const Products = () => {
   
   const [selectedSkus, setSelectedSkus] = useState(new Set());
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [pendingFormData, setPendingFormData] = useState(null);
   
@@ -184,6 +186,9 @@ const Products = () => {
           <Button variant="secondary" onClick={() => refetch()} isLoading={isPending}>
             <FiRefreshCw style={{ marginRight: '8px' }} /> Refresh
           </Button>
+          <Button variant="secondary" onClick={() => setIsImportModalOpen(true)}>
+            <FiUploadCloud style={{ marginRight: '8px' }} /> Import Products
+          </Button>
           <Button variant="primary" onClick={() => { setEditingProduct(null); setIsFormModalOpen(true); }}>
             <FiPlus style={{ marginRight: '8px' }} /> Add Product
           </Button>
@@ -266,6 +271,11 @@ const Products = () => {
         onSubmit={handleFormSubmit}
         initialData={editingProduct}
         isLoading={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <BulkProductImportModal 
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
       />
 
       <ConfirmationDialog 

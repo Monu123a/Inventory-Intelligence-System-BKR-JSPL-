@@ -31,5 +31,21 @@ export const productService = {
   deleteProduct: async (sku) => {
     const response = await api.delete(`${API_ROUTES.PRODUCTS}/${sku}`);
     return normalizeResponse(response.data);
+  },
+
+  downloadTemplate: async () => {
+    const response = await api.get(`${API_ROUTES.PRODUCTS}/template`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  bulkImport: async (formData) => {
+    const response = await api.post(`${API_ROUTES.PRODUCTS}/bulk-import`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
   }
 };

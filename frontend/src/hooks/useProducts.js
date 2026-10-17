@@ -177,3 +177,38 @@ export const useBulkUpdateProducts = () => {
     }
   });
 };
+
+export const useBulkImportProducts = () => {
+  const companyId = useCompanyStore((state) => state.companyId);
+  const queryClient = useQueryClient();
+  const { addNotification } = useNotificationStore.getState();
+
+  return useMutation({
+    mutationFn: async ({ file, dryRun = false, updateExisting = false, initStock = true }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('dry_run', dryRun ? 'true' : 'false');
+      formData.append('update_existing', updateExisting ? 'true' : 'false');
+      formData.append('init_stock', initStock ? 'true' : 'false');
+
+      return await productService.bulkImport(formData);
+    },
+    onSuccess: (data, variables) => {
+      if (!variables.dryRun) {
+        queryClient.invalidateQueries({ queryKey: ['products', companyId] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        addNotification({
+          type: 'success',
+          title: 'Bulk Import Completed',
+          message: `Created ${data.inserted || 0} products, updated ${data.updated || 0}.`
+        });
+      }
+    },
+    onError: (error) => {
+      const detail = error.response?.data?.detail;
+      const msg = Array.isArray(detail) ? detail.map(d => d.msg).join(', ') : (detail || error.message || 'An error occurred during import.');
+      addNotification({ type: 'error', title: 'Import Failed', message: msg });
+    }
+  });
+};
+

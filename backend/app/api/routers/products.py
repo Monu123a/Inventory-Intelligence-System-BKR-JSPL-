@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 import logging
 from datetime import datetime
+import os
+import shutil
+import tempfile
+import sys
 
 from app.models.db import get_db
 from app.models.schema import Product
@@ -63,6 +68,68 @@ def create_product(product: ProductCreate, company_id: int = Depends(get_current
         "timestamp": datetime.utcnow().isoformat()
     })
     return new_prod
+
+@router.get("/template")
+def download_product_template():
+    base_backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    template_path = os.path.join(base_backend, "product_import_template.xlsx")
+    if not os.path.exists(template_path):
+        try:
+            from generate_product_template import create_product_import_template
+            create_product_import_template(template_path)
+        except Exception as e:
+            logger.error(f"Failed to generate template: {e}")
+            raise HTTPException(status_code=500, detail="Could not generate product template")
+    return FileResponse(
+        template_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename="product_import_template.xlsx"
+    )
+
+@router.post("/bulk-import")
+async def bulk_import_products_endpoint(
+    file: UploadFile = File(...),
+    dry_run: bool = Form(False),
+    update_existing: bool = Form(False),
+    init_stock: bool = Form(True),
+    company_id: int = Depends(get_current_company_id),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    safe_filename = os.path.basename(file.filename or "upload.xlsx")
+    suffix = os.path.splitext(safe_filename)[1].lower()
+    if suffix not in [".xlsx", ".xls", ".csv"]:
+        raise HTTPException(status_code=400, detail="Only .xlsx, .xls, and .csv files are supported")
+        
+    temp_dir = tempfile.gettempdir()
+    temp_file = os.path.join(temp_dir, f"bulk_prod_{datetime.utcnow().timestamp()}_{safe_filename}")
+    
+    with open(temp_file, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    try:
+        try:
+            from bulk_import_products import run_bulk_import
+        except ImportError:
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            from bulk_import_products import run_bulk_import
+
+        result = run_bulk_import(
+            file_path=temp_file,
+            company_id=company_id,
+            dry_run=dry_run,
+            update_existing=update_existing,
+            init_stock=init_stock
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except Exception:
+                pass
 
 @router.get("/{sku}", response_model=ProductResponse)
 def get_product(sku: str, company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
