@@ -7,7 +7,10 @@ const ReceiptModal = ({ receipt, onClose, isPreview, onComplete, isPending }) =>
   };
 
   const formatDate = (isoString) => {
-    return new Date(isoString).toLocaleString();
+    if (!isoString) return '-';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString();
   };
 
   return (

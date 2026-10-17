@@ -45,7 +45,10 @@ const SalesHistoryPage = () => {
   const total = data?.total || 0;
 
   const formatDate = (isoString) => {
-    return new Date(isoString).toLocaleString();
+    if (!isoString) return '-';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString();
   };
 
   const retryTallyMutation = useMutation({
