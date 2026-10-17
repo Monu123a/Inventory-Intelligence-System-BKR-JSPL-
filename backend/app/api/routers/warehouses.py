@@ -42,10 +42,13 @@ class WarehouseBase(BaseModel):
     external_mappings: Optional[List[ExternalMappingBase]] = []
     admin_password: Optional[str] = Field(default=None, exclude=True)
 
+from app.api.routers.state_hubs import StateHubResponse
+
 class WarehouseResponse(WarehouseBase):
     id: int
     company_id: int
     external_mappings: List[ExternalMappingResponse] = []
+    hub: Optional[StateHubResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 class WarehouseUserBase(BaseModel):

@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 
 from app.models.db import get_db
-from app.models.schema import Company, Product, Warehouse, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem, User, InventoryMovement
+from app.models.schema import Company, Product, Warehouse, WarehouseType, Inventory, Sale, SaleItem, CompanySettings, SalesReturn, SalesReturnItem, User, InventoryMovement
 from app.api.dependencies import get_current_company_id, get_current_user
 from app.services.inventory_event_engine import InventoryEventEngine
 from app.services.invoice_number_service import InvoiceNumberService
@@ -329,8 +329,40 @@ def complete_sale(
         # Ensure bill_number is consistent and matches invoice_number
         bill_number = invoice_number or _generate_bill_number(company_code)
 
-        # Company snapshot source (settings)
+        # Company snapshot source (settings + selected warehouse)
         settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
+        wh = None
+        if payload.origin_warehouse_id:
+            wh = db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == payload.origin_warehouse_id).first()
+
+        seller_name = (settings.legal_name if settings and settings.legal_name else (company.name if company else None))
+        seller_gstin = (settings.gstin if settings else None)
+        seller_address = (settings.address if settings else None)
+        seller_state = (settings.state if settings else None)
+        seller_state_code = (settings.state_code if settings else None)
+        seller_email = (settings.email if settings else None)
+        seller_phone = (settings.phone if settings else None)
+
+        if wh and wh.warehouse_type != WarehouseType.CENTRAL:
+            if wh.hub:
+                if wh.hub.gstin:
+                    seller_gstin = wh.hub.gstin
+                if wh.hub.state:
+                    seller_state = wh.hub.state
+                if wh.hub.state_code:
+                    seller_state_code = wh.hub.state_code
+                if wh.hub.address:
+                    seller_address = wh.hub.address
+                if wh.hub.phone:
+                    seller_phone = wh.hub.phone
+                if wh.hub.email:
+                    seller_email = wh.hub.email
+            if wh.address and wh.address.strip():
+                seller_address = wh.address.strip()
+            if wh.phone_number:
+                seller_phone = wh.phone_number
+            if wh.email:
+                seller_email = wh.email
 
         # 3. Create Sale
         sale = Sale(
@@ -367,13 +399,13 @@ def complete_sale(
             dispatch_document_number=payload.dispatch_document_number,
             dispatch_through=payload.dispatch_through,
 
-            company_name_snapshot=(settings.legal_name if settings and settings.legal_name else (company.name if company else None)),
-            company_gstin_snapshot=(settings.gstin if settings else None),
-            company_address_snapshot=(settings.address if settings else None),
-            company_state_snapshot=(settings.state if settings else None),
-            company_state_code_snapshot=(settings.state_code if settings else None),
-            company_email_snapshot=(settings.email if settings else None),
-            company_phone_snapshot=(settings.phone if settings else None),
+            company_name_snapshot=seller_name,
+            company_gstin_snapshot=seller_gstin,
+            company_address_snapshot=seller_address,
+            company_state_snapshot=seller_state,
+            company_state_code_snapshot=seller_state_code,
+            company_email_snapshot=seller_email,
+            company_phone_snapshot=seller_phone,
             company_logo_url_snapshot=(settings.logo_url if settings else None),
             company_bank_details_snapshot=(settings.bank_details if settings else None),
 
@@ -773,6 +805,41 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
             "line_total": i.line_total,
         })
 
+    seller_name = sale.company_name_snapshot
+    seller_gstin = sale.company_gstin_snapshot
+    seller_address = sale.company_address_snapshot
+    seller_state = sale.company_state_snapshot
+    seller_state_code = sale.company_state_code_snapshot
+    seller_email = sale.company_email_snapshot
+    seller_phone = sale.company_phone_snapshot
+
+    if origin_wh_id:
+        wh = db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == origin_wh_id).first()
+        if wh and wh.warehouse_type != WarehouseType.CENTRAL:
+            if wh.hub:
+                if wh.hub.gstin: seller_gstin = wh.hub.gstin
+                if wh.hub.state: seller_state = wh.hub.state
+                if wh.hub.state_code: seller_state_code = wh.hub.state_code
+                if wh.hub.address: seller_address = wh.hub.address
+                if wh.hub.phone: seller_phone = wh.hub.phone
+                if wh.hub.email: seller_email = wh.hub.email
+            if wh.address and wh.address.strip():
+                seller_address = wh.address.strip()
+            if wh.phone_number: seller_phone = wh.phone_number
+            if wh.email: seller_email = wh.email
+
+    company_dict = {
+        "name": seller_name,
+        "gstin": seller_gstin,
+        "address": seller_address,
+        "state": seller_state,
+        "state_code": seller_state_code,
+        "email": seller_email,
+        "phone": seller_phone,
+        "logo_url": sale.company_logo_url_snapshot,
+        "bank_details": sale.company_bank_details_snapshot,
+    }
+
     return {
         "id": sale.id,
         "company_id": sale.company_id,
@@ -797,17 +864,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
         "vehicle_number": sale.vehicle_number,
         "lr_rr_number": sale.lr_rr_number,
         "terms_of_delivery": sale.terms_of_delivery,
-        "company": {
-            "name": sale.company_name_snapshot,
-            "gstin": sale.company_gstin_snapshot,
-            "address": sale.company_address_snapshot,
-            "state": sale.company_state_snapshot,
-            "state_code": sale.company_state_code_snapshot,
-            "email": sale.company_email_snapshot,
-            "phone": sale.company_phone_snapshot,
-            "logo_url": sale.company_logo_url_snapshot,
-            "bank_details": sale.company_bank_details_snapshot,
-        },
+        "company": company_dict,
         "customer": {
             "name": sale.customer_name,
             "gstin": sale.customer_gstin,
@@ -1261,6 +1318,24 @@ def update_sale(
         default_warehouse = _resolve_default_warehouse(db, target_company_id)
     if not default_warehouse:
         raise HTTPException(status_code=400, detail="Warehouse not found for delta processing")
+
+    # Update seller snapshot if warehouse is non-central
+    if default_warehouse and default_warehouse.warehouse_type != WarehouseType.CENTRAL:
+        wh = db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == default_warehouse.id).first()
+        if wh:
+            if wh.hub:
+                if wh.hub.gstin: sale.company_gstin_snapshot = wh.hub.gstin
+                if wh.hub.state: sale.company_state_snapshot = wh.hub.state
+                if wh.hub.state_code: sale.company_state_code_snapshot = wh.hub.state_code
+                if wh.hub.address: sale.company_address_snapshot = wh.hub.address
+                if wh.hub.phone: sale.company_phone_snapshot = wh.hub.phone
+                if wh.hub.email: sale.company_email_snapshot = wh.hub.email
+            if wh.address and wh.address.strip():
+                sale.company_address_snapshot = wh.address.strip()
+            if wh.phone_number:
+                sale.company_phone_snapshot = wh.phone_number
+            if wh.email:
+                sale.company_email_snapshot = wh.email
 
     # 2.5 Resolve linked transfer (for inter-company edits)
     from app.models.schema import StockTransfer

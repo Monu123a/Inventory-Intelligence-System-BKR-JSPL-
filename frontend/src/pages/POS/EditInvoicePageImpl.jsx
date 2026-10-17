@@ -226,7 +226,10 @@ const EditInvoicePage = () => {
   }, [searchData, debouncedSearchTerm]);
 
   // Determine if inter-state (IGST) or intra-state (CGST+SGST/UTGST)
-  const sellerStateCode = companySettings?.state_code || (companySettings?.gstin ? companySettings.gstin.substring(0, 2) : '04');
+  const selectedWh = activeWarehouses.find(w => String(w.id) === String(selectedWarehouseId));
+  const sellerStateCode = (selectedWh && selectedWh.warehouse_type !== 'CENTRAL' && (selectedWh.hub?.state_code || (selectedWh.hub?.gstin ? selectedWh.hub.gstin.substring(0, 2) : null))) ||
+    companySettings?.state_code || 
+    (companySettings?.gstin ? companySettings.gstin.substring(0, 2) : '04');
   const buyerStateCode = customerInfo.state_code || (customerInfo.gstin ? customerInfo.gstin.substring(0, 2) : '') || (() => {
     const found = INDIAN_STATES.find(s => s.name === customerInfo.place_of_supply || s.name === customerInfo.state);
     return found ? found.code : '';
@@ -401,18 +404,40 @@ const EditInvoicePage = () => {
           : invoiceInfo.custom_invoice_number)
       : (invoicePrefix ? `${invoicePrefix}-PREVIEW` : 'PREVIEW');
 
+    const selectedWh = activeWarehouses.find(w => String(w.id) === String(selectedWarehouseId));
+    let sellerName = companySettings?.legal_name || currentCompany?.name || 'BKR';
+    let sellerGstin = companySettings?.gstin || '';
+    let sellerAddress = companySettings?.address || '';
+    let sellerState = companySettings?.state || '';
+    let sellerStateCode = companySettings?.state_code || '';
+    let sellerPhone = selectedWh?.phone_number || selectedWh?.hub?.phone || companySettings?.phone;
+    let sellerEmail = selectedWh?.email || selectedWh?.hub?.email || companySettings?.email;
+
+    if (selectedWh && selectedWh.warehouse_type !== 'CENTRAL') {
+      if (selectedWh.hub) {
+        if (selectedWh.hub.gstin) sellerGstin = selectedWh.hub.gstin;
+        if (selectedWh.hub.state) sellerState = selectedWh.hub.state;
+        if (selectedWh.hub.state_code) sellerStateCode = selectedWh.hub.state_code;
+        if (selectedWh.hub.address) sellerAddress = selectedWh.hub.address;
+      }
+      if (selectedWh.address && selectedWh.address.trim()) {
+        sellerAddress = selectedWh.address.trim();
+      }
+    }
+
     const mockInvoice = {
-      company: companySettings ? {
-        name: companySettings.legal_name || currentCompany?.name || 'BKR',
-        gstin: companySettings.gstin,
-        address: companySettings.address,
-        state: companySettings.state,
-        state_code: companySettings.state_code,
-        email: companySettings.email,
-        phone: companySettings.phone,
-        logo_url: companySettings.logo_url,
-        bank_details: companySettings.bank_details,
-      } : (currentCompany || { name: 'BKR', gstin: 'TEST' }),
+      company: {
+        name: sellerName,
+        gstin: sellerGstin,
+        address: sellerAddress,
+        state: sellerState,
+        state_code: sellerStateCode,
+        email: sellerEmail,
+        phone: sellerPhone,
+        logo_url: companySettings?.logo_url,
+        bank_details: companySettings?.bank_details,
+        code: currentCompany?.code
+      },
       invoice_type: invoiceType || 'B2C',
       invoice_prefix: invoicePrefix,
       invoice_number: formattedInvoiceNo,

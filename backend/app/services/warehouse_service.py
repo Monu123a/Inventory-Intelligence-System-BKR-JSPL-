@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.schema import Warehouse, WarehouseUser
 from app.models.schema import FCDispatch, FCReturn
 from app.models.schema import WarehouseExternalMapping
@@ -6,15 +6,15 @@ from app.models.schema import WarehouseExternalMapping
 class WarehouseService:
     @staticmethod
     def get_all(db: Session, company_id: int):
-        return db.query(Warehouse).filter(Warehouse.company_id == company_id).all()
+        return db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.company_id == company_id).all()
 
     @staticmethod
     def get_all_across_companies(db: Session):
-        return db.query(Warehouse).all()
+        return db.query(Warehouse).options(joinedload(Warehouse.hub)).all()
 
     @staticmethod
     def get_by_id(db: Session, warehouse_id: int, company_id: int):
-        return db.query(Warehouse).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
+        return db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
 
     @staticmethod
     def create(db: Session, company_id: int, data: dict):
