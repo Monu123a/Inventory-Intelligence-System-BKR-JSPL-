@@ -200,6 +200,38 @@
   font-style: italic;
 }
 
+.einvoiceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.einvoiceGenerated {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.einvoiceFailed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.einvoiceCancelled {
+  background: #f1f5f9;
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.einvoiceNotGenerated {
+  color: #94a3b8;
+  font-size: 12px;
+  font-style: italic;
+}
+
 .actionsCell {
   display: flex;
   gap: 8px;

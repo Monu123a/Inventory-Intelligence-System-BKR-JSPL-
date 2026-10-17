@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { einvoiceService } from '../../services/einvoice';
 import styles from './SettingsPage.module.css';
 import { FiSave, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import { useQueryClient } from '@tanstack/react-query';
@@ -23,6 +24,17 @@ const SettingsPage = () => {
     export_internal_distribution_to_accounting: false
   });
 
+  const [einvoiceSettings, setEinvoiceSettings] = useState({
+    einvoice_enabled: false,
+    einvoice_provider: 'CLEARTAX',
+    environment: 'sandbox',
+    gstin: '',
+    auth_token: '',
+    client_id: '',
+    client_secret: '',
+    auto_generate_on_pos: false
+  });
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
@@ -35,7 +47,13 @@ const SettingsPage = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/api/settings/');
+      const [res, einvRes] = await Promise.all([
+        api.get('/api/settings/'),
+        einvoiceService.getSettings().catch((e) => {
+          console.warn('Could not fetch einvoice settings:', e);
+          return null;
+        })
+      ]);
       if (res.data) {
         setSettings((prev) => ({
           ...prev,
@@ -44,6 +62,12 @@ const SettingsPage = () => {
             ...prev.bank_details,
             ...(res.data.bank_details || {})
           }
+        }));
+      }
+      if (einvRes) {
+        setEinvoiceSettings((prev) => ({
+          ...prev,
+          ...einvRes
         }));
       }
     } catch (error) {
@@ -73,11 +97,22 @@ const SettingsPage = () => {
     }));
   };
 
+  const handleEinvoiceChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setEinvoiceSettings((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
       setSaving(true);
-      await api.put('/api/settings/', settings);
+      await Promise.all([
+        api.put('/api/settings/', settings),
+        einvoiceService.updateSettings(einvoiceSettings)
+      ]);
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       showMessage('Settings saved successfully', 'success');
     } catch (error) {
@@ -223,6 +258,116 @@ const SettingsPage = () => {
                     <span className={styles.toggleText}>Export Internal Distribution to Accounting</span>
                     <div className={styles.toggleSwitch}>
                       <input type="checkbox" name="export_internal_distribution_to_accounting" checked={settings.export_internal_distribution_to_accounting || false} onChange={handleChange} />
+                      <span className={styles.slider}></span>
+                    </div>
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* E-Invoicing (GST B2B) Integration */}
+        <section className={styles.section}>
+          <h2>E-Invoicing (GST B2B IRN)</h2>
+          <div className={styles.grid}>
+            <div className={styles.formGroupToggle}>
+              <label className={styles.toggleLabel}>
+                <span className={styles.toggleText}>Enable E-Invoicing (IRN & Signed QR)</span>
+                <div className={styles.toggleSwitch}>
+                  <input
+                    type="checkbox"
+                    name="einvoice_enabled"
+                    checked={einvoiceSettings.einvoice_enabled || false}
+                    onChange={handleEinvoiceChange}
+                  />
+                  <span className={styles.slider}></span>
+                </div>
+              </label>
+            </div>
+
+            {einvoiceSettings.einvoice_enabled && (
+              <>
+                <div className={styles.formGroup}>
+                  <label>E-Invoice Provider (GSP/ASP)</label>
+                  <select
+                    name="einvoice_provider"
+                    value={einvoiceSettings.einvoice_provider || 'CLEARTAX'}
+                    onChange={handleEinvoiceChange}
+                  >
+                    <option value="CLEARTAX">ClearTax API</option>
+                    <option value="MASTERS_INDIA">Masters India</option>
+                    <option value="SANDBOX">Simulated Sandbox (Testing Mode)</option>
+                  </select>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>Environment</label>
+                  <select
+                    name="environment"
+                    value={einvoiceSettings.environment || 'sandbox'}
+                    onChange={handleEinvoiceChange}
+                  >
+                    <option value="sandbox">Sandbox / Staging</option>
+                    <option value="production">Production (Live Government IRP)</option>
+                  </select>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>Provider Auth Token / API Key</label>
+                  <input
+                    type="password"
+                    name="auth_token"
+                    value={einvoiceSettings.auth_token || ''}
+                    onChange={handleEinvoiceChange}
+                    placeholder="Enter GSP Auth Token"
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>Registered GSTIN for E-Invoicing</label>
+                  <input
+                    type="text"
+                    name="gstin"
+                    value={einvoiceSettings.gstin || ''}
+                    onChange={handleEinvoiceChange}
+                    placeholder="15-character GSTIN"
+                  />
+                </div>
+
+                {einvoiceSettings.einvoice_provider === 'MASTERS_INDIA' && (
+                  <>
+                    <div className={styles.formGroup}>
+                      <label>Client ID</label>
+                      <input
+                        type="text"
+                        name="client_id"
+                        value={einvoiceSettings.client_id || ''}
+                        onChange={handleEinvoiceChange}
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Client Secret</label>
+                      <input
+                        type="password"
+                        name="client_secret"
+                        value={einvoiceSettings.client_secret || ''}
+                        onChange={handleEinvoiceChange}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className={styles.formGroupToggle}>
+                  <label className={styles.toggleLabel}>
+                    <span className={styles.toggleText}>Auto-Generate IRN on B2B POS Checkout</span>
+                    <div className={styles.toggleSwitch}>
+                      <input
+                        type="checkbox"
+                        name="auto_generate_on_pos"
+                        checked={einvoiceSettings.auto_generate_on_pos || false}
+                        onChange={handleEinvoiceChange}
+                      />
                       <span className={styles.slider}></span>
                     </div>
                   </label>

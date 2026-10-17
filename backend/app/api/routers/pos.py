@@ -570,6 +570,18 @@ def complete_sale(
                     db.flush()
                 tally_result = {"status": "FAILED", "error_message": str(tally_err)}
 
+        # E-Invoice Generation (B2B only, configurable) - runs AFTER sale is committed
+        if commit and sale.customer_gstin and len(sale.customer_gstin.strip()) >= 15:
+            try:
+                settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
+                if settings and settings.einvoice_enabled:
+                    cfg = settings.einvoice_config or {}
+                    if cfg.get("auto_generate_on_pos", False):
+                        from app.services.einvoice.einvoice_service import EInvoiceService
+                        EInvoiceService.generate_irn_for_sale(sale_id=sale.id, db=db)
+            except Exception as e_err:
+                logging.getLogger(__name__).warning(f"Auto E-Invoice failed for sale {sale.id}: {e_err}")
+
         # Add audit logs
         AuditLogService.log(
             db, 
@@ -724,8 +736,12 @@ def get_sales_history(
             "items_count": len(s.items),
             "return_status": computed_return_status,
             "returned_quantity": t_ret,
-            "remaining_quantity": net_qty,
-            "total_sold": t_sold
+            "total_sold": t_sold,
+            "einvoice_status": s.einvoice_status or "NOT_GENERATED",
+            "einvoice_irn": s.einvoice_irn,
+            "einvoice_ack_no": s.einvoice_ack_no,
+            "einvoice_ack_date": s.einvoice_ack_date,
+            "einvoice_error_message": s.einvoice_error_message
         })
     
     # Enrich with linked return ids
@@ -894,6 +910,22 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
             "reference": sale.tally_reference,
             "error_message": sale.tally_error_message,
         },
+        "einvoice": {
+            "status": sale.einvoice_status or ("GENERATED" if sale.einvoice_irn else "NOT_GENERATED"),
+            "irn": sale.einvoice_irn,
+            "ack_no": sale.einvoice_ack_no,
+            "ack_date": sale.einvoice_ack_date.isoformat() if sale.einvoice_ack_date else None,
+            "qr_code_data": sale.einvoice_qr_code_data,
+            "error_message": sale.einvoice_error_message,
+            "canceled_at": sale.einvoice_canceled_at.isoformat() if sale.einvoice_canceled_at else None,
+            "cancel_reason": sale.einvoice_cancel_reason,
+            "is_b2b": bool(sale.customer_gstin and len(sale.customer_gstin.strip()) >= 15),
+        },
+        "einvoice_irn": sale.einvoice_irn,
+        "einvoice_ack_no": sale.einvoice_ack_no,
+        "einvoice_ack_date": sale.einvoice_ack_date.isoformat() if sale.einvoice_ack_date else None,
+        "einvoice_qr_code_data": sale.einvoice_qr_code_data,
+        "einvoice_status": sale.einvoice_status or ("GENERATED" if sale.einvoice_irn else "NOT_GENERATED"),
         "items": dto_items,
         "related_returns": returns_summary
     }

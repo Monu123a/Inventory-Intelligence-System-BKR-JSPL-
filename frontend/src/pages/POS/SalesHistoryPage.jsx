@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { posService } from '../../services/pos';
+import { einvoiceService } from '../../services/einvoice';
 import { handleApiError } from '../../utils/errorHandler';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
@@ -26,6 +27,7 @@ const SalesHistoryPage = () => {
 
   const [retryingId, setRetryingId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [generatingIrnId, setGeneratingIrnId] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['sales', skip, limit, search, status, invoiceType, returnStatus, tallyStatus, startDate, endDate],
@@ -79,6 +81,51 @@ const SalesHistoryPage = () => {
         return <span className={`${styles.tallyBadge} ${styles.tallyPending}`}><FiClock /> Pending</span>;
       default:
         return <span className={styles.tallyBadgeNA}>{sale.tally_sync_status}</span>;
+    }
+  };
+
+  const renderEInvoiceStatus = (sale) => {
+    if (sale.invoice_type !== 'B2B') return <span className={styles.tallyBadgeNA}>N/A (B2C)</span>;
+
+    const status = sale.einvoice_status || 'NOT_GENERATED';
+    if (status === 'GENERATED') {
+      return (
+        <span 
+          className={`${styles.einvoiceBadge} ${styles.einvoiceGenerated}`} 
+          title={`IRN: ${sale.einvoice_irn || ''}\nAck No: ${sale.einvoice_ack_no || ''}`}
+        >
+          <FiCheck /> IRN Active
+        </span>
+      );
+    }
+    if (status === 'CANCELLED') {
+      return (
+        <span className={`${styles.einvoiceBadge} ${styles.einvoiceCancelled}`} title="Cancelled on IRP">
+          <FiX /> Cancelled
+        </span>
+      );
+    }
+    if (status === 'FAILED') {
+      return (
+        <span className={`${styles.einvoiceBadge} ${styles.einvoiceFailed}`} title={sale.einvoice_error_message || 'Failed'}>
+          <FiX /> Failed
+        </span>
+      );
+    }
+    return <span className={styles.einvoiceNotGenerated}>Not Generated</span>;
+  };
+
+  const handleGenerateEInvoice = async (sale) => {
+    const isRetry = sale.einvoice_status === 'FAILED';
+    try {
+      setGeneratingIrnId(sale.id);
+      const res = await einvoiceService.generateIRN(sale.id, isRetry);
+      alert(`E-Invoice IRN Generated Successfully!\nIRN: ${res.irn.substring(0, 16)}...\nAck No: ${res.ack_no}`);
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+    } catch (err) {
+      handleApiError(err, 'Failed to generate E-Invoice IRN');
+    } finally {
+      setGeneratingIrnId(null);
     }
   };
 
@@ -150,6 +197,7 @@ const SalesHistoryPage = () => {
     },
     { key: 'return_status', label: 'Return Status', render: (val) => renderReturnStatus(val) },
     { key: 'tally_sync_status', label: 'Tally Sync', render: (_, sale) => renderTallyStatus(sale) },
+    { key: 'einvoice_status', label: 'E-Invoice', render: (_, sale) => renderEInvoiceStatus(sale) },
     {
       key: 'actions',
       label: 'Actions',
@@ -200,6 +248,17 @@ const SalesHistoryPage = () => {
               disabled={retryingId === sale.id}
             >
               <FiRefreshCw className={retryingId === sale.id ? styles.spinning : ''} /> Retry
+            </button>
+          )}
+          {sale.invoice_type === 'B2B' && sale.status !== 'Cancelled' && sale.einvoice_status !== 'GENERATED' && (
+            <button 
+              className={`${styles.actionBtn} ${styles.retryBtn}`} 
+              title={sale.einvoice_status === 'FAILED' ? "Retry E-Invoice IRN" : "Generate E-Invoice IRN & QR"}
+              onClick={() => handleGenerateEInvoice(sale)}
+              disabled={generatingIrnId === sale.id}
+            >
+              <FiRefreshCw className={generatingIrnId === sale.id ? styles.spinning : ''} />
+              {generatingIrnId === sale.id ? ' Generating...' : (sale.einvoice_status === 'FAILED' ? ' Retry IRN' : ' Gen IRN')}
             </button>
           )}
         </div>

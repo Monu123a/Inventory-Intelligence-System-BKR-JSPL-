@@ -435,6 +435,11 @@ class CompanySettings(Base):
     amazon_returns_sync_enabled = Column(Boolean, default=False)
     amazon_returns_sync_interval_minutes = Column(Integer, default=5)
 
+    # E-Invoice Integration (GSP / ClearTax / Masters India / Sandbox)
+    einvoice_enabled = Column(Boolean, default=False)
+    einvoice_provider = Column(String, default="CLEARTAX")  # CLEARTAX | MASTERS_INDIA | SANDBOX
+    einvoice_config = Column(JSON, nullable=True)  # {auth_token, gstin, client_id, client_secret, environment, auto_generate}
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     company = relationship("Company")
@@ -569,6 +574,10 @@ class Sale(Base):
     einvoice_ack_no = Column(String, nullable=True)
     einvoice_ack_date = Column(DateTime, nullable=True)
     einvoice_qr_code_data = Column(Text, nullable=True)
+    einvoice_status = Column(String, default="NOT_GENERATED")  # NOT_GENERATED | GENERATED | FAILED | CANCELLED
+    einvoice_error_message = Column(Text, nullable=True)
+    einvoice_canceled_at = Column(DateTime, nullable=True)
+    einvoice_cancel_reason = Column(String, nullable=True)
 
     # Tally sync metadata (B2B only, optional and configurable)
     tally_sync_status = Column(String, default="NOT_APPLICABLE")  # NOT_APPLICABLE|PENDING|PROCESSING|SUCCESS|FAILED|RETRYING|CANCELLED

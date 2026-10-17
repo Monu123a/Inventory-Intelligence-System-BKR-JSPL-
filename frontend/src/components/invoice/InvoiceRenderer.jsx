@@ -26,6 +26,13 @@ const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
           invoiceType={invoice.invoice_type} 
           tallyData={invoice.tally} 
           items={invoice.items}
+          einvoice={invoice.einvoice || {
+            irn: invoice.einvoice_irn,
+            ack_no: invoice.einvoice_ack_no,
+            ack_date: invoice.einvoice_ack_date,
+            qr_code_data: invoice.einvoice_qr_code_data,
+            status: invoice.einvoice_status
+          }}
         />
         
         <div className={styles.middleSection}>
