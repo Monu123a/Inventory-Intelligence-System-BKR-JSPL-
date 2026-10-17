@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
-import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
+import { DataTable, TablePagination } from '../../components/DataTable';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import { SearchBar } from '../../components/forms/SearchBar';
 import Button from '../../components/forms/Button';
@@ -191,12 +191,12 @@ const DownloadCentre = () => {
   const CategoryIcon = currentCategoryObj.icon;
 
   const columns = [
-    { key: 'reportType', label: 'Report Type', render: (val) => <span className={styles.typeText}>{val.replace(/_/g, ' ')}</span> },
-    { key: 'filename', label: 'Filename', render: (val) => <span className={styles.filename}>{val}</span> },
-    { key: 'generatedAt', label: 'Generated At', render: (val) => new Date(val).toLocaleString() },
-    { key: 'rowCount', label: 'Rows', render: (val) => val },
-    { key: 'fileFormat', label: 'Format', render: (val) => val },
-    { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> },
+    { key: 'reportType', label: 'Report Type', render: (val) => <span className={styles.typeText}>{val ? String(val).replace(/_/g, ' ') : '-'}</span> },
+    { key: 'filename', label: 'Filename', render: (val) => <span className={styles.filename}>{val || '-'}</span> },
+    { key: 'generatedAt', label: 'Generated At', render: (val) => val ? new Date(val).toLocaleString() : '-' },
+    { key: 'rowCount', label: 'Rows', render: (val) => val != null ? val : '-' },
+    { key: 'fileFormat', label: 'Format', render: (val) => val || '-' },
+    { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val || 'Completed'} /> },
     {
       key: 'actions',
       label: 'Actions',
@@ -422,28 +422,11 @@ const DownloadCentre = () => {
         </div>
 
         <div className={styles.tableWrapper}>
-          <DataTable>
-            <TableHeader columns={columns} />
-            <tbody>
-              {historyList.length === 0 ? (
-                <TableRow>
-                  <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem' }}>
-                    No reports downloaded yet. Generate one above to track it here.
-                  </td>
-                </TableRow>
-              ) : (
-                historyList.map((row) => (
-                  <TableRow key={row.id}>
-                    {columns.map((col) => (
-                      <td key={col.key}>
-                        {col.render ? col.render(row[col.key], row) : row[col.key]}
-                      </td>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </tbody>
-          </DataTable>
+          <DataTable
+            columns={columns}
+            data={historyList}
+            emptyMessage="No reports downloaded yet. Generate one above to track it here."
+          />
         </div>
 
         {totalPages > 1 && (

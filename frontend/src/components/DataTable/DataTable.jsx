@@ -33,6 +33,7 @@ export const DataTable = ({
 
   // New Streamlined API
   const colCount = columns?.length || 1;
+  const safeData = Array.isArray(data) ? data : [];
 
   let content;
   if (isLoading) {
@@ -48,16 +49,16 @@ export const DataTable = ({
         <span>{errorMessage}</span>
       </div>
     </td></tr>;
-  } else if (!data || data.length === 0) {
+  } else if (safeData.length === 0) {
     content = <tr><td colSpan={colCount} className={styles.stateCell}>
       <div className={styles.stateContainer}>
         <span>{hasActiveFilters ? noResultsMessage : emptyMessage}</span>
       </div>
     </td></tr>;
   } else {
-    content = data.map((row, idx) => (
+    content = safeData.map((row, idx) => (
       <TableRow 
-        key={row.id || idx} 
+        key={row?.id || idx} 
         row={row} 
         columns={columns} 
         onClick={() => onRowClick && onRowClick(row)} 
