@@ -800,11 +800,16 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
         if ret_qty > 0:
             item_status = "Returned" if ret_qty >= i.quantity else "Partial"
             
+        pack_grade = ""
+        if i.product:
+            pack_grade = i.product.category or i.product.brand or ""
+
         dto_items.append({
             "id": i.id,
             "product_id": i.product_id,
             "sku": i.sku,
             "product_name": i.product_name or (i.product.name if i.product else None),
+            "pack_grade": pack_grade,
             "hsn_sac": i.hsn_sac,
             "gst_rate": i.gst_rate,
             "quantity": i.quantity, # original sold

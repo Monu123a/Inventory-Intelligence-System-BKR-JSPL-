@@ -32,12 +32,12 @@ export function downloadInvoicePdf(invoiceRef, invoiceNumber) {
         <title>Invoice_${invoiceNumber || 'Download'}</title>
         ${styleTags}
         <style>
-          @page { size: auto; margin: 10mm; }
+          @page { size: landscape; margin: 4mm; }
           body { 
             margin: 0; 
-            padding: 20px; 
+            padding: 8px; 
             background: white; 
-            font-family: 'Inter', sans-serif;
+            font-family: "Courier New", Courier, monospace, ui-monospace;
           }
           /* Ensure we print what we see */
           @media print {

@@ -1,13 +1,17 @@
 import React, { forwardRef } from 'react';
 import styles from './InvoiceRenderer.module.css';
 import InvoiceHeader from './sections/InvoiceHeader';
-import InvoiceParties from './sections/InvoiceParties';
-import InvoiceMeta from './sections/InvoiceMeta';
+import InvoiceDetailsBox from './sections/InvoiceDetailsBox';
 import InvoiceItems from './sections/InvoiceItems';
 import InvoiceSummary from './sections/InvoiceSummary';
 
 const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
   if (!invoice) return null;
+
+  const sellerStateCode = invoice.company?.state_code || (invoice.company?.gstin ? invoice.company.gstin.substring(0, 2) : '04');
+  const buyerStateCode = invoice.customer?.state_code || (invoice.customer?.gstin ? invoice.customer.gstin.substring(0, 2) : '');
+  const itemsHaveIGST = invoice.items?.some(item => parseFloat(item.igst || 0) > 0);
+  const isInterState = itemsHaveIGST || Boolean(buyerStateCode && buyerStateCode !== sellerStateCode);
 
   return (
     <div className={styles.invoiceWrapper} ref={ref} style={{ position: 'relative' }}>
@@ -34,23 +38,13 @@ const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
             status: invoice.einvoice_status
           }}
         />
-        
-        <div className={styles.middleSection}>
-          <div className={styles.leftColumn}>
-            <InvoiceParties 
-              company={invoice.company} 
-              customer={invoice.customer} 
-              shipping={invoice.shipping}
-            />
-          </div>
-          <div className={styles.rightColumn}>
-            <InvoiceMeta invoice={invoice} />
-          </div>
-        </div>
+
+        <InvoiceDetailsBox invoice={invoice} />
 
         <InvoiceItems 
           items={invoice.items} 
           totals={invoice.totals} 
+          isInterState={isInterState}
         />
 
         <InvoiceSummary 

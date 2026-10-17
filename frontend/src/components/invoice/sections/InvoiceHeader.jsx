@@ -24,44 +24,84 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
     }
   }, [ackDate]);
 
+  const coNameUpper = (company?.name || company?.legal_name || '').toUpperCase();
+  const coCodeUpper = (company?.code || '').toUpperCase();
+  const isJspl = !coCodeUpper || coCodeUpper === 'JSPL' || coNameUpper.includes('SHOPSMART') || coNameUpper.includes('HALTE') || (coNameUpper.includes('JAGAN') && !coNameUpper.includes('RAMAN'));
+
+  const gstNo = company?.gstin || (isJspl ? '04AAFCJ8215N1ZC' : '');
+  const brandName = isJspl ? 'HALTE' : (company?.trade_name || company?.name || '');
+  const legalName = isJspl ? 'C/O Jagan Shopsmart Pvt Ltd.' : (company?.name || '');
+  const addressLine1 = isJspl ? 'Plot No. 150,Business & Industrial Park-2,' : (company?.address || '');
+  const addressLine2 = isJspl ? 'Chandigarh, India - 160002,,Godown/Workshop: 24/9, Industrial Park-2' : `${company?.state || ''} ${company?.state_code ? `(${company.state_code})` : ''}`;
+  const email = company?.email || (isJspl ? 'halteindia@gmail.com' : '');
+  const website = company?.website || (isJspl ? 'www.halte.in' : '');
+  const phones = isJspl 
+    ? ['9914130130,9216407929,', '9872607929,9501200185'] 
+    : (company?.phone ? [company.phone] : []);
+  const logoSrc = isJspl ? '/halte_logo.png' : (company?.logo_url || '/logo.png');
+
   return (
-    <div className={styles.header}>
-      <div className={styles.logoContainer}>
-        <img 
-          src={company?.logo_url || "/logo.png"} 
-          alt="Company Logo" 
-          className={styles.companyLogo} 
-          onError={(e) => {
-            e.target.style.display = 'none';
-            if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
-          }} 
-        />
-        <h1 className={styles.partyName} style={{ display: (company?.logo_url || '/logo.png') ? 'none' : 'block' }}>{company?.name}</h1>
-      </div>
-      
-      <div className={styles.titleBox}>
-        <h2 className={styles.invoiceTitle}>{invoiceTitle}</h2>
-      </div>
-      
-      <div className={styles.eInvoiceSection}>
-        {hasEInvoice ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
-            <div style={{ textAlign: 'right', fontSize: '9px', lineHeight: '1.3', color: '#1e293b' }}>
-              <div style={{ fontWeight: 700, color: '#1d4ed8' }}>e-Invoice Verified</div>
-              <div style={{ wordBreak: 'break-all', maxWidth: '170px', fontFamily: 'monospace', fontSize: '8px' }}>
-                <strong>IRN:</strong> {irn.length > 28 ? `${irn.substring(0, 16)}...${irn.substring(irn.length - 8)}` : irn}
+    <div className={styles.headerContainer}>
+      {/* Top Left: GST No & QRs */}
+      <div className={styles.headerLeft}>
+        <div className={styles.gstinLabel}>
+          <strong>GST NO. :</strong>{gstNo}
+        </div>
+        <div className={styles.qrRow}>
+          {hasEInvoice && (
+            <div className={styles.eInvoiceBlock}>
+              {qrCodeData && (
+                <div className={styles.qrCodeWrapper}>
+                  <QRCodeSVG value={qrCodeData} size={64} level="M" />
+                </div>
+              )}
+              <div className={styles.eInvoiceMeta}>
+                <div style={{ fontWeight: 700, color: '#1d4ed8' }}>e-Invoice</div>
+                <div>IRN: {irn.length > 16 ? `${irn.substring(0, 8)}...${irn.substring(irn.length - 6)}` : irn}</div>
+                {ackNo && <div>Ack: {ackNo}</div>}
+                {formattedAckDate && <div>Dt: {formattedAckDate}</div>}
               </div>
-              {ackNo && <div><strong>Ack No:</strong> {ackNo}</div>}
-              {formattedAckDate && <div><strong>Ack Dt:</strong> {formattedAckDate}</div>}
             </div>
-            {qrCodeData && (
-              <div style={{ padding: '2px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', display: 'flex' }}>
-                <QRCodeSVG value={qrCodeData} size={64} level="M" />
-              </div>
-            )}
+          )}
+          {isJspl && (
+            <div className={styles.instaQrBlock}>
+              <img src="/halte_insta_qr.png" alt="@HALTE.INDIA" className={styles.instaQrImg} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Center: Title & Company details */}
+      <div className={styles.headerCenter}>
+        <div className={styles.taxInvoiceTitle}>{invoiceTitle}</div>
+        <div className={styles.mainBrandName}>{brandName}</div>
+        {legalName && <div className={styles.coLegalName}>{legalName}</div>}
+        {addressLine1 && <div className={styles.headerAddress}>{addressLine1}</div>}
+        {addressLine2 && <div className={styles.headerAddress}>{addressLine2}</div>}
+        <div className={styles.headerContactLine}>
+          {email && <span><strong>EMAIL :- </strong>{email}</span>}
+          {website && <span className={styles.shopOnlineCenter}><strong>Shop Online - </strong>{website}</span>}
+        </div>
+      </div>
+
+      {/* Top Right: Phones, Logo, Shop Online */}
+      <div className={styles.headerRight}>
+        <div className={styles.phoneBlock}>
+          {phones.length > 0 && <span><strong>PH NO.</strong>{phones[0]}</span>}
+          {phones.length > 1 && <div>{phones[1]}</div>}
+        </div>
+        <div className={styles.headerLogoWrapper}>
+          <img 
+            src={logoSrc} 
+            alt="Logo" 
+            className={styles.headerLogoImg}
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        </div>
+        {website && (
+          <div className={styles.headerShopOnline}>
+            <strong>Shop Online - </strong>{website}
           </div>
-        ) : (
-          <div className={styles.eInvoicePlaceholder}></div>
         )}
       </div>
     </div>

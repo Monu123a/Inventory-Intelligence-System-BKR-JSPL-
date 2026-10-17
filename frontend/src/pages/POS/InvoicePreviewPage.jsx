@@ -166,7 +166,7 @@ export default function InvoicePreviewPage() {
         filename:     `Invoice_${invoice.invoice_number || saleId}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
       };
       
       const pdfBlob = await html2pdf().set(opt).from(invoiceRef.current).output('blob');

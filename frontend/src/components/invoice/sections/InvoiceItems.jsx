@@ -1,59 +1,136 @@
 import React from 'react';
 import styles from '../InvoiceRenderer.module.css';
 
-const formatCurrency = (val) => {
-  return Number(val || 0).toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+const formatNum = (val) => {
+  if (val === null || val === undefined || val === '') return '';
+  const n = Number(val);
+  return isNaN(n) ? '' : n.toFixed(2);
 };
 
-const InvoiceItems = ({ items, totals }) => {
+const InvoiceItems = ({ items = [], isInterState = false }) => {
+  const minRows = 7;
+  const emptyRowsCount = Math.max(0, minRows - items.length);
+
   return (
-    <table className={styles.itemsTable}>
-      <thead>
-        <tr>
-          <th className={styles.textCenter}>Sl No.</th>
-          <th className={styles.textLeft}>Description of Goods</th>
-          <th className={styles.textCenter}>HSN/SAC</th>
-          <th className={styles.textCenter}>GST Rate</th>
-          <th className={styles.textCenter}>Sold</th>
-          <th className={styles.textCenter}>Ret.</th>
-          <th className={styles.textCenter}>Net</th>
-          <th className={styles.textCenter}>Status</th>
-          <th className={styles.textCenter}>per</th>
-          <th className={styles.textRight}>Rate</th>
-          <th className={styles.textRight}>Disc.</th>
-          <th className={styles.textRight}>Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items?.map((item, index) => (
-          <tr key={index}>
-            <td className={styles.textCenter}>{index + 1}</td>
-            <td className={styles.textLeft}>{item.product_name} {item.sku && <small><br/>SKU: {item.sku}</small>}</td>
-            <td className={styles.textCenter}>{item.hsn_sac}</td>
-            <td className={styles.textCenter}>{item.gst_rate}%</td>
-            <td className={styles.textCenter}>{item.quantity}</td>
-            <td className={styles.textCenter} style={{ color: item.returned_quantity > 0 ? '#c2410c' : 'inherit' }}>{item.returned_quantity || 0}</td>
-            <td className={styles.textCenter} style={{ fontWeight: 'bold' }}>{item.remaining_quantity ?? item.quantity}</td>
-            <td className={styles.textCenter}>
-              <span style={{
-                fontSize: '11px',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                backgroundColor: item.item_status === 'Sold' ? '#f1f5f9' : item.item_status === 'Partial' ? '#ffedd5' : '#fee2e2',
-                color: item.item_status === 'Sold' ? '#475569' : item.item_status === 'Partial' ? '#c2410c' : '#b91c1c'
-              }}>{item.item_status || 'Sold'}</span>
-            </td>
-            <td className={styles.textCenter}>{item.unit}</td>
-            <td className={styles.textRight}>{formatCurrency(item.rate)}</td>
-            <td className={styles.textRight}>{formatCurrency(item.discount)}</td>
-            <td className={styles.textRight}>{formatCurrency(item.taxable_value)}</td>
+    <div className={styles.itemsTableWrapper}>
+      <table className={styles.halteItemsTable}>
+        <thead>
+          <tr>
+            <th className={styles.thSN}>SN</th>
+            <th className={styles.thItemName}>ITEM NAME</th>
+            <th className={styles.thPackGrade}>PACK/GRADE</th>
+            <th className={styles.thHSN}>HSN</th>
+            <th className={styles.thQty}>QTY.</th>
+            <th className={styles.thLoose}>LOOSE</th>
+            <th className={styles.thRate}>RATE</th>
+            <th className={styles.thTD}>TD</th>
+            <th className={styles.thCD}>C.D(%)</th>
+            <th className={styles.thTax}>TAX</th>
+            {isInterState ? (
+              <>
+                <th className={styles.thGstRate}>IGST(%)</th>
+                <th className={styles.thGstAmt}>IGST AMT</th>
+              </>
+            ) : (
+              <>
+                <th className={styles.thGstRate}>CGST(%)</th>
+                <th className={styles.thGstAmt}>CGST AMT</th>
+                <th className={styles.thGstAmt}>SGST AMT</th>
+                <th className={styles.thGstRate}>SGST(%)</th>
+              </>
+            )}
+            <th className={styles.thAmount}>AMOUNT</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((item, index) => {
+            const qty = parseFloat(item.remaining_quantity ?? item.quantity ?? 0);
+            const rate = parseFloat(item.rate ?? item.selling_price ?? 0);
+            const gross = qty * rate;
+            const discount = parseFloat(item.discount || 0);
+            
+            let cdDisplay = '';
+            if (gross > 0 && discount > 0) {
+              const cdPct = Math.round((discount / gross) * 100);
+              cdDisplay = `${cdPct} %`;
+            }
+
+            const taxableVal = item.taxable_value !== undefined 
+              ? parseFloat(item.taxable_value) 
+              : Math.max(0, gross - discount);
+
+            const gstRate = parseFloat(item.gst_rate || 0);
+            const halfRate = (gstRate / 2).toFixed(2);
+            
+            const cgstAmt = item.cgst !== undefined ? parseFloat(item.cgst) : (taxableVal * (gstRate / 200));
+            const sgstAmt = item.sgst !== undefined ? parseFloat(item.sgst) : (taxableVal * (gstRate / 200));
+            const igstAmt = item.igst !== undefined ? parseFloat(item.igst) : (taxableVal * (gstRate / 100));
+
+            const taxLabel = gstRate > 0 ? `GST ${Math.round(gstRate)}%` : 'TAXFREE';
+
+            return (
+              <tr key={item.id || index} className={styles.itemRow}>
+                <td className={styles.tdCenter}>{index + 1}</td>
+                <td className={styles.tdLeft}>
+                  {item.product_name || item.name || item.sku}
+                </td>
+                <td className={styles.tdLeft}>{item.pack_grade || ''}</td>
+                <td className={styles.tdCenter}>{item.hsn_sac || item.hsn || ''}</td>
+                <td className={styles.tdRight}>{qty.toFixed(2)}</td>
+                <td className={styles.tdRight}>{item.loose || ''}</td>
+                <td className={styles.tdRight}>{formatNum(rate)}</td>
+                <td className={styles.tdRight}>{item.td || ''}</td>
+                <td className={styles.tdRight}>{cdDisplay}</td>
+                <td className={styles.tdCenter}>{taxLabel}</td>
+                {isInterState ? (
+                  <>
+                    <td className={styles.tdRight}>{gstRate > 0 ? gstRate.toFixed(2) : ''}</td>
+                    <td className={styles.tdRight}>{formatNum(igstAmt)}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className={styles.tdRight}>{gstRate > 0 ? halfRate : ''}</td>
+                    <td className={styles.tdRight}>{formatNum(cgstAmt)}</td>
+                    <td className={styles.tdRight}>{formatNum(sgstAmt)}</td>
+                    <td className={styles.tdRight}>{gstRate > 0 ? halfRate : ''}</td>
+                  </>
+                )}
+                <td className={styles.tdRight}>{formatNum(gross)}</td>
+              </tr>
+            );
+          })}
+          {/* Filler rows to ensure table extends cleanly like the printed bill */}
+          {Array.from({ length: emptyRowsCount }).map((_, i) => (
+            <tr key={`filler-${i}`} className={styles.fillerRow}>
+              <td>&nbsp;</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              {isInterState ? (
+                <>
+                  <td></td>
+                  <td></td>
+                </>
+              ) : (
+                <>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </>
+              )}
+              <td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 
