@@ -24,21 +24,47 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
     }
   }, [ackDate]);
 
-  const coNameUpper = (company?.name || company?.legal_name || '').toUpperCase();
+  // Robust BKR vs JSPL detection
+  const coId = company?.id || company?.company_id;
   const coCodeUpper = (company?.code || '').toUpperCase();
-  const isJspl = !coCodeUpper || coCodeUpper === 'JSPL' || coNameUpper.includes('SHOPSMART') || coNameUpper.includes('HALTE') || (coNameUpper.includes('JAGAN') && !coNameUpper.includes('RAMAN'));
+  const coNameUpper = (company?.name || company?.legal_name || '').toUpperCase();
 
-  const gstNo = company?.gstin || (isJspl ? '04AAFCJ8215N1ZC' : '');
-  const brandName = isJspl ? 'HALTE' : (company?.trade_name || company?.name || '');
-  const legalName = isJspl ? 'C/O Jagan Shopsmart Pvt Ltd.' : (company?.name || '');
-  const addressLine1 = isJspl ? 'Plot No. 150,Business & Industrial Park-2,' : (company?.address || '');
-  const addressLine2 = isJspl ? 'Chandigarh, India - 160002,,Godown/Workshop: 24/9, Industrial Park-2' : `${company?.state || ''} ${company?.state_code ? `(${company.state_code})` : ''}`;
-  const email = company?.email || (isJspl ? 'halteindia@gmail.com' : '');
-  const website = company?.website || (isJspl ? 'www.halte.in' : '');
-  const phones = isJspl 
-    ? ['9914130130,9216407929,', '9872607929,9501200185'] 
-    : (company?.phone ? [company.phone] : []);
-  const logoSrc = isJspl ? '/halte_logo.png' : (company?.logo_url || '/logo.png');
+  const isBkr = coId === 2 || coCodeUpper === 'BKR' || coNameUpper.includes('RAMAN') || coNameUpper.startsWith('BKR') || coNameUpper.includes('B.K.') || coNameUpper.includes('BK ');
+  const isJspl = !isBkr;
+
+  const gstNo = company?.gstin || (isBkr ? '04AEFPS6301F1ZU' : '04AAFCJ8215N1ZC');
+  const brandName = isBkr ? 'B.K. RAMAN & CO.' : 'HALTE';
+  const legalName = isBkr ? (company?.name || 'B K RAMAN AND CO (Formerly Jagan Hardware)') : 'C/O Jagan Shopsmart Pvt Ltd.';
+  
+  let addressLine1 = '';
+  let addressLine2 = '';
+  if (isBkr) {
+    if (company?.address && company.address.includes('\n')) {
+      const parts = company.address.split('\n');
+      addressLine1 = parts[0].trim();
+      addressLine2 = parts.slice(1).join(' ').trim();
+    } else if (company?.address) {
+      addressLine1 = company.address;
+      addressLine2 = `${company?.state || 'CHANDIGARH'} ${company?.state_code ? `(${company.state_code})` : ''}`;
+    } else {
+      addressLine1 = 'Showroom : Plot No.150, Business & Industrial Park-2,';
+      addressLine2 = 'CHANDIGARH - 160002 | Godown : Plot No.24/9, Industrial Park-2';
+    }
+  } else {
+    addressLine1 = company?.address ? company.address.split('\n')[0] : 'Plot No. 150,Business & Industrial Park-2,';
+    addressLine2 = company?.address && company.address.includes('\n') 
+      ? company.address.split('\n').slice(1).join(' ') 
+      : 'Chandigarh, India - 160002,,Godown/Workshop: 24/9, Industrial Park-2';
+  }
+
+  const email = company?.email || (isBkr ? 'bkramanco@gmail.com' : 'halteindia@gmail.com');
+  const website = isBkr ? (company?.website || '') : (company?.website || 'www.halte.in');
+  
+  const phones = company?.phone 
+    ? [company.phone] 
+    : (isBkr ? ['9501200185, 9914130130'] : ['9914130130, 9216407929,', '9872607929, 9501200185']);
+
+  const logoSrc = isBkr ? (company?.logo_url || '') : (company?.logo_url || '/halte_logo.png');
 
   return (
     <div className={styles.headerContainer}>
@@ -52,12 +78,12 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
             <div className={styles.eInvoiceBlock}>
               {qrCodeData && (
                 <div className={styles.qrCodeWrapper}>
-                  <QRCodeSVG value={qrCodeData} size={64} level="M" />
+                  <QRCodeSVG value={qrCodeData} size={58} level="M" />
                 </div>
               )}
               <div className={styles.eInvoiceMeta}>
                 <div style={{ fontWeight: 700, color: '#1d4ed8' }}>e-Invoice</div>
-                <div>IRN: {irn.length > 16 ? `${irn.substring(0, 8)}...${irn.substring(irn.length - 6)}` : irn}</div>
+                <div>IRN: {irn.length > 14 ? `${irn.substring(0, 7)}...${irn.substring(irn.length - 5)}` : irn}</div>
                 {ackNo && <div>Ack: {ackNo}</div>}
                 {formattedAckDate && <div>Dt: {formattedAckDate}</div>}
               </div>
@@ -87,17 +113,24 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
       {/* Top Right: Phones, Logo, Shop Online */}
       <div className={styles.headerRight}>
         <div className={styles.phoneBlock}>
-          {phones.length > 0 && <span><strong>PH NO.</strong>{phones[0]}</span>}
+          {phones.length > 0 && <span><strong>PH NO. </strong>{phones[0]}</span>}
           {phones.length > 1 && <div>{phones[1]}</div>}
         </div>
-        <div className={styles.headerLogoWrapper}>
-          <img 
-            src={logoSrc} 
-            alt="Logo" 
-            className={styles.headerLogoImg}
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
-        </div>
+        {logoSrc ? (
+          <div className={styles.headerLogoWrapper}>
+            <img 
+              src={logoSrc} 
+              alt="Logo" 
+              className={styles.headerLogoImg}
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          </div>
+        ) : isBkr ? (
+          <div className={styles.bkrBrandBadge}>
+            <div className={styles.bkrBrandTitle}>B.K. RAMAN &amp; CO.</div>
+            <div className={styles.bkrBrandSub}>ESTD. 1978 &bull; CHANDIGARH</div>
+          </div>
+        ) : null}
         {website && (
           <div className={styles.headerShopOnline}>
             <strong>Shop Online - </strong>{website}

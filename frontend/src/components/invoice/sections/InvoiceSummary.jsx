@@ -67,19 +67,22 @@ const InvoiceSummary = ({ company, customer, items = [], totals }) => {
   const roundedGrandTotal = totals?.grand_total ? Math.round(totals.grand_total) : Math.round(rawGrandTotal);
   const roundOff = parseFloat((roundedGrandTotal - rawGrandTotal).toFixed(2));
 
-  // Determine Company & Bank details
-  const coNameUpper = (company?.name || company?.legal_name || '').toUpperCase();
+  // Robust BKR vs JSPL identification
+  const coId = company?.id || company?.company_id;
   const coCodeUpper = (company?.code || '').toUpperCase();
-  const isJspl = !coCodeUpper || coCodeUpper === 'JSPL' || coNameUpper.includes('SHOPSMART') || coNameUpper.includes('HALTE') || (coNameUpper.includes('JAGAN') && !coNameUpper.includes('RAMAN'));
+  const coNameUpper = (company?.name || company?.legal_name || '').toUpperCase();
+
+  const isBkr = coId === 2 || coCodeUpper === 'BKR' || coNameUpper.includes('RAMAN') || coNameUpper.startsWith('BKR') || coNameUpper.includes('B.K.') || coNameUpper.includes('BK ');
+  const isJspl = !isBkr;
 
   const bankDetails = company?.bank_details || {};
   const bankInfo = {
-    name: isJspl ? 'JAGAN SHOPSMART PVT LTD' : (bankDetails.account_name || 'B.K. RAMAN & CO (CA)'),
-    accountNumber: (bankDetails.account_no || bankDetails.account_number || (isJspl ? '50200075992904' : '41836801381')).trim(),
-    branch: (bankDetails.branch || (isJspl ? 'CHD- INDUSTRIAL AREA PH-II' : 'Industrial Area, Phase-2')).trim(),
+    name: isBkr ? (bankDetails.account_name || 'B K RAMAN AND CO') : 'JAGAN SHOPSMART PVT LTD',
+    accountNumber: (bankDetails.account_no || bankDetails.account_number || (isBkr ? '41836801381' : '50200075992904')).trim(),
+    branch: (bankDetails.branch || (isBkr ? 'Industrial Area, Phase-2' : 'CHD- INDUSTRIAL AREA PH-II')).trim(),
     accountType: (bankDetails.account_type || 'CURRENT ACCOUNT').trim(),
-    ifsc: (bankDetails.ifsc || (isJspl ? 'HDFC0001417' : 'SBIN0007501')).trim(),
-    bankName: (bankDetails.bank_name || (isJspl ? 'HDFC Bank Ltd' : 'State Bank Of India')).trim(),
+    ifsc: (bankDetails.ifsc || (isBkr ? 'SBIN0007501' : 'HDFC0001417')).trim(),
+    bankName: (bankDetails.bank_name || (isBkr ? 'State Bank Of India' : 'HDFC Bank Ltd')).trim(),
     city: (bankDetails.city || 'Chandigarh').trim()
   };
 
@@ -186,7 +189,7 @@ const InvoiceSummary = ({ company, customer, items = [], totals }) => {
         </div>
 
         <div className={styles.lowerRightBlock}>
-          {isJspl ? (
+          {isBkr ? (
             <>
               <div className={styles.bankDetailBox}>
                 <div className={styles.bankDetailTitle}>OUR BANK DETAIL</div>
@@ -195,9 +198,10 @@ const InvoiceSummary = ({ company, customer, items = [], totals }) => {
                 <div className={styles.bankDetailRow}>Branch: {bankInfo.branch}</div>
                 <div className={styles.bankDetailRow}>Account Type: {bankInfo.accountType}</div>
                 <div className={styles.bankDetailRow}>IFSC CODE : {bankInfo.ifsc}</div>
+                <div className={styles.bankDetailRow}>Bank Name : {bankInfo.bankName}</div>
               </div>
               <div className={styles.signatureBox}>
-                <div className={styles.forCompanyTitle}>For {bankInfo.name}</div>
+                <div className={styles.forCompanyTitle}>For {company?.name || 'B K RAMAN AND CO'}</div>
                 <div className={styles.signSpacer}></div>
                 <div className={styles.signLabelAuth}>AUTH. SIGNATURY.</div>
               </div>
@@ -213,7 +217,7 @@ const InvoiceSummary = ({ company, customer, items = [], totals }) => {
                 <div className={styles.bankDetailRow}>IFSC CODE : {bankInfo.ifsc}</div>
               </div>
               <div className={styles.signatureBox}>
-                <div className={styles.forCompanyTitle}>For {company?.name || 'Company'}</div>
+                <div className={styles.forCompanyTitle}>For Jagan Shopsmart Pvt Ltd</div>
                 <div className={styles.signSpacer}></div>
                 <div className={styles.signLabelAuth}>AUTH. SIGNATURY.</div>
               </div>

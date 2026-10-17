@@ -849,7 +849,40 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
             if wh.phone_number: seller_phone = wh.phone_number
             if wh.email: seller_email = wh.email
 
+    company_code = "BKR" if sale.company_id == 2 else ("JSPL" if sale.company_id == 3 else None)
+    if not company_code and sale.company:
+        company_code = sale.company.code
+
+    seller_bank_details = sale.company_bank_details_snapshot
+    if not seller_bank_details:
+        if company_code == "BKR" or sale.company_id == 2:
+            seller_bank_details = {
+                "account_name": "B.K. RAMAN & CO (CA)",
+                "account_no": "41836801381",
+                "ifsc": "SBIN0007501",
+                "bank_name": "State Bank Of India",
+                "branch": "Industrial Area, Phase-2",
+                "city": "Chandigarh"
+            }
+        else:
+            seller_bank_details = {
+                "account_name": "JAGAN SHOPSMART PVT LTD",
+                "account_no": "50200075992904",
+                "ifsc": "HDFC0001417",
+                "bank_name": "HDFC Bank Ltd",
+                "branch": "CHD- INDUSTRIAL AREA PH-II",
+                "city": "Chandigarh"
+            }
+
+    if not seller_email:
+        seller_email = "bkramanco@gmail.com" if (company_code == "BKR" or sale.company_id == 2) else "halteindia@gmail.com"
+    if not seller_phone:
+        seller_phone = "9501200185, 9914130130" if (company_code == "BKR" or sale.company_id == 2) else "9914130130, 9216407929, 9872607929, 9501200185"
+
     company_dict = {
+        "id": sale.company_id,
+        "company_id": sale.company_id,
+        "code": company_code,
         "name": seller_name,
         "gstin": seller_gstin,
         "address": seller_address,
@@ -858,7 +891,7 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
         "email": seller_email,
         "phone": seller_phone,
         "logo_url": sale.company_logo_url_snapshot,
-        "bank_details": sale.company_bank_details_snapshot,
+        "bank_details": seller_bank_details,
     }
 
     return {

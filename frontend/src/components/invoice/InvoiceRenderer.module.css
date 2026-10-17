@@ -170,6 +170,26 @@
   object-fit: contain;
 }
 
+.bkrBrandBadge {
+  margin: 4px 0;
+  text-align: right;
+  border: 1px solid #000000;
+  padding: 3px 6px;
+  background-color: #ffffff;
+}
+
+.bkrBrandTitle {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.bkrBrandSub {
+  font-size: 7.5px;
+  color: #333333;
+  letter-spacing: 0.5px;
+}
+
 .headerShopOnline {
   font-size: 9.5px;
   font-weight: 600;
