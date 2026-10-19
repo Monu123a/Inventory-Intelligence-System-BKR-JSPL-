@@ -254,24 +254,24 @@
 
 .metaMiniKey {
   font-weight: 700;
-  width: 46%;
+  width: 38%;
   white-space: nowrap;
 }
 
 .metaMiniSep {
-  width: 6%;
+  width: 5%;
   text-align: center;
 }
 
 .metaMiniValBold {
   font-weight: 700;
-  width: 48%;
-  word-break: break-word;
+  width: 57%;
+  white-space: nowrap;
 }
 
 .metaMiniVal {
   font-weight: 500;
-  width: 48%;
+  width: 57%;
   word-break: break-word;
 }
 
@@ -327,19 +327,19 @@
 
 /* Exact Column Percentages summing to 100% in Portrait */
 .thSN { width: 3%; text-align: center; }
-.thItemName { width: 24%; text-align: left; }
-.thPackGrade { width: 6.5%; text-align: left; }
-.thHSN { width: 6.5%; text-align: center; }
+.thItemName { width: 23%; text-align: left; }
+.thPackGrade { width: 8%; text-align: left; }
+.thHSN { width: 6%; text-align: center; }
 .thQty { width: 5%; text-align: right; }
 .thLoose { width: 3%; text-align: right; }
 .thRate { width: 7%; text-align: right; }
-.thTD { width: 3%; text-align: right; }
-.thCD { width: 4.5%; text-align: right; }
-.thTax { width: 5.5%; text-align: center; }
+.thTD { width: 2.5%; text-align: right; }
+.thCD { width: 3.5%; text-align: right; }
+.thTax { width: 5%; text-align: center; }
 .thGstRate { width: 4.5%; text-align: right; }
-.thGstAmt { width: 6.5%; text-align: right; }
+.thGstAmt { width: 6%; text-align: right; }
 .thIgstRate { width: 9%; text-align: right; }
-.thIgstAmt { width: 13%; text-align: right; }
+.thIgstAmt { width: 15%; text-align: right; }
 .thAmount { width: 10%; text-align: right; }
 
 .tdCenter { text-align: center; }

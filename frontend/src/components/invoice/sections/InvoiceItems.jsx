@@ -72,7 +72,14 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
               <tr key={item.id || index} className={styles.itemRow}>
                 <td className={styles.tdCenter}>{index + 1}</td>
                 <td className={styles.tdLeft}>
-                  {item.product_name || item.name || item.sku}
+                  {(() => {
+                    const sku = item.sku || item.product_sku || '';
+                    const name = item.product_name || item.name || item.description || '';
+                    if (sku && name && !name.toUpperCase().includes(sku.toUpperCase())) {
+                      return `${sku} - ${name}`;
+                    }
+                    return name || sku;
+                  })()}
                 </td>
                 <td className={styles.tdLeft}>{item.pack_grade || ''}</td>
                 <td className={styles.tdCenter}>{item.hsn_sac || item.hsn || ''}</td>
