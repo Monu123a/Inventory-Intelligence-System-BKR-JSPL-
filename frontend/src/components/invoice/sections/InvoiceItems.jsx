@@ -8,7 +8,7 @@ const formatNum = (val) => {
 };
 
 const InvoiceItems = ({ items = [], isInterState = false }) => {
-  const minRows = 7;
+  const minRows = 13;
   const emptyRowsCount = Math.max(0, minRows - items.length);
 
   return (

@@ -55,7 +55,23 @@ button {
   flex-direction: column;
 }
 
+@page {
+  size: A4 portrait !important;
+  margin: 4mm !important;
+}
+
 @media print {
+  @page {
+    size: A4 portrait !important;
+    margin: 4mm !important;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -63,9 +79,15 @@ button {
     visibility: visible;
   }
   .print-only {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
   }
 }

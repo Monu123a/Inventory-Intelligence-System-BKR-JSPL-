@@ -32,16 +32,18 @@ export function downloadInvoicePdf(invoiceRef, invoiceNumber) {
         <title>Invoice_${invoiceNumber || 'Download'}</title>
         ${styleTags}
         <style>
-          @page { size: portrait; margin: 4mm; }
-          body { 
-            margin: 0; 
-            padding: 8px; 
-            background: white; 
+          @page { size: A4 portrait !important; margin: 4mm !important; }
+          html, body { 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background: white !important; 
             font-family: "Courier New", Courier, monospace, ui-monospace;
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
           }
-          /* Ensure we print what we see */
           @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @page { size: A4 portrait !important; margin: 4mm !important; }
+            body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           }
         </style>
       </head>

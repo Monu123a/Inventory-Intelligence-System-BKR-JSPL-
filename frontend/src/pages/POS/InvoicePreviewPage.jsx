@@ -121,7 +121,13 @@ export default function InvoicePreviewPage() {
   };
 
   const handlePrint = () => {
+    const originalTitle = document.title;
+    const invNo = invoice?.invoice_number || invoice?.bill_number || 'Invoice';
+    document.title = invNo;
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   const handleDownloadPdf = () => {
@@ -207,6 +213,39 @@ export default function InvoicePreviewPage() {
 
   return (
     <div className={styles.container}>
+      <style>
+        {`
+          @page {
+            size: A4 portrait !important;
+            margin: 4mm !important;
+          }
+          @media print {
+            @page {
+              size: A4 portrait !important;
+              margin: 4mm !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-only {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              transform: none !important;
+            }
+          }
+        `}
+      </style>
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
           <button className={styles.actionButton} onClick={() => navigate(-1)}>
