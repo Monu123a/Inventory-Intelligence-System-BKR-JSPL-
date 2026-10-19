@@ -18,6 +18,7 @@ export const PurchaseBillModal = ({ isOpen, onClose, purchase }) => {
     <Modal isOpen={isOpen} onClose={onClose} title={`Purchase Bill - ${purchase.invoice_number || purchase.id}`}>
       <div style={{ marginBottom: '20px' }}>
         <p><strong>Vendor:</strong> {purchase.vendor_name}</p>
+        <p><strong>Warehouse:</strong> <span style={{ fontWeight: 600, color: '#1d4ed8' }}>{purchase.warehouse_name || 'Central'}</span></p>
         <p><strong>Date:</strong> {new Date(purchase.created_at).toLocaleDateString()}</p>
         <p><strong>Status:</strong> {purchase.status}</p>
         <p><strong>Payment Status:</strong> <span style={{ color: purchase.payment_status === 'UNPAID' ? 'red' : 'green' }}>{purchase.payment_status}</span></p>

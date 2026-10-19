@@ -7,6 +7,7 @@ import { SearchBar } from '../../components/forms/SearchBar';
 import { DataTable } from '../../components/DataTable/DataTable';
 import { PurchaseBillModal } from '../../components/Purchases/PurchaseBillModal';
 import { RecordPaymentModal } from '../../components/Purchases/RecordPaymentModal';
+import { ReceiveStockModal } from '../../components/Purchases/ReceiveStockModal';
 
 export default function PurchasesList() {
   const navigate = useNavigate();
@@ -27,6 +28,8 @@ export default function PurchasesList() {
   const [billModalOpen, setBillModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedPaymentPurchase, setSelectedPaymentPurchase] = useState(null);
+  const [receiveModalOpen, setReceiveModalOpen] = useState(false);
+  const [selectedReceivePurchase, setSelectedReceivePurchase] = useState(null);
 
   const loadData = () => {
     if (activeCompanyId) {
@@ -71,24 +74,9 @@ export default function PurchasesList() {
     setPaymentModalOpen(true);
   };
 
-  const receiveDraft = async (purchase) => {
-    try {
-      if (confirm(`Receive stock for draft bill ${purchase.invoice_number || purchase.id}?`)) {
-        await PurchaseService.receivePurchase(purchase.id, {
-          idempotency_key: `recv-${crypto.randomUUID()}`,
-          warehouse_id: null // defaults to central
-        });
-        alert("Stock received successfully!");
-        loadData();
-      }
-    } catch(e) {
-      const detail = e.response?.data?.detail;
-      if (Array.isArray(detail)) {
-        alert(detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join('\n'));
-      } else {
-        alert(detail || e.message || "An error occurred");
-      }
-    }
+  const openReceive = (purchase) => {
+    setSelectedReceivePurchase(purchase);
+    setReceiveModalOpen(true);
   };
 
   const vendorColumns = [
@@ -102,6 +90,9 @@ export default function PurchasesList() {
   const billColumns = [
     { name: 'Bill ID', key: 'id', render: (_, r) => r.invoice_number || `PUR-${r.id}` },
     { name: 'Vendor', key: 'vendor_name' },
+    { name: 'Warehouse', key: 'warehouse_name', render: (_, r) => (
+      <span style={{ fontWeight: 500, color: '#1d4ed8' }}>{r.warehouse_name || 'Central'}</span>
+    )},
     { name: 'Bill Amount', key: 'total_amount', render: (_, r) => `₹ ${Number(r.total_amount||0).toFixed(2)}` },
     { name: 'Amount Paid', key: 'amount_paid', render: (_, r) => `₹ ${Number(r.amount_paid||0).toFixed(2)}` },
     { name: 'Payment Status', key: 'payment_status', render: (_, r) => (
@@ -118,7 +109,7 @@ export default function PurchasesList() {
         <button onClick={() => viewBill(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '4px' }}>View Bill</button>
         <button onClick={() => navigate(`/purchases/${r.id}/edit`)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#ffc107', color: '#000', border: 'none', borderRadius: '4px' }}>Edit</button>
         {r.status === 'DRAFT' && (
-          <button onClick={() => receiveDraft(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px' }}>Receive</button>
+          <button onClick={() => openReceive(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px' }}>Receive</button>
         )}
         {r.payment_status !== 'PAID' && r.status === 'RECEIVED' && (
           <button onClick={() => openPayment(r)} style={{ cursor: 'pointer', padding: '4px 8px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>Pay</button>
@@ -158,6 +149,7 @@ export default function PurchasesList() {
       
       <PurchaseBillModal isOpen={billModalOpen} onClose={() => setBillModalOpen(false)} purchase={selectedBill} />
       <RecordPaymentModal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} purchase={selectedPaymentPurchase} onSuccess={() => { setPaymentModalOpen(false); loadData(); }} />
+      <ReceiveStockModal isOpen={receiveModalOpen} onClose={() => setReceiveModalOpen(false)} purchase={selectedReceivePurchase} onSuccess={() => { setReceiveModalOpen(false); loadData(); }} />
     </div>
   );
 }

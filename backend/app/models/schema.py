@@ -1366,10 +1366,12 @@ class Purchase(Base):
     vendor_name = Column(String, nullable=True)
     amount_paid = Column(Numeric(15, 2), default=0.0)
     payment_method = Column(String(50), nullable=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
     
     vendor = relationship("Vendor")
     company = relationship("Company")
     operator = relationship("User")
+    warehouse = relationship("Warehouse")
     items = relationship("PurchaseItem", back_populates="purchase", cascade="all, delete-orphan")
 
 class PurchaseItem(Base):

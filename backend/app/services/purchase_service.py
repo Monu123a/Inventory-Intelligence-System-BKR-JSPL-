@@ -96,6 +96,8 @@ class PurchaseService:
             
         vendor = PurchaseService._get_or_create_vendor(db, request.company_id, request.vendor_id, request.vendor_name)
         
+        target_warehouse_id = request.warehouse_id or PurchaseService.get_default_warehouse(db, request.company_id)
+
         purchase = Purchase(
             vendor_id=vendor.id,
             vendor_name=vendor.name,
@@ -105,6 +107,7 @@ class PurchaseService:
             vehicle_number=request.vehicle_number,
             company_id=request.company_id,
             operator_id=operator_id,
+            warehouse_id=target_warehouse_id,
             status="DRAFT",
             invoice_number=request.invoice_number if request.invoice_number else None,
             idempotency_key=request.idempotency_key,
@@ -149,13 +152,13 @@ class PurchaseService:
         if not purchase:
             raise ValueError("Purchase not found")
         
+        edit_timestamp = int(datetime.utcnow().timestamp())
+        
         if purchase.status == "RECEIVED":
             # Reverse inventory for old items
             old_items = db.query(PurchaseItem).filter_by(purchase_id=purchase_id).all()
-            # We must find the warehouse this purchase was received into.
-            # Easiest way: look at the InventoryMovement table
             mov = db.query(InventoryMovement).filter_by(source="PURCHASE", reference_id=purchase.invoice_number or f"PUR-{purchase.id}").first()
-            wh_id = mov.warehouse_id if mov else PurchaseService.get_default_warehouse(db, purchase.company_id)
+            wh_id = mov.warehouse_id if mov else (purchase.warehouse_id or PurchaseService.get_default_warehouse(db, purchase.company_id))
             
             for item in old_items:
                 InventoryEventEngine.process_event(
@@ -163,12 +166,12 @@ class PurchaseService:
                     company_id=purchase.company_id,
                     product_sku=item.product_sku,
                     warehouse_id=wh_id,
-                    quantity=item.qty,
+                    quantity=int(round(item.qty)),
                     event_type="REMOVE", # Reversing the previous ADD
                     source="PURCHASE_EDIT_REVERSE",
                     reference_id=purchase.invoice_number or f"PUR-{purchase.id}",
                     user_id=operator_id,
-                    metadata_payload={"operation": "EDIT_REVERSAL"}
+                    metadata_payload={"operation_id": f"REV_{purchase.id}_{item.id}_{edit_timestamp}"}
                 )
             
         # Update Purchase Header
@@ -182,6 +185,8 @@ class PurchaseService:
         purchase.vehicle_number = request.vehicle_number
         purchase.invoice_number = request.invoice_number if request.invoice_number else None
         purchase.notes = request.notes
+        if request.warehouse_id:
+            purchase.warehouse_id = request.warehouse_id
         
         old_total = float(purchase.total_amount or 0.0)
         
@@ -198,6 +203,7 @@ class PurchaseService:
                 product = db.query(Product).filter_by(sku=item_req.product_sku).first()
                 if not product:
                     new_product = Product(
+                        company_id=purchase.company_id,
                         sku=item_req.product_sku,
                         name=item_req.description,
                         hsn=item_req.hsn,
@@ -242,19 +248,20 @@ class PurchaseService:
         # Re-apply inventory if status is RECEIVED
         if purchase.status == "RECEIVED":
             mov = db.query(InventoryMovement).filter_by(source="PURCHASE", reference_id=purchase.invoice_number or f"PUR-{purchase.id}").first()
-            wh_id = request.warehouse_id or (mov.warehouse_id if mov else PurchaseService.get_default_warehouse(db, purchase.company_id))
+            wh_id = request.warehouse_id or purchase.warehouse_id or (mov.warehouse_id if mov else PurchaseService.get_default_warehouse(db, purchase.company_id))
+            purchase.warehouse_id = wh_id
             for p_item in new_items:
                 InventoryEventEngine.process_event(
                     db=db,
                     company_id=purchase.company_id,
                     product_sku=p_item.product_sku,
                     warehouse_id=wh_id,
-                    quantity=p_item.qty,
+                    quantity=int(round(p_item.qty)),
                     event_type="ADD", # Re-applying the ADD
                     source="PURCHASE",
                     reference_id=purchase.invoice_number or f"PUR-{purchase.id}",
                     user_id=operator_id,
-                    metadata_payload={"operation": "EDIT_REAPPLY"}
+                    metadata_payload={"operation_id": f"REAPPLY_{purchase.id}_{p_item.id}_{edit_timestamp}"}
                 )
             
             # Adjust vendor balance for the diff
@@ -295,7 +302,7 @@ class PurchaseService:
                  return {"synced": True, "purchase_id": purchase.id, "message": "Already received"}
             raise ValueError(f"Cannot receive purchase in {purchase.status} state")
 
-        warehouse_id = request.warehouse_id or PurchaseService.get_default_warehouse(db, purchase.company_id)
+        warehouse_id = request.warehouse_id or purchase.warehouse_id or PurchaseService.get_default_warehouse(db, purchase.company_id)
         if not warehouse_id:
             raise ValueError("Target warehouse must be provided or default configured")
             
@@ -304,6 +311,7 @@ class PurchaseService:
         if not wh:
             raise ValueError("Target warehouse does not belong to this company")
 
+        purchase.warehouse_id = warehouse_id
         movements = []
         
         for item in purchase.items:
@@ -337,7 +345,7 @@ class PurchaseService:
                 company_id=purchase.company_id,
                 product_sku=item.product_sku,
                 warehouse_id=warehouse_id,
-                quantity=item.qty,
+                quantity=int(round(item.qty)),
                 event_type="ADD",
                 source="PURCHASE",
                 reference_id=purchase.invoice_number or f"PUR-{purchase.id}",

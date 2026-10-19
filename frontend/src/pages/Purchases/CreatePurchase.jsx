@@ -63,7 +63,7 @@ export default function CreatePurchase() {
   });
 
   const { data: warehousesQuery = [] } = useQuery({
-    queryKey: ['warehouses'],
+    queryKey: ['warehouses', activeCompanyId],
     queryFn: async () => {
       const res = await api.get('/api/warehouses/');
       return res.data;
@@ -71,13 +71,14 @@ export default function CreatePurchase() {
   });
 
   useEffect(() => {
-    if (warehousesQuery.length > 0 && warehouses.length === 0) {
+    if (warehousesQuery.length > 0) {
       setWarehouses(warehousesQuery);
-      if (!warehouseId) {
-        setWarehouseId(warehousesQuery[0].id);
+      if (!warehouseId || !warehousesQuery.some(w => String(w.id) === String(warehouseId))) {
+        const defaultWh = warehousesQuery.find(w => w.name.toLowerCase().includes('central') || w.name.toLowerCase().includes('bkr')) || warehousesQuery[0];
+        setWarehouseId(defaultWh ? String(defaultWh.id) : String(warehousesQuery[0].id));
       }
     }
-  }, [warehousesQuery, warehouses, warehouseId]);
+  }, [warehousesQuery, activeCompanyId]);
 
   const handleVendorSelect = (value) => {
     setVendorName(value);
@@ -123,24 +124,36 @@ export default function CreatePurchase() {
   };
 
   const handleSaveDraft = async () => {
+    if (!vendorName.trim()) {
+      alert("Please select or enter a Vendor Name.");
+      return;
+    }
+    if (!warehouseId) {
+      alert("Please select a Receiving Warehouse.");
+      return;
+    }
+    if (items.length === 0 || !items.some(i => i.product_sku.trim() && parseFloat(i.qty) > 0)) {
+      alert("Please enter at least one line item with SKU and quantity.");
+      return;
+    }
     try {
       setLoading(true);
       const payload = {
         idempotency_key: draftIdempotency,
         company_id: activeCompanyId,
-        vendor_name: vendorName,
-        invoice_number: invoiceNumber || null,
+        vendor_name: vendorName.trim(),
+        invoice_number: invoiceNumber ? invoiceNumber.trim() : null,
         bill_date: billDate,
         payment_terms: paymentTerms || null,
         eway_bill: ewayBill || null,
         vehicle_number: vehicleNo || null,
-        items: items.map(i => ({
+        items: items.filter(i => i.product_sku.trim()).map(i => ({
           ...i,
           qty: parseFloat(i.qty || 0),
           unit_cost: parseFloat(i.unit_cost || 0),
           gst_pct: parseFloat(i.gst_pct || 0)
         })),
-        warehouse_id: warehouseId ? parseInt(warehouseId) : null
+        warehouse_id: parseInt(warehouseId)
       };
 
       const res = await PurchaseService.createDraft(payload);
@@ -158,25 +171,64 @@ export default function CreatePurchase() {
   };
 
   const handleReceiveAndPay = async () => {
-    if (!draftId) {
-      alert("Please save the bill as a draft first before receiving/paying.");
+    if (!vendorName.trim()) {
+      alert("Please select or enter a Vendor Name.");
       return;
     }
+    if (!warehouseId) {
+      alert("Please select a Receiving Warehouse.");
+      return;
+    }
+    if (items.length === 0 || !items.some(i => i.product_sku.trim() && parseFloat(i.qty) > 0)) {
+      alert("Please enter at least one line item with SKU and quantity.");
+      return;
+    }
+
     try {
       setLoading(true);
       
-      // Step 1: Receive Stock
-      const recvRes = await PurchaseService.receivePurchase(draftId, {
+      let currentDraftId = draftId;
+      if (!currentDraftId) {
+        const payload = {
+          idempotency_key: draftIdempotency,
+          company_id: activeCompanyId,
+          vendor_name: vendorName.trim(),
+          invoice_number: invoiceNumber ? invoiceNumber.trim() : null,
+          bill_date: billDate,
+          payment_terms: paymentTerms || null,
+          eway_bill: ewayBill || null,
+          vehicle_number: vehicleNo || null,
+          items: items.filter(i => i.product_sku.trim()).map(i => ({
+            ...i,
+            qty: parseFloat(i.qty || 0),
+            unit_cost: parseFloat(i.unit_cost || 0),
+            gst_pct: parseFloat(i.gst_pct || 0)
+          })),
+          warehouse_id: parseInt(warehouseId)
+        };
+
+        const res = await PurchaseService.createDraft(payload);
+        if (res.status === 'PENDING') {
+          alert('Saved to offline queue!');
+          return;
+        }
+        currentDraftId = res.id;
+        setDraftId(res.id);
+      }
+
+      // Step 1: Receive Stock exclusively into the selected warehouse
+      const recvRes = await PurchaseService.receivePurchase(currentDraftId, {
         idempotency_key: `recv-${draftIdempotency}`,
-        warehouse_id: warehouseId ? parseInt(warehouseId) : null
+        warehouse_id: parseInt(warehouseId)
       });
       
-      let msg = `Stock received! Added ${recvRes.movements} inventory records.`;
+      const targetWh = warehouses.find(w => String(w.id) === String(warehouseId));
+      let msg = `Stock received! Added ${recvRes.movements} items to ${targetWh ? targetWh.name : 'warehouse'}.`;
       
       // Step 2: Pay if amount entered
       const payAmount = parseFloat(amountPaid);
       if (!isNaN(payAmount) && payAmount > 0) {
-         await PurchaseService.recordPayment(draftId, {
+         await PurchaseService.recordPayment(currentDraftId, {
              amount: payAmount,
              method: paymentMethod,
              txn_ref: txnRef,
@@ -369,11 +421,11 @@ export default function CreatePurchase() {
           </div>
 
           <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
-            <button onClick={handleSaveDraft} disabled={loading} style={{ padding: '12px 24px', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-              {loading ? 'Processing...' : (draftId ? 'Draft Saved ✓' : '1. Save Bill')}
+            <button type="button" onClick={handleSaveDraft} disabled={loading} style={{ padding: '12px 24px', background: '#0284c7', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+              {loading ? 'Processing...' : (draftId ? 'Draft Saved ✓' : 'Save as Draft')}
             </button>
-            <button onClick={handleReceiveAndPay} disabled={loading || !draftId || isOffline} style={{ padding: '12px 24px', background: draftId ? '#28a745' : '#ccc', color: 'white', border: 'none', borderRadius: '4px', cursor: draftId ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}>
-              2. Complete Purchase (Receive & Pay)
+            <button type="button" onClick={handleReceiveAndPay} disabled={loading || isOffline} style={{ padding: '12px 24px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+              Complete Purchase (Receive Stock & Pay)
             </button>
           </div>
         </div>

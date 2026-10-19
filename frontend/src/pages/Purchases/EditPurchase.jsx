@@ -56,9 +56,11 @@ export default function EditPurchase() {
         setVehicleNo(purchase.vehicle_number || '');
         setNotes(purchase.notes || '');
         setPurchaseStatus(purchase.status || 'DRAFT');
-        setPaymentStatus(purchase.payment_status || 'UNPAID');
         setPaymentMethod(purchase.payment_method || 'Cash');
         setAmountPaid(purchase.amount_paid ? String(purchase.amount_paid) : '');
+        if (purchase.warehouse_id) {
+          setWarehouseId(String(purchase.warehouse_id));
+        }
         
         const mappedItems = (purchase.items || []).map(i => ({
           product_sku: i.product_sku || '',
@@ -108,7 +110,7 @@ export default function EditPurchase() {
   });
 
   const { data: warehousesQuery = [] } = useQuery({
-    queryKey: ['warehouses'],
+    queryKey: ['warehouses', activeCompanyId],
     queryFn: async () => {
       const res = await api.get('/api/warehouses/');
       return res.data;
@@ -116,13 +118,13 @@ export default function EditPurchase() {
   });
 
   useEffect(() => {
-    if (warehousesQuery.length > 0 && warehouses.length === 0) {
+    if (warehousesQuery.length > 0) {
       setWarehouses(warehousesQuery);
       if (!warehouseId) {
-        setWarehouseId(warehousesQuery[0].id);
+        setWarehouseId(String(warehousesQuery[0].id));
       }
     }
-  }, [warehousesQuery, warehouses, warehouseId]);
+  }, [warehousesQuery]);
 
   const handleVendorSelect = (value) => {
     setVendorName(value);
