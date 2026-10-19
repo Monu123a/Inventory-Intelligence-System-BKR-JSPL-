@@ -217,12 +217,12 @@ export default function InvoicePreviewPage() {
         {`
           @page {
             size: A4 portrait !important;
-            margin: 6mm 6mm !important;
+            margin: 5mm !important;
           }
           @media print {
             @page {
               size: A4 portrait !important;
-              margin: 6mm 6mm !important;
+              margin: 5mm !important;
             }
             html, body {
               margin: 0 !important;
