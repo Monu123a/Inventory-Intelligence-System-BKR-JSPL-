@@ -90,7 +90,7 @@ def update_vendor(
     return db_vendor
 
 from app.models.schema import Purchase
-from sqlalchemy import desc
+from sqlalchemy import desc, or_, func
 
 @router.get("/{vendor_id}/history")
 def get_vendor_history(
@@ -102,7 +102,10 @@ def get_vendor_history(
     if not db_vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
         
-    purchases = db.query(Purchase).filter(Purchase.vendor_name == db_vendor.name, Purchase.company_id == company_id).order_by(desc(Purchase.date)).all()
+    purchases = db.query(Purchase).filter(
+        or_(Purchase.vendor_id == db_vendor.id, Purchase.vendor_name == db_vendor.name),
+        Purchase.company_id == company_id
+    ).order_by(desc(func.coalesce(Purchase.date, Purchase.created_at))).all()
     
     return {
         "vendor": {
@@ -115,7 +118,7 @@ def get_vendor_history(
             {
                 "id": p.id,
                 "invoice_number": p.invoice_number,
-                "date": p.date.isoformat() if p.date else None,
+                "date": (p.date or p.created_at).isoformat() if (p.date or p.created_at) else None,
                 "total_amount": p.total_amount,
                 "status": p.status
             }

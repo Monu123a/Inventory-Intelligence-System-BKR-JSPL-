@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
+import { formatDate } from '../../utils/dateUtils';
 
 export default function VendorsPage() {
   const queryClient = useQueryClient();
@@ -208,7 +209,7 @@ export default function VendorsPage() {
                   <tbody>
                     {vendorHistory.purchases.map(p => (
                       <tr key={p.id} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '14px' }}>
-                        <td style={{ padding: '12px 16px', color: '#6b7280' }}>{new Date(p.date).toLocaleDateString()}</td>
+                        <td style={{ padding: '12px 16px', color: '#6b7280' }}>{formatDate(p.date)}</td>
                         <td style={{ padding: '12px 16px', fontWeight: '500' }}>{p.invoice_number || 'Draft'}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '500', background: p.status === 'COMPLETED' ? '#dcfce7' : '#fef9c3', color: p.status === 'COMPLETED' ? '#166534' : '#854d0e' }}>

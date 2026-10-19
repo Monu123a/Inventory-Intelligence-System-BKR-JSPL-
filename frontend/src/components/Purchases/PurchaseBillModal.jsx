@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal } from '../Modal/Modal';
 import { DataTable } from '../DataTable/DataTable';
+import { formatDate } from '../../utils/dateUtils';
 
 export const PurchaseBillModal = ({ isOpen, onClose, purchase }) => {
   if (!purchase) return null;
@@ -19,7 +20,7 @@ export const PurchaseBillModal = ({ isOpen, onClose, purchase }) => {
       <div style={{ marginBottom: '20px' }}>
         <p><strong>Vendor:</strong> {purchase.vendor_name}</p>
         <p><strong>Warehouse:</strong> <span style={{ fontWeight: 600, color: '#1d4ed8' }}>{purchase.warehouse_name || 'Central'}</span></p>
-        <p><strong>Date:</strong> {new Date(purchase.created_at).toLocaleDateString()}</p>
+        <p><strong>Date:</strong> {formatDate(purchase.date || purchase.created_at)}</p>
         <p><strong>Status:</strong> {purchase.status}</p>
         <p><strong>Payment Status:</strong> <span style={{ color: purchase.payment_status === 'UNPAID' ? 'red' : 'green' }}>{purchase.payment_status}</span></p>
         {purchase.payment_method && <p><strong>Method:</strong> {purchase.payment_method}</p>}

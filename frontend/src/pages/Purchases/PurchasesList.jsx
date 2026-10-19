@@ -8,6 +8,7 @@ import { DataTable } from '../../components/DataTable/DataTable';
 import { PurchaseBillModal } from '../../components/Purchases/PurchaseBillModal';
 import { RecordPaymentModal } from '../../components/Purchases/RecordPaymentModal';
 import { ReceiveStockModal } from '../../components/Purchases/ReceiveStockModal';
+import { formatDate } from '../../utils/dateUtils';
 
 export default function PurchasesList() {
   const navigate = useNavigate();
@@ -89,6 +90,7 @@ export default function PurchasesList() {
 
   const billColumns = [
     { name: 'Bill ID', key: 'id', render: (_, r) => r.invoice_number || `PUR-${r.id}` },
+    { name: 'Date', key: 'date', render: (_, r) => formatDate(r.date || r.created_at) },
     { name: 'Vendor', key: 'vendor_name' },
     { name: 'Warehouse', key: 'warehouse_name', render: (_, r) => (
       <span style={{ fontWeight: 500, color: '#1d4ed8' }}>{r.warehouse_name || 'Central'}</span>

@@ -167,7 +167,8 @@ def list_purchases(
             "amount_paid": p.amount_paid,
             "payment_status": p.payment_status,
             "payment_method": p.payment_method,
-            "created_at": p.created_at
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "date": (p.date or p.created_at).isoformat() if (p.date or p.created_at) else None
         })
     return res
 
