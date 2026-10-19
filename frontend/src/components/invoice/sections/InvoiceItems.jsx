@@ -81,7 +81,7 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
                     return name || sku;
                   })()}
                 </td>
-                <td className={styles.tdLeft}>{item.pack_grade || ''}</td>
+                <td className={styles.tdLeft}>{item.pack_grade || (item.sku === 'SERVICE CHARGE' || item.hsn_sac === '9987' ? 'SERV' : '')}</td>
                 <td className={styles.tdCenter}>{item.hsn_sac || item.hsn || ''}</td>
                 <td className={styles.tdRight}>{qty.toFixed(2)}</td>
                 <td className={styles.tdRight}>{item.loose || ''}</td>

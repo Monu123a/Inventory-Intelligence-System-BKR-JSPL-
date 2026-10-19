@@ -9,7 +9,7 @@ import styles from './POSPage.module.css';
 import ReceiptModal from './ReceiptModal';
 import InvoicePreviewModal from './InvoicePreviewModal';
 import useCompanyStore from '../../stores/useCompanyStore';
-import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiX, FiChevronDown, FiChevronUp, FiWifi, FiWifiOff, FiRefreshCw, FiSearch, FiTool, FiPlus, FiTrash2 } from 'react-icons/fi';
 
 // ---------------------------------------------------------------------------
 // GSTIN validation (basic format: 2-digit state + 10 PAN + 1 entity + 1 Z + 1 check)
@@ -118,6 +118,7 @@ const EditInvoicePage = () => {
   // Clean form state for editing
   const [searchTerm, setSearchTerm] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState(companyCode || 'GST');
+  const isServiceSeries = ['SERVICE', 'SERV'].includes((invoicePrefix || '').trim().toUpperCase());
   const [searchResults, setSearchResults] = useState([]);
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
@@ -126,6 +127,25 @@ const EditInvoicePage = () => {
   const [error, setError] = useState('');
   const [completedReceipt, setCompletedReceipt] = useState(null);
   const [previewReceiptData, setPreviewReceiptData] = useState(null);
+
+  const handleAddServiceCharge = async () => {
+    try {
+      const serviceItem = await posService.getServiceChargeItem();
+      if (!serviceItem) {
+        setError("Service Charge product not found. Please contact administrator.");
+        return;
+      }
+      addToCart({
+        ...serviceItem,
+        available_stock: 999999,
+        unit: 'SERV',
+        pack_grade: 'SERV',
+      });
+    } catch (err) {
+      console.error("Failed to load service charge item:", err);
+      setError("Failed to add Service Charge. " + (err.response?.data?.detail || err.message));
+    }
+  };
 
   // Offline queue state
   const [pendingCount, setPendingCount] = useState(0);
@@ -275,8 +295,9 @@ const EditInvoicePage = () => {
       return;
     }
 
-    const initialGst = product.default_gst_rate !== null ? product.default_gst_rate : 0;
-    const initialPrice = product.default_price || 0;
+    const isService = product.sku === 'SERVICE CHARGE' || (product.hsn_sac === '9987' && product.unit === 'SERV');
+    const initialGst = product.default_gst_rate !== null && product.default_gst_rate !== undefined ? product.default_gst_rate : 18;
+    const initialPrice = product.default_price || (isService ? 0 : 0);
     const taxable = initialPrice * 1;
     const gstAmount = taxable * (initialGst / 100);
 
@@ -285,7 +306,7 @@ const EditInvoicePage = () => {
       sku: product.sku,
       product_name: product.name,
       name: product.name,
-      hsn_sac: product.hsn_sac || product.hsn || '',
+      hsn_sac: product.hsn_sac || product.hsn || (isService ? '9987' : ''),
       gst_rate: initialGst,
       quantity: 1,
       selling_price: initialPrice,
@@ -297,8 +318,9 @@ const EditInvoicePage = () => {
       sgst: isInterState ? 0 : gstAmount / 2,
       igst: isInterState ? gstAmount : 0,
       line_total: taxable + gstAmount,
-      available_stock: product.available_stock,
-      unit: product.unit || 'PCS',
+      available_stock: isService ? 999999 : product.available_stock,
+      unit: product.unit || (isService ? 'SERV' : 'PCS'),
+      pack_grade: product.pack_grade || (isService ? 'SERV' : ''),
       gst_needs_confirmation: false,
     };
 
@@ -323,8 +345,8 @@ const EditInvoicePage = () => {
     }
     if (field === 'hsn_sac') item.hsn_sac = value;
 
-    // Validate stock
-    if (field === 'quantity' && Number(item.quantity) > item.available_stock) {
+    // Validate stock (skip for service items)
+    if (field === 'quantity' && item.sku !== 'SERVICE CHARGE' && Number(item.quantity) > item.available_stock) {
       item.quantity = item.available_stock;
       setError(`Cannot exceed available stock (${item.available_stock}) for ${item.sku}`);
       setTimeout(() => setError(''), 3000);
@@ -511,7 +533,8 @@ const EditInvoicePage = () => {
         cgst: Number(i.cgst) || 0,
         sgst: Number(i.sgst) || 0,
         igst: Number(i.igst) || 0,
-        unit: i.unit || 'PCS'
+        unit: i.unit || (i.sku === 'SERVICE CHARGE' ? 'SERV' : 'PCS'),
+        pack_grade: i.pack_grade || (i.sku === 'SERVICE CHARGE' || i.hsn_sac === '9987' ? 'SERV' : '')
       })),
       totals: {
         taxable_amount: totals.taxable,
@@ -529,6 +552,11 @@ const EditInvoicePage = () => {
     if (cart.length === 0) return;
     if (hasUnconfirmedGst) {
       setError("Please confirm the 0% GST rate for highlighted items.");
+      return;
+    }
+    const hasServiceCharge = cart.some(i => i.sku === 'SERVICE CHARGE');
+    if (hasServiceCharge && !isServiceSeries) {
+      setError("SERVICE CHARGE can only be billed under SERVICE series (e.g. SERV- or SERVICE-). Please change Bill Series or remove the service charge.");
       return;
     }
     if (customerInfo.mobile && customerInfo.mobile.length !== 10) {
@@ -605,7 +633,8 @@ const EditInvoicePage = () => {
         sku: item.sku,
         product_name: item.product_name || item.name,
         hsn_sac: item.hsn_sac || null,
-        unit: item.unit || null,
+        unit: item.unit || (item.sku === 'SERVICE CHARGE' ? 'SERV' : null),
+        pack_grade: item.pack_grade || (item.sku === 'SERVICE CHARGE' ? 'SERV' : null),
         quantity: Number(item.quantity) || 1,
         selling_price: Number(item.selling_price) || 0,
         discount: Number(item.discount) || 0,
@@ -682,6 +711,7 @@ const EditInvoicePage = () => {
         });
 
         const mappedCart = (sale.items || []).map(item => {
+          const isService = item.sku === 'SERVICE CHARGE' || item.hsn_sac === '9987';
           const qty = item.quantity || 1;
           const rate = item.rate !== undefined ? item.rate : (item.selling_price || 0);
           const discount = item.discount || 0;
@@ -699,7 +729,7 @@ const EditInvoicePage = () => {
             sku: item.sku,
             product_name: item.product_name || item.name,
             name: item.product_name || item.name,
-            hsn_sac: item.hsn_sac || '',
+            hsn_sac: item.hsn_sac || (isService ? '9987' : ''),
             selling_price: rate,
             gst_rate: gst,
             quantity: qty,
@@ -710,7 +740,9 @@ const EditInvoicePage = () => {
             sgst: sgst,
             igst: igst,
             line_total: lineTotal,
-            unit: item.unit || 'PCS'
+            available_stock: isService ? 999999 : (item.available_stock || 999999),
+            unit: item.unit || (isService ? 'SERV' : 'PCS'),
+            pack_grade: item.pack_grade || (isService ? 'SERV' : '')
           };
         });
 
@@ -921,6 +953,26 @@ const EditInvoicePage = () => {
             </div>
           </CollapsibleSection>
 
+          {/* Service Series Banner & Action */}
+          {isServiceSeries && (
+            <div className={styles.serviceBanner} style={{ marginTop: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className={styles.serviceBannerIcon}>🔧</span>
+                <span>
+                  <strong>Service Series Active:</strong> You can charge labour/repair fees using the <strong>+ Add Service Charge</strong> button. Service charges do not deduct physical warehouse stock.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddServiceCharge}
+                className={styles.addServiceChargeBtn}
+                title="Add Service Charge item (SERV- / SERVICE series only)"
+              >
+                <FiTool size={14} /> + Add Service Charge
+              </button>
+            </div>
+          )}
+
           {/* Prominent Search Bar */}
           <div className={styles.searchSection}>
             <div className={styles.searchBarWrapper}>
@@ -984,7 +1036,12 @@ const EditInvoicePage = () => {
                 {(cart || []).map((item, index) => (
                   <tr key={`${item.sku}-${index}`}>
                     <td>
-                      <div className={styles.itemName}>{item.sku}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className={styles.itemName}>{item.sku}</span>
+                        {item.sku === 'SERVICE CHARGE' && (
+                          <span className={styles.serviceBadge}>SERVICE</span>
+                        )}
+                      </div>
                       <div className={styles.itemMeta}>{item.product_name || item.name}</div>
                     </td>
                     <td className={styles.hsnCell}>
@@ -1154,7 +1211,7 @@ const EditInvoicePage = () => {
             <label>Invoice Series (Prefix)</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <select 
-                value={['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                value={['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
                 onChange={e => {
                   if (e.target.value !== 'CUSTOM') {
                     setInvoicePrefix(e.target.value);
@@ -1168,14 +1225,15 @@ const EditInvoicePage = () => {
                 <option value="GST">GST-</option>
                 <option value="JGST">JGST-</option>
                 <option value="SERVICE">SERVICE-</option>
+                <option value="SERV">SERV-</option>
                 <option value="BKR">BKR-</option>
                 <option value="JSPL">JSPL-</option>
-                {companyCode && !['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL'].includes(companyCode) && (
+                {companyCode && !['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL'].includes(companyCode) && (
                   <option value={companyCode}>{companyCode}-</option>
                 )}
                 <option value="CUSTOM">Custom</option>
               </select>
-              {!['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) && (
+              {!['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) && (
                 <input 
                   type="text" 
                   value={invoicePrefix} 

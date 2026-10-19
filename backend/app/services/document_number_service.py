@@ -52,7 +52,7 @@ class DocumentNumberService:
     @staticmethod
     def _format_sale_number(prefix: str, num: int, digits_len: int = 0) -> str:
         pref = prefix.strip().upper()
-        if pref in ['SERVICE', 'BKR', 'JSPL', 'GST']:
+        if pref in ['SERVICE', 'SERV', 'BKR', 'JSPL', 'GST', 'JGST']:
             pad = 3
             return f"{pref}-{num:0{pad}d}" if num < (10 ** pad) else f"{pref}-{num}"
         elif digits_len >= 3:

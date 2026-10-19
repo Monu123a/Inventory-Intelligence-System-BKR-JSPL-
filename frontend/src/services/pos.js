@@ -25,6 +25,11 @@ export const posService = {
     return normalizeResponse(res.data);
   },
 
+  getServiceChargeItem: async () => {
+    const res = await api.get('/api/pos/service-charge-item');
+    return normalizeResponse(res.data);
+  },
+
   getSalesHistory: async (params) => {
     const res = await api.get('/api/pos/history', { params });
     return normalizeResponse(res.data);

@@ -217,14 +217,54 @@ def search_products(q: str = "", warehouse_id: Optional[int] = None, company_id:
             "sku": r.sku,
             "name": r.name,
             "hsn_sac": r.hsn,
-            "unit": r.unit,
+            "unit": r.unit or ("SERV" if (r.category in ["SERV", "SERVICE"] or r.sku == "SERVICE CHARGE") else "PCS"),
             "brand": r.brand,
             "category": r.category,
             "default_price": r.default_price,
             "default_gst_rate": r.default_gst_rate,
-            "available_stock": r.available_stock
+            "available_stock": 999999 if (r.category in ["SERV", "SERVICE"] or r.sku == "SERVICE CHARGE") else r.available_stock
         } for r in results
     ]
+
+@router.get("/service-charge-item")
+def get_service_charge_item(company_id: int = Depends(get_bkr_company_id), db: Session = Depends(get_db)):
+    """Retrieve or auto-create the SERVICE CHARGE item for the company."""
+    product = db.query(Product).filter(
+        Product.company_id == company_id,
+        Product.sku == "SERVICE CHARGE"
+    ).first()
+    if not product:
+        product = Product(
+            company_id=company_id,
+            sku="SERVICE CHARGE",
+            name="SERVICE CHARGE",
+            category="SERV",
+            brand="SERVICE",
+            hsn="9987",
+            hsn_code="9987",
+            default_gst_rate=18.0,
+            unit="SERV",
+            status="Active",
+            item_rate=0.0
+        )
+        db.add(product)
+        db.commit()
+        db.refresh(product)
+    
+    return {
+        "id": product.id,
+        "sku": product.sku,
+        "name": product.name,
+        "product_name": product.name,
+        "hsn_sac": product.hsn or "9987",
+        "unit": product.unit or "SERV",
+        "pack_grade": "SERV",
+        "brand": product.brand or "SERVICE",
+        "category": "SERV",
+        "default_price": product.item_rate or 0.0,
+        "default_gst_rate": 18.0,
+        "available_stock": 999999
+    }
 
 @router.post("/sale")
 def complete_sale(
@@ -237,6 +277,15 @@ def complete_sale(
 ):
     if not payload.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
+
+    invoice_pref = (payload.invoice_prefix or "").strip().upper()
+    for it in payload.items:
+        if it.sku == "SERVICE CHARGE" or it.hsn_sac == "9987":
+            if invoice_pref not in ["SERVICE", "SERV"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Service Charge can only be charged for Service series bills (SERVICE- or SERV-)."
+                )
 
     if payload.idempotency_key:
         existing_sale = db.query(Sale).filter(Sale.idempotency_key == payload.idempotency_key, Sale.company_id == company_id).first()
@@ -300,7 +349,7 @@ def complete_sale(
             raw_no = payload.custom_invoice_number.strip()
             if prefix and not raw_no.upper().startswith(f"{prefix}-") and not raw_no.upper().startswith(f"{prefix}/"):
                 # Avoid double prefixing if raw_no already starts with a known prefix
-                if '-' in raw_no and raw_no.split('-')[0].upper() in ['GST', 'JGST', 'SERVICE', 'BKR', 'JSPL']:
+                if '-' in raw_no and raw_no.split('-')[0].upper() in ['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL']:
                     invoice_number = raw_no
                 else:
                     invoice_number = f"{prefix}-{raw_no}"
@@ -461,8 +510,13 @@ def complete_sale(
             
             # 5. Inventory Deduction via Event Engine
             # Use the verified DB product SKU, not the client-supplied SKU
-            # Deduct from Inventory using Event Engine (if not skipped)
-            if not payload.skip_inventory_update and product:
+            # Deduct from Inventory using Event Engine (if not skipped and not a service item)
+            is_service_item = (
+                (product and (product.category in ['SERV', 'SERVICE'] or product.sku == 'SERVICE CHARGE' or product.hsn == '9987'))
+                or item.sku == 'SERVICE CHARGE'
+                or item.hsn_sac == '9987'
+            )
+            if not payload.skip_inventory_update and product and not is_service_item:
                 wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
                 if len(wh_ids) > 1:
                     qty_needed = item.quantity
@@ -803,6 +857,8 @@ def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
         pack_grade = ""
         if i.product:
             pack_grade = i.product.category or i.product.brand or ""
+        if i.sku == "SERVICE CHARGE" or i.hsn_sac == "9987" or (i.product and i.product.category in ["SERV", "SERVICE"]):
+            pack_grade = "SERV"
 
         dto_items.append({
             "id": i.id,
@@ -1419,6 +1475,15 @@ def update_sale(
             dest_warehouse_id = dw.id
 
     # 3. Item Delta Calculation
+    invoice_pref = (payload.invoice_prefix or "").strip().upper()
+    for it in (payload.items or []):
+        if it.sku == "SERVICE CHARGE" or it.hsn_sac == "9987":
+            if invoice_pref not in ["SERVICE", "SERV"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Service Charge can only be charged for Service series bills (SERVICE- or SERV-)."
+                )
+
     old_items = {item.id: item for item in sale.items}
     new_items_payload = payload.items or []
     
@@ -1477,7 +1542,12 @@ def update_sale(
             db.add(new_sale_item)
             
         # Apply Inventory Delta
-        if delta_qty != 0 and not payload.skip_inventory_update:
+        is_service_item = (
+            (product and (product.category in ['SERV', 'SERVICE'] or product.sku == 'SERVICE CHARGE' or product.hsn == '9987'))
+            or req_item.sku == 'SERVICE CHARGE'
+            or req_item.hsn_sac == '9987'
+        )
+        if delta_qty != 0 and not payload.skip_inventory_update and not is_service_item:
             wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
             if len(wh_ids) > 1 and delta_qty > 0:
                 central_inv = db.query(Inventory).filter(
