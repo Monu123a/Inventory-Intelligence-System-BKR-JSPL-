@@ -105,6 +105,7 @@ const POSPage = () => {
           hsn_sac: item.hsn_sac || '',
           quantity: qty,
           selling_price: rate,
+          discount_percent: 0,
           discount: discount,
           gst_rate: gst,
           taxable_amount: taxable,
@@ -130,7 +131,21 @@ const POSPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState(savedState.invoicePrefix || companyCode || 'GST');
   const [searchResults, setSearchResults] = useState([]);
-  const [cart, setCart] = useState(Array.isArray(savedState.cart) ? savedState.cart.filter(i => i && typeof i === 'object') : []);
+  const [cart, setCart] = useState(() => {
+    const rawCart = Array.isArray(savedState.cart) ? savedState.cart.filter(i => i && typeof i === 'object') : [];
+    return rawCart.map(item => {
+      const gross = (Number(item.quantity) || 0) * (Number(item.selling_price) || 0);
+      const disc = Number(item.discount) || 0;
+      const pct = item.discount_percent !== undefined
+        ? item.discount_percent
+        : (gross > 0 && disc > 0 ? parseFloat(((disc / gross) * 100).toFixed(2)) : 0);
+      return {
+        ...item,
+        discount: disc,
+        discount_percent: pct,
+      };
+    });
+  });
   const [paymentMethod, setPaymentMethod] = useState(savedState.paymentMethod || 'Cash');
   const [paymentReference, setPaymentReference] = useState(savedState.paymentReference || '');
   const [paymentRemarks, setPaymentRemarks] = useState(savedState.paymentRemarks || '');
@@ -313,6 +328,7 @@ const POSPage = () => {
       available_stock: product.available_stock,
       quantity: 1,
       selling_price: initialPrice,
+      discount_percent: 0,
       discount: 0,
       gst_rate: initialGst,
       gst_needs_confirmation: product.default_gst_rate === null,
@@ -336,30 +352,63 @@ const POSPage = () => {
     const newCart = [...cart];
     const item = { ...newCart[index] };
 
-    if (field === 'quantity') item.quantity = parseInt(value) || 0;
-    if (field === 'selling_price') item.selling_price = parseFloat(value) || 0;
-    if (field === 'discount') item.discount = parseFloat(value) || 0;
+    if (field === 'quantity') item.quantity = value === '' ? '' : (parseInt(value) || 0);
+    if (field === 'selling_price') item.selling_price = value === '' ? '' : (parseFloat(value) || 0);
     if (field === 'gst_rate') {
-      item.gst_rate = parseFloat(value) || 0;
+      item.gst_rate = value === '' ? '' : (parseFloat(value) || 0);
       item.gst_needs_confirmation = false;
     }
     if (field === 'hsn_sac') item.hsn_sac = value;
 
     // Validate stock
-    if (field === 'quantity' && item.quantity > item.available_stock) {
+    if (field === 'quantity' && Number(item.quantity) > item.available_stock) {
       item.quantity = item.available_stock;
       setError(`Cannot exceed available stock (${item.available_stock}) for ${item.sku}`);
       setTimeout(() => setError(''), 3000);
     }
 
-    // Recalculate: taxable = (price * qty) - discount
-    const grossAmount = item.quantity * item.selling_price;
-    item.taxable_amount = Math.max(0, grossAmount - item.discount);
-    const gstAmount = item.taxable_amount * (item.gst_rate / 100);
-    item.cgst = isInterState ? 0 : gstAmount / 2;
-    item.sgst = isInterState ? 0 : gstAmount / 2;
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.selling_price) || 0;
+    const grossAmount = qty * price;
+
+    if (field === 'discount_percent') {
+      if (value === '') {
+        item.discount_percent = '';
+        item.discount = 0;
+      } else {
+        const pct = Math.min(100, Math.max(0, parseFloat(value) || 0));
+        item.discount_percent = pct;
+        item.discount = parseFloat(((grossAmount * pct) / 100).toFixed(2));
+      }
+    } else if (field === 'discount') {
+      if (value === '') {
+        item.discount = '';
+        item.discount_percent = 0;
+      } else {
+        const disc = Math.min(grossAmount, Math.max(0, parseFloat(value) || 0));
+        item.discount = disc;
+        item.discount_percent = grossAmount > 0 ? parseFloat(((disc / grossAmount) * 100).toFixed(2)) : 0;
+      }
+    } else if (field === 'quantity' || field === 'selling_price') {
+      if (item.discount_percent !== '' && Number(item.discount_percent) > 0) {
+        const pct = Math.min(100, Number(item.discount_percent));
+        item.discount = parseFloat(((grossAmount * pct) / 100).toFixed(2));
+      } else if (Number(item.discount) > grossAmount) {
+        item.discount = grossAmount;
+        item.discount_percent = grossAmount > 0 ? 100 : 0;
+      } else if (grossAmount > 0 && Number(item.discount) > 0) {
+        item.discount_percent = parseFloat(((Number(item.discount) / grossAmount) * 100).toFixed(2));
+      }
+    }
+
+    const discAmt = Number(item.discount) || 0;
+    item.taxable_amount = Math.max(0, parseFloat((grossAmount - discAmt).toFixed(2)));
+    const gstRate = Number(item.gst_rate) || 0;
+    const gstAmount = parseFloat((item.taxable_amount * (gstRate / 100)).toFixed(2));
+    item.cgst = isInterState ? 0 : parseFloat((gstAmount / 2).toFixed(2));
+    item.sgst = isInterState ? 0 : parseFloat((gstAmount / 2).toFixed(2));
     item.igst = isInterState ? gstAmount : 0;
-    item.line_total = item.taxable_amount + gstAmount;
+    item.line_total = parseFloat((item.taxable_amount + gstAmount).toFixed(2));
 
     newCart[index] = item;
     setCart(newCart);
@@ -369,16 +418,20 @@ const POSPage = () => {
   useEffect(() => {
     if (cart.length === 0) return;
     setCart(prev => prev.map(item => {
-      const grossAmount = item.quantity * item.selling_price;
-      const taxable = Math.max(0, grossAmount - item.discount);
-      const gstAmount = taxable * (item.gst_rate / 100);
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.selling_price) || 0;
+      const grossAmount = qty * price;
+      const discAmt = Number(item.discount) || 0;
+      const taxable = Math.max(0, parseFloat((grossAmount - discAmt).toFixed(2)));
+      const gstRate = Number(item.gst_rate) || 0;
+      const gstAmount = parseFloat((taxable * (gstRate / 100)).toFixed(2));
       return {
         ...item,
         taxable_amount: taxable,
-        cgst: isInterState ? 0 : gstAmount / 2,
-        sgst: isInterState ? 0 : gstAmount / 2,
+        cgst: isInterState ? 0 : parseFloat((gstAmount / 2).toFixed(2)),
+        sgst: isInterState ? 0 : parseFloat((gstAmount / 2).toFixed(2)),
         igst: isInterState ? gstAmount : 0,
-        line_total: taxable + gstAmount,
+        line_total: parseFloat((taxable + gstAmount).toFixed(2)),
       };
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -388,12 +441,12 @@ const POSPage = () => {
   // Totals (extended with IGST)
   // ---------------------------------------------------------------------------
   const totals = cart.reduce((acc, item) => {
-    acc.taxable += item.taxable_amount;
-    acc.cgst += item.cgst;
-    acc.sgst += item.sgst;
-    acc.igst += item.igst;
-    acc.tax += item.cgst + item.sgst + item.igst;
-    acc.grand += item.line_total;
+    acc.taxable += item.taxable_amount || 0;
+    acc.cgst += item.cgst || 0;
+    acc.sgst += item.sgst || 0;
+    acc.igst += item.igst || 0;
+    acc.tax += (item.cgst || 0) + (item.sgst || 0) + (item.igst || 0);
+    acc.grand += item.line_total || 0;
     return acc;
   }, { taxable: 0, cgst: 0, sgst: 0, igst: 0, tax: 0, grand: 0 });
 
@@ -509,14 +562,14 @@ const POSPage = () => {
         sku: i.product_sku || i.sku || i.name,
         product_name: i.product_name || i.name,
         hsn_sac: i.hsn_sac,
-        quantity: i.quantity,
-        rate: i.selling_price,
-        discount: i.discount || 0,
-        taxable_value: i.taxable_amount,
-        gst_rate: i.gst_rate,
-        cgst: i.cgst,
-        sgst: i.sgst,
-        igst: i.igst,
+        quantity: Number(i.quantity) || 1,
+        rate: Number(i.selling_price) || 0,
+        discount: Number(i.discount) || 0,
+        taxable_value: Number(i.taxable_amount) || 0,
+        gst_rate: Number(i.gst_rate) || 0,
+        cgst: Number(i.cgst) || 0,
+        sgst: Number(i.sgst) || 0,
+        igst: Number(i.igst) || 0,
         unit: i.unit || 'PCS'
       })),
       totals: {
@@ -628,15 +681,15 @@ const POSPage = () => {
         product_name: item.product_name || item.name,
         hsn_sac: item.hsn_sac || null,
         unit: item.unit || null,
-        quantity: item.quantity,
-        selling_price: item.selling_price,
-        discount: item.discount,
-        gst_rate: item.gst_rate,
-        taxable_amount: item.taxable_amount,
-        cgst: item.cgst,
-        sgst: item.sgst,
-        igst: item.igst,
-        line_total: item.line_total,
+        quantity: Number(item.quantity) || 1,
+        selling_price: Number(item.selling_price) || 0,
+        discount: Number(item.discount) || 0,
+        gst_rate: Number(item.gst_rate) || 0,
+        taxable_amount: Number(item.taxable_amount) || 0,
+        cgst: Number(item.cgst) || 0,
+        sgst: Number(item.sgst) || 0,
+        igst: Number(item.igst) || 0,
+        line_total: Number(item.line_total) || 0,
       })),
     };
 
@@ -1135,17 +1188,18 @@ const POSPage = () => {
               <table className={styles.cartTable}>
                 <thead>
                   <tr>
-                    <th style={{ minWidth: '160px' }}>Product Details</th>
-                    <th style={{ width: '70px', textAlign: 'center' }}>HSN</th>
-                    <th style={{ width: '50px', textAlign: 'center' }}>Qty</th>
-                    <th style={{ width: '40px', textAlign: 'center' }}>Unit</th>
-                    <th style={{ width: '80px', textAlign: 'right' }}>Rate (₹)</th>
-                    <th style={{ width: '60px', textAlign: 'right' }}>Disc. (₹)</th>
-                    <th style={{ width: '55px', textAlign: 'center' }}>GST %</th>
-                    <th style={{ width: '75px', textAlign: 'right' }}>Taxable</th>
-                    <th style={{ width: '70px', textAlign: 'right' }}>{isInterState ? 'IGST (₹)' : 'Taxes (₹)'}</th>
-                    <th style={{ width: '80px', textAlign: 'right' }}>Total (₹)</th>
-                    <th style={{ width: '32px', textAlign: 'center' }}></th>
+                    <th style={{ minWidth: '150px' }}>Product Details</th>
+                    <th style={{ width: '65px', textAlign: 'center' }}>HSN</th>
+                    <th style={{ width: '45px', textAlign: 'center' }}>Qty</th>
+                    <th style={{ width: '35px', textAlign: 'center' }}>Unit</th>
+                    <th style={{ width: '75px', textAlign: 'right' }}>Rate (₹)</th>
+                    <th style={{ width: '55px', textAlign: 'right' }}>Disc %</th>
+                    <th style={{ width: '65px', textAlign: 'right' }}>Disc (₹)</th>
+                    <th style={{ width: '50px', textAlign: 'center' }}>GST %</th>
+                    <th style={{ width: '70px', textAlign: 'right' }}>Taxable</th>
+                    <th style={{ width: '65px', textAlign: 'right' }}>{isInterState ? 'IGST (₹)' : 'Taxes (₹)'}</th>
+                    <th style={{ width: '75px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ width: '30px', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1188,11 +1242,27 @@ const POSPage = () => {
                         <td style={{ textAlign: 'right' }}>
                           <input
                             type="number"
+                            className={`${styles.tableInput} ${styles.discPctInput}`}
+                            value={item.discount_percent ?? ''}
+                            onChange={(e) => updateCartItem(index, 'discount_percent', e.target.value)}
+                            placeholder="0"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            title="Discount %"
+                          />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <input
+                            type="number"
                             className={`${styles.tableInput} ${styles.discInput}`}
-                            value={item.discount}
+                            value={item.discount ?? ''}
                             onChange={(e) => updateCartItem(index, 'discount', e.target.value)}
+                            placeholder="0"
                             step="0.01"
                             min="0"
+                            max={(Number(item.quantity) || 0) * (Number(item.selling_price) || 0)}
+                            title="Discount Amount (₹)"
                           />
                         </td>
                         <td style={{ textAlign: 'center' }}>
@@ -1217,7 +1287,7 @@ const POSPage = () => {
                   })}
                   {cart.length === 0 && (
                     <tr>
-                      <td colSpan={11}>
+                      <td colSpan={12}>
                         <div className={styles.emptyCart}>
                           <FiShoppingBag size={40} style={{ opacity: 0.4 }} />
                           <div className={styles.emptyCartTitle}>No products added yet</div>

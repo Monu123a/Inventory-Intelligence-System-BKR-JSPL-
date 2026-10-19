@@ -484,8 +484,14 @@
   font-weight: 500;
 }
 
+.discPctInput {
+  width: 50px;
+  text-align: right;
+  font-weight: 500;
+}
+
 .discInput {
-  width: 55px;
+  width: 60px;
   text-align: right;
 }
 
