@@ -32,7 +32,7 @@ export function downloadInvoicePdf(invoiceRef, invoiceNumber) {
         <title>Invoice_${invoiceNumber || 'Download'}</title>
         ${styleTags}
         <style>
-          @page { size: A4 portrait !important; margin: 4mm !important; }
+          @page { size: A4 portrait !important; margin: 5mm !important; }
           html, body { 
             margin: 0 !important; 
             padding: 0 !important; 
@@ -42,7 +42,7 @@ export function downloadInvoicePdf(invoiceRef, invoiceNumber) {
             print-color-adjust: exact !important; 
           }
           @media print {
-            @page { size: A4 portrait !important; margin: 4mm !important; }
+            @page { size: A4 portrait !important; margin: 5mm !important; }
             body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           }
         </style>
