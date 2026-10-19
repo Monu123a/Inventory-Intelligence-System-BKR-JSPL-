@@ -24,19 +24,19 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
             <th className={styles.thLoose}>LOOSE</th>
             <th className={styles.thRate}>RATE</th>
             <th className={styles.thTD}>TD</th>
-            <th className={styles.thCD}>C.D(%)</th>
+            <th className={styles.thCD}>C.D%</th>
             <th className={styles.thTax}>TAX</th>
             {isInterState ? (
               <>
-                <th className={styles.thGstRate}>IGST(%)</th>
-                <th className={styles.thGstAmt}>IGST AMT</th>
+                <th className={styles.thIgstRate}>IGST%</th>
+                <th className={styles.thIgstAmt}>IGST AMT</th>
               </>
             ) : (
               <>
-                <th className={styles.thGstRate}>CGST(%)</th>
+                <th className={styles.thGstRate}>CGST%</th>
                 <th className={styles.thGstAmt}>CGST AMT</th>
                 <th className={styles.thGstAmt}>SGST AMT</th>
-                <th className={styles.thGstRate}>SGST(%)</th>
+                <th className={styles.thGstRate}>SGST%</th>
               </>
             )}
             <th className={styles.thAmount}>AMOUNT</th>

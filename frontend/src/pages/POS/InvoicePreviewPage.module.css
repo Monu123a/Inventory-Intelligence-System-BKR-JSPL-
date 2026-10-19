@@ -127,7 +127,7 @@
   border: 1px solid var(--color-border, #e5e7eb);
   padding: 16px;
   width: 100%;
-  max-width: 297mm;
+  max-width: 210mm;
   min-height: auto;
   box-sizing: border-box;
 }

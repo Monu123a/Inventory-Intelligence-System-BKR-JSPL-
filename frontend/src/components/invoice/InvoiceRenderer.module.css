@@ -1,13 +1,13 @@
 .invoiceWrapper {
   background: #ffffff;
   padding: 0;
-  max-width: 297mm;
+  max-width: 210mm;
   width: 100%;
   margin: 0 auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   font-family: "Courier New", Courier, monospace, ui-monospace;
-  font-size: 9.5px;
-  line-height: 1.3;
+  font-size: 8.5px;
+  line-height: 1.25;
   color: #000000;
   position: relative;
   box-sizing: border-box;
@@ -18,7 +18,7 @@
 }
 
 .invoiceContent {
-  padding: 6px 8px;
+  padding: 4px 6px;
   display: flex;
   flex-direction: column;
   border: 1px solid #000000;
@@ -286,7 +286,7 @@
   table-layout: fixed;
   border-collapse: collapse;
   border-bottom: 1px solid #000000;
-  font-size: 8.5px;
+  font-size: 7.5px;
   font-family: "Courier New", Courier, monospace, ui-monospace;
   box-sizing: border-box;
 }
@@ -294,8 +294,8 @@
 .halteItemsTable th {
   border-bottom: 1px solid #000000;
   border-right: 1px solid #000000;
-  padding: 2.5px 1.5px;
-  font-size: 8px;
+  padding: 2px 1px;
+  font-size: 7.2px;
   font-weight: 700;
   background: #ffffff;
   text-align: center;
@@ -311,8 +311,8 @@
 
 .halteItemsTable td {
   border-right: 1px solid #000000;
-  padding: 2px 2px;
-  font-size: 8.5px;
+  padding: 2px 1.5px;
+  font-size: 7.5px;
   vertical-align: top;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -324,20 +324,22 @@
   border-right: none;
 }
 
-/* Exact Column Percentages summing to 100% */
+/* Exact Column Percentages summing to 100% in Portrait */
 .thSN { width: 3%; text-align: center; }
-.thItemName { width: 24.5%; text-align: left; }
-.thPackGrade { width: 7%; text-align: left; }
-.thHSN { width: 7.5%; text-align: center; }
+.thItemName { width: 24%; text-align: left; }
+.thPackGrade { width: 6.5%; text-align: left; }
+.thHSN { width: 6.5%; text-align: center; }
 .thQty { width: 5%; text-align: right; }
-.thLoose { width: 3.5%; text-align: right; }
+.thLoose { width: 3%; text-align: right; }
 .thRate { width: 7%; text-align: right; }
 .thTD { width: 3%; text-align: right; }
-.thCD { width: 5%; text-align: right; }
-.thTax { width: 6%; text-align: center; }
-.thGstRate { width: 4%; text-align: right; }
+.thCD { width: 4.5%; text-align: right; }
+.thTax { width: 5.5%; text-align: center; }
+.thGstRate { width: 4.5%; text-align: right; }
 .thGstAmt { width: 6.5%; text-align: right; }
-.thAmount { width: 7.5%; text-align: right; }
+.thIgstRate { width: 9%; text-align: right; }
+.thIgstAmt { width: 13%; text-align: right; }
+.thAmount { width: 10%; text-align: right; }
 
 .tdCenter { text-align: center; }
 .tdLeft { text-align: left; white-space: normal; word-break: break-word; }
@@ -563,7 +565,7 @@
 /* Print Styles */
 @media print {
   @page {
-    size: landscape;
+    size: portrait;
     margin: 4mm;
   }
   
