@@ -1,13 +1,13 @@
 .invoiceWrapper {
   background: #ffffff;
   padding: 0;
-  max-width: 200mm;
+  max-width: 198mm;
   width: 100%;
   margin: 0 auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   font-family: "Courier New", Courier, monospace, ui-monospace;
-  font-size: 8.5px;
-  line-height: 1.25;
+  font-size: 8.8px;
+  line-height: 1.3;
   color: #000000;
   position: relative;
   box-sizing: border-box;
@@ -18,14 +18,15 @@
 }
 
 .invoiceContent {
-  padding: 4px 6px;
+  padding: 5px 8px;
   display: flex;
   flex-direction: column;
-  border: 1px solid #000000;
+  border: 1.5px solid #000000;
   background: #ffffff;
   box-sizing: border-box;
   page-break-inside: avoid;
   break-inside: avoid;
+  min-height: 270mm;
 }
 
 /* Header Section */
@@ -277,12 +278,17 @@
 /* Items Table */
 .itemsTableWrapper {
   width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  min-height: 50mm;
 }
 
 .halteItemsTable {
   width: 100%;
+  height: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   border-bottom: 1px solid #000000;
@@ -291,11 +297,15 @@
   box-sizing: border-box;
 }
 
+.halteItemsTable tbody {
+  height: 100%;
+}
+
 .halteItemsTable th {
   border-bottom: 1px solid #000000;
   border-right: 1px solid #000000;
-  padding: 3px 1px;
-  font-size: 7.8px;
+  padding: 3.5px 1px;
+  font-size: 8px;
   font-weight: 700;
   background: #ffffff;
   text-align: center;
@@ -311,8 +321,8 @@
 
 .halteItemsTable td {
   border-right: 1px solid #000000;
-  padding: 2.5px 1.5px;
-  font-size: 8px;
+  padding: 3px 1.5px;
+  font-size: 8.2px;
   vertical-align: top;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -345,14 +355,18 @@
 .tdLeft { text-align: left; white-space: normal; word-break: break-word; }
 .tdRight { text-align: right; }
 
+.itemRow td {
+  height: 20px;
+}
+
 .fillerRow td {
-  height: 16px;
+  height: auto;
   padding: 0;
 }
 
 /* Subtotals & Summary Section */
 .summaryContainerModern {
-  margin-top: 0;
+  margin-top: auto;
   color: #000000;
   font-family: "Courier New", Courier, monospace, ui-monospace;
   box-sizing: border-box;
@@ -567,7 +581,7 @@
 @media print {
   @page {
     size: A4 portrait !important;
-    margin: 5mm !important;
+    margin: 6mm 6mm !important;
   }
   
   html, body {
@@ -591,11 +605,28 @@
   }
   
   .invoiceContent {
-    padding: 4px 6px !important;
-    border: 1px solid #000000 !important;
+    padding: 5px 8px !important;
+    border: 1.5px solid #000000 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     page-break-after: avoid !important;
+    min-height: 275mm !important;
+    height: 275mm !important;
+    box-sizing: border-box !important;
+  }
+
+  .itemsTableWrapper {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .halteItemsTable {
+    height: 100% !important;
+  }
+
+  .summaryContainerModern {
+    margin-top: auto !important;
   }
 }
 
