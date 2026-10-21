@@ -21,9 +21,7 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
             <th className={styles.thPackGrade}>PACK/GRADE</th>
             <th className={styles.thHSN}>HSN</th>
             <th className={styles.thQty}>QTY.</th>
-            <th className={styles.thLoose}>LOOSE</th>
             <th className={styles.thRate}>RATE</th>
-            <th className={styles.thTD}>TD</th>
             <th className={styles.thCD}>C.D%</th>
             <th className={styles.thTax}>TAX</th>
             {isInterState ? (
@@ -84,9 +82,7 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
                 <td className={styles.tdLeft}>{item.pack_grade || (item.sku === 'SERVICE CHARGE' || item.hsn_sac === '9987' ? 'SERV' : '')}</td>
                 <td className={styles.tdCenter}>{item.hsn_sac || item.hsn || ''}</td>
                 <td className={styles.tdRight}>{qty.toFixed(2)}</td>
-                <td className={styles.tdRight}>{item.loose || ''}</td>
                 <td className={styles.tdRight}>{formatNum(rate)}</td>
-                <td className={styles.tdRight}>{item.td || ''}</td>
                 <td className={styles.tdRight}>{cdDisplay}</td>
                 <td className={styles.tdCenter}>{taxLabel}</td>
                 {isInterState ? (
@@ -110,8 +106,6 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
           {Array.from({ length: emptyRowsCount }).map((_, i) => (
             <tr key={`filler-${i}`} className={styles.fillerRow}>
               <td>&nbsp;</td>
-              <td></td>
-              <td></td>
               <td></td>
               <td></td>
               <td></td>
