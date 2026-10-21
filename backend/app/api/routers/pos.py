@@ -305,8 +305,25 @@ def complete_sale(
     try:
         # 1. Validate Stock (Aggregated to prevent overselling on duplicate items)
         if not payload.skip_inventory_update:
+            product_ids = [item.product_id for item in payload.items if item.product_id]
+            products_by_id = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+
             required_quantities = {}
             for item in payload.items:
+                product = products_by_id.get(item.product_id)
+                it_sku = (item.sku or "").strip().upper()
+                it_hsn = (item.hsn_sac or "").strip()
+                is_service_item = (
+                    (product and (
+                        (product.category and product.category.strip().upper() in ['SERV', 'SERVICE'])
+                        or (product.sku and product.sku.strip().upper() == 'SERVICE CHARGE')
+                        or (product.hsn and product.hsn.strip() == '9987')
+                    ))
+                    or it_sku == 'SERVICE CHARGE'
+                    or it_hsn == '9987'
+                )
+                if is_service_item:
+                    continue
                 required_quantities[item.product_id] = required_quantities.get(item.product_id, 0) + item.quantity
 
             wh_ids = [39, 2] if default_warehouse.id in (39, 2) else [default_warehouse.id]
@@ -320,7 +337,7 @@ def complete_sale(
                     ).with_for_update().all()
                     combined_available = sum(inv.available_qty or 0 for inv in invs)
                     if combined_available < total_qty:
-                        product = db.query(Product).filter(Product.id == product_id).first()
+                        product = products_by_id.get(product_id) or db.query(Product).filter(Product.id == product_id).first()
                         sku_name = product.sku if product else str(product_id)
                         raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name} (Requested: {total_qty}, Combined Available: {combined_available})")
                 else:
@@ -331,7 +348,7 @@ def complete_sale(
                     ).with_for_update().first() # Lock row
 
                     if not inv or inv.available_qty < total_qty:
-                        product = db.query(Product).filter(Product.id == product_id).first()
+                        product = products_by_id.get(product_id) or db.query(Product).filter(Product.id == product_id).first()
                         sku_name = product.sku if product else str(product_id)
                         raise HTTPException(status_code=400, detail=f"Insufficient Stock for SKU: {sku_name}")
 
@@ -1631,7 +1648,11 @@ def update_sale(
             
     # Process removals (anything left in old_items was deleted from the UI)
     for oi in old_items.values():
-        if not payload.skip_inventory_update:
+        is_oi_service = (
+            (oi.sku and oi.sku.strip().upper() == "SERVICE CHARGE")
+            or (oi.hsn_sac and oi.hsn_sac.strip() == "9987")
+        )
+        if not payload.skip_inventory_update and not is_oi_service:
             wh_target = 39 if default_warehouse.id in (39, 2) else default_warehouse.id
             InventoryEventEngine.process_event(
                 db=db,
