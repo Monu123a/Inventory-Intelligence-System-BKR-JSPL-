@@ -326,13 +326,13 @@
 
 /* Exact Column Percentages summing to 100% in Portrait */
 .thSN { width: 3%; text-align: center; }
-.thItemName { width: 28%; text-align: left; }
-.thPackGrade { width: 8%; text-align: left; }
+.thItemName { width: 27%; text-align: left; }
+.thPackGrade { width: 6%; text-align: left; }
 .thHSN { width: 6%; text-align: center; }
 .thQty { width: 5.5%; text-align: right; }
 .thRate { width: 7%; text-align: right; }
 .thCD { width: 3.5%; text-align: right; }
-.thTax { width: 5%; text-align: center; }
+.thTax { width: 8%; text-align: center; }
 .thGstRate { width: 5%; text-align: right; }
 .thGstAmt { width: 7%; text-align: right; }
 .thIgstRate { width: 9%; text-align: right; }
