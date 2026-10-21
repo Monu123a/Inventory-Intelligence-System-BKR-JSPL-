@@ -150,7 +150,7 @@ const Products = () => {
     { key: 'hsn', label: 'HSN' },
     { key: 'barcode', label: 'Barcode' },
     { key: 'min_stock_level', label: 'Min Stock' },
-    { key: 'item_rate', label: 'Item Rate', render: (val) => `₹${val?.toFixed(2)}` },
+    { key: 'item_rate', label: 'Item Rate', render: (val) => `₹${Number(val || 0).toFixed(2)}` },
     { 
       key: 'status', 
       label: 'Status', 

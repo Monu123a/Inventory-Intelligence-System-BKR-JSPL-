@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import logging
 from datetime import datetime
 import os
@@ -26,9 +26,9 @@ class ProductCreate(BaseModel):
     name: str
     category: Optional[str] = None
     brand: Optional[str] = None
-    item_rate: float = 0.0
-    min_stock_level: int = 0
-    status: str = "Active"
+    item_rate: Optional[float] = 0.0
+    min_stock_level: Optional[int] = 0
+    status: Optional[str] = "Active"
     hsn: Optional[str] = None
     barcode: Optional[str] = None
     unit: Optional[str] = None
@@ -37,9 +37,37 @@ class ProductCreate(BaseModel):
     default_gst_rate: Optional[float] = None
     admin_password: Optional[str] = Field(default=None, exclude=True)
 
-class ProductResponse(ProductCreate):
+class ProductResponse(BaseModel):
     id: int
+    sku: str
+    name: str
+    category: Optional[str] = None
+    brand: Optional[str] = None
+    item_rate: Optional[float] = 0.0
+    min_stock_level: Optional[int] = 0
+    status: Optional[str] = "Active"
+    hsn: Optional[str] = None
+    barcode: Optional[str] = None
+    unit: Optional[str] = None
+    reorder_level: Optional[int] = None
+    safety_stock: Optional[int] = None
+    default_gst_rate: Optional[float] = None
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("min_stock_level", mode="before")
+    @classmethod
+    def validate_min_stock(cls, v):
+        return v if v is not None else 0
+
+    @field_validator("item_rate", mode="before")
+    @classmethod
+    def validate_item_rate(cls, v):
+        return float(v) if v is not None else 0.0
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v):
+        return v if v else "Active"
 
 @router.get("/filters")
 def get_product_filters(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
