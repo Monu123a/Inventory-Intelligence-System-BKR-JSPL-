@@ -51,10 +51,21 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
       addressLine2 = 'CHANDIGARH - 160002 | Godown : Plot No.24/9, Industrial Park-2';
     }
   } else {
-    addressLine1 = company?.address ? company.address.split('\n')[0] : 'Plot No. 150,Business & Industrial Park-2,';
-    addressLine2 = company?.address && company.address.includes('\n') 
-      ? company.address.split('\n').slice(1).join(' ') 
-      : 'Chandigarh, India - 160002,,Godown/Workshop: 24/9, Industrial Park-2';
+    let rawAddr = (company?.address || '').trim();
+    if (rawAddr.includes('24/9')) {
+      rawAddr = 'Plot no: 150, Industrial & Business Park-2,\nChandigarh-160002';
+    }
+    if (rawAddr.includes('\n')) {
+      const parts = rawAddr.split('\n');
+      addressLine1 = parts[0].trim();
+      addressLine2 = parts.slice(1).join(' ').trim();
+    } else if (rawAddr) {
+      addressLine1 = rawAddr;
+      addressLine2 = '';
+    } else {
+      addressLine1 = 'Plot no: 150, Industrial & Business Park-2,';
+      addressLine2 = 'Chandigarh-160002';
+    }
   }
 
   const email = company?.email || (isBkr ? 'bkramanco@gmail.com' : 'halteindia@gmail.com');

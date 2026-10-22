@@ -110,7 +110,7 @@ const ServiceInvoicePreview = () => {
 
     const companySnapshot = {
       name: currentCompany?.name || 'JAGAN SHOPSMART PVT LTD',
-      address: currentCompany?.address || 'PLOT NO. 185, BUSINESS & INDUSTRIAL PARK-2',
+      address: currentCompany?.address || 'Plot no: 150, Industrial & Business Park-2, Chandigarh-160002',
       city: currentCompany?.city || 'CHANDIGARH',
       state: currentCompany?.state || 'CHANDIGARH',
       state_code: currentCompany?.state_code || '04',
@@ -267,7 +267,7 @@ const ServiceInvoicePreview = () => {
           />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', textTransform: 'uppercase', margin: 0 }}>TAX INVOICE</h1>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.5rem', marginBottom: 0 }}>{currentCompany?.name || 'JAGAN SHOPSMART PVT LTD'}</h2>
-          <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>{currentCompany?.address || 'PLOT NO. 185, BUSINESS & INDUSTRIAL PARK-2, CHANDIGARH'}</p>
+          <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>{currentCompany?.address || 'Plot no: 150, Industrial & Business Park-2, Chandigarh-160002'}</p>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
