@@ -88,13 +88,29 @@ def get_sales_report(
                 sale_base = sale_base.filter(Sale.id == -1)
             else:
                 sale_base = sale_base.filter(
-                    or_(
-                        Sale.bill_number.ilike("JGST%"),
-                        Sale.invoice_number.ilike("JGST%"),
-                        Sale.bill_number.ilike("JSPL%"),
-                        Sale.invoice_number.ilike("JSPL%")
+                    and_(
+                        or_(
+                            Sale.bill_number.ilike("JGST%"),
+                            Sale.invoice_number.ilike("JGST%"),
+                        ),
+                        ~Sale.bill_number.ilike("GST%"),
+                        ~Sale.invoice_number.ilike("GST%")
                     )
                 )
+        elif s_clean == "AFN":
+            sale_base = sale_base.filter(
+                or_(
+                    Sale.bill_number.ilike("AFN%"),
+                    Sale.invoice_number.ilike("AFN%")
+                )
+            )
+        elif s_clean == "MFN":
+            sale_base = sale_base.filter(
+                or_(
+                    Sale.bill_number.ilike("MFN%"),
+                    Sale.invoice_number.ilike("MFN%")
+                )
+            )
         elif s_clean == "BKR":
             if company_id != 2:
                 sale_base = sale_base.filter(Sale.id == -1)
@@ -122,7 +138,11 @@ def get_sales_report(
                     Sale.bill_number.ilike("AMZ%"),
                     Sale.invoice_number.ilike("AMZ%"),
                     Sale.bill_number.ilike("%AMZN%"),
-                    Sale.invoice_number.ilike("%AMZN%")
+                    Sale.invoice_number.ilike("%AMZN%"),
+                    Sale.bill_number.ilike("AFN%"),
+                    Sale.invoice_number.ilike("AFN%"),
+                    Sale.bill_number.ilike("MFN%"),
+                    Sale.invoice_number.ilike("MFN%")
                 )
             )
         elif s_clean != "ALL":

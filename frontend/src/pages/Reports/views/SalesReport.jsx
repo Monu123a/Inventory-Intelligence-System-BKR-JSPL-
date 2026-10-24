@@ -28,8 +28,10 @@ export const SalesReport = () => {
       return [
         { value: 'GST', label: 'GST Series (GST-)' },
         { value: 'JGST', label: 'JSPL Series (JGST-)' },
+        { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
+        { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { value: 'SERVICE', label: 'Service Series (SERVICE-)' },
-        { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
         { value: 'ALL', label: 'All Series Combined' }
       ];
     }
@@ -37,13 +39,17 @@ export const SalesReport = () => {
       return [
         { value: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
         { value: 'BKR', label: 'BKR Series (BKR-)' },
-        { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
+        { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
+        { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { value: 'ALL', label: 'All Series Combined' }
       ];
     }
     return [
       { value: 'GST', label: 'GST Series (GST-)' },
-      { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
+      { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
+      { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+      { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
       { value: 'ALL', label: 'All Series Combined' }
     ];
   }, [isJspl, isBkr]);

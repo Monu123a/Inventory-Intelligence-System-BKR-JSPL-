@@ -89,8 +89,10 @@ const DownloadCentre = () => {
       return [
         { id: 'GST', label: 'GST Series (GST-)' },
         { id: 'JGST', label: 'JSPL GST Series (JGST-)' },
+        { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
+        { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { id: 'SERVICE', label: 'Service Series (SERVICE-)' },
-        { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
         { id: 'ALL', label: 'All Series (Combined)' },
         { id: 'CUSTOM', label: 'Custom Series...' }
       ];
@@ -99,14 +101,18 @@ const DownloadCentre = () => {
       return [
         { id: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
         { id: 'BKR', label: 'BKR Retail Series (BKR-)' },
-        { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
+        { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
+        { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { id: 'ALL', label: 'All Series (Combined)' },
         { id: 'CUSTOM', label: 'Custom Series...' }
       ];
     }
     return [
       { id: 'GST', label: 'GST Series (GST-)' },
-      { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
+      { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
+      { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+      { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
       { id: 'ALL', label: 'All Series (Combined)' },
       { id: 'CUSTOM', label: 'Custom Series...' }
     ];

@@ -118,7 +118,7 @@ const EditInvoicePage = () => {
   const isJspl = (companyCode || '').toUpperCase() === 'JSPL';
 
   const validSeriesOptions = React.useMemo(() => {
-    const base = ['GST'];
+    const base = ['GST', 'AFN', 'MFN'];
     if (!isBkr) base.push('JGST', 'SERVICE', 'SERV', 'JSPL');
     if (!isJspl) base.push('BKR');
     if (companyCode && !base.includes(companyCode)) base.push(companyCode);
@@ -1248,6 +1248,8 @@ const EditInvoicePage = () => {
               >
                 <option value="GST">GST-</option>
                 {!isBkr && <option value="JGST">JGST-</option>}
+                <option value="AFN">AFN-</option>
+                <option value="MFN">MFN-</option>
                 {!isBkr && <option value="SERVICE">SERVICE-</option>}
                 {!isBkr && <option value="SERV">SERV-</option>}
                 {!isJspl && <option value="BKR">BKR-</option>}

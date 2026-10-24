@@ -136,38 +136,44 @@ class SeriesReportService:
                 series_set.add(ref[:3].upper())
 
         if company_code == "JSPL" or company_id == 3:
-            # JSPL: GST, JGST, SERVICE, AMAZON, ALL. BKR series is strictly excluded.
+            # JSPL: GST, JGST, AFN, MFN, AMAZON, SERVICE, ALL. BKR series is strictly excluded.
             options = [
                 {"id": "GST", "label": "GST Series (GST-)"},
                 {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
+                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
+                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
+                {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
                 {"id": "SERVICE", "label": "Service Series (SERVICE-)"},
-                {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
                 {"id": "ALL", "label": "All Invoices & Series Combined"}
             ]
             for p in sorted(series_set):
-                if p not in ("GST", "BKR", "JGST", "JSPL", "SERVICE", "SERV", "DELETED", "EDITED", "CANCELLED") and not p.startswith("BKR"):
+                if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "SERVICE", "SERV", "DELETED", "EDITED", "CANCELLED") and not p.startswith("BKR"):
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
         elif company_code == "BKR" or company_id == 2:
-            # BKR: GST, BKR, AMAZON, ALL. JGST and JSPL series are strictly excluded.
+            # BKR: GST, BKR, AFN, MFN, AMAZON, ALL. JGST and JSPL series are strictly excluded.
             options = [
                 {"id": "GST", "label": "GST Series (GST- / BKR-GST-)"},
                 {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
-                {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
+                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
+                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
+                {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
                 {"id": "ALL", "label": "All Invoices & Series Combined"}
             ]
             for p in sorted(series_set):
-                if p not in ("GST", "BKR", "JGST", "JSPL", "DELETED", "EDITED", "CANCELLED") and not p.startswith("JGST") and not p.startswith("JSPL"):
+                if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED") and not p.startswith("JGST") and not p.startswith("JSPL"):
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
         else:
             options = [
                 {"id": "GST", "label": "GST Series (GST-)"},
-                {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
+                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
+                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
+                {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
                 {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
                 {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
                 {"id": "ALL", "label": "All Invoices & Series Combined"}
             ]
             for p in sorted(series_set):
-                if p not in ("GST", "BKR", "JGST", "DELETED", "EDITED", "CANCELLED"):
+                if p not in ("GST", "BKR", "JGST", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED"):
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
 
         return options
@@ -365,7 +371,27 @@ class SeriesReportService:
                     Sale.bill_number.ilike("AMZ%"),
                     Sale.invoice_number.ilike("AMZ%"),
                     Sale.bill_number.ilike("%AMZN%"),
-                    Sale.invoice_number.ilike("%AMZN%")
+                    Sale.invoice_number.ilike("%AMZN%"),
+                    Sale.bill_number.ilike("AFN%"),
+                    Sale.invoice_number.ilike("AFN%"),
+                    Sale.bill_number.ilike("MFN%"),
+                    Sale.invoice_number.ilike("MFN%")
+                )
+            )
+        elif series_clean == "AFN":
+            # Amazon AFN (FBA) Fulfillment Network
+            sales_query = sales_query.filter(
+                or_(
+                    Sale.bill_number.ilike("AFN%"),
+                    Sale.invoice_number.ilike("AFN%")
+                )
+            )
+        elif series_clean == "MFN":
+            # Amazon MFN (Merchant) Fulfillment Network
+            sales_query = sales_query.filter(
+                or_(
+                    Sale.bill_number.ilike("MFN%"),
+                    Sale.invoice_number.ilike("MFN%")
                 )
             )
         elif series_clean == "BKR":
@@ -382,15 +408,18 @@ class SeriesReportService:
                 )
         elif series_clean == "JGST":
             # JGST is strictly company exclusive to JSPL (company_id = 3)
+            # Strictly matches JGST% and explicitly excludes GST% (e.g. GST-129 to GST-137)
             if company_id and company_id != 3:
                 sales_query = sales_query.filter(Sale.id == -1)
             else:
                 sales_query = sales_query.filter(
-                    or_(
-                        Sale.bill_number.ilike("JGST%"),
-                        Sale.invoice_number.ilike("JGST%"),
-                        Sale.bill_number.ilike("JSPL%"),
-                        Sale.invoice_number.ilike("JSPL%")
+                    and_(
+                        or_(
+                            Sale.bill_number.ilike("JGST%"),
+                            Sale.invoice_number.ilike("JGST%")
+                        ),
+                        ~Sale.bill_number.ilike("GST%"),
+                        ~Sale.invoice_number.ilike("GST%")
                     )
                 )
         elif series_clean in ("SERVICE", "SERV"):
@@ -419,12 +448,16 @@ class SeriesReportService:
         sales = sales_query.order_by(Sale.sale_date.asc(), Sale.id.asc()).all()
 
         amazon_allocations = []
-        if series_clean in ("AMAZON", "ALL"):
+        if series_clean in ("AMAZON", "ALL", "AFN", "MFN"):
             alloc_query = db.query(AmazonLiveAllocation)
             if company_id:
                 has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
                 if has_allocs:
                     alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
+            if series_clean == "AFN":
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
+            elif series_clean == "MFN":
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
             if date_from:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(date_from, datetime.min.time()))
             if date_to:
@@ -641,7 +674,7 @@ class SeriesReportService:
             grand_cash += bill_cash
 
         # Process Amazon allocations
-        if series_clean in ("AMAZON", "ALL") and amazon_allocations:
+        if series_clean in ("AMAZON", "ALL", "AFN", "MFN") and amazon_allocations:
             prod_query = db.query(Product)
             if company_id:
                 prod_query = prod_query.filter(Product.company_id == company_id)
@@ -737,6 +770,12 @@ class SeriesReportService:
         timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         filename_base = f"Accountant_Sales_{series_clean}_{timestamp_str}"
 
+        report_label = f"Accountant Sales ({series_clean})"
+        if series_clean == "AFN":
+            report_label = "Accountant Sales (Amazon AFN - FBA)"
+        elif series_clean == "MFN":
+            report_label = "Accountant Sales (Amazon MFN - Merchant)"
+
         return SeriesReportService._export_dataset(
             db=db,
             company_id=company_id,
@@ -744,7 +783,7 @@ class SeriesReportService:
             title_str=title_str,
             filename_base=filename_base,
             sheet_title=f"{series_clean[:10]}_Sales",
-            report_type_label=f"Accountant Sales ({series_clean})",
+            report_type_label=report_label,
             file_format=file_format
         )
 
