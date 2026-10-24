@@ -25,19 +25,17 @@ _SCHEDULER_LOCK_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirn
 def _acquire_scheduler_lock() -> bool:
     global _scheduler_lock_handle
 
-    if _scheduler_lock_handle is not None:
+    if _scheduler_lock_handle is not None and hasattr(_scheduler_lock_handle, "closed") and not _scheduler_lock_handle.closed:
         return True
 
     try:
-        with open(_SCHEDULER_LOCK_PATH, "w") as lock_handle:
-            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            lock_handle.write(str(os.getpid()))
-            lock_handle.flush()
-            _scheduler_lock_handle = lock_handle
-            # We must keep the file open to hold the lock
-            # Actually, if we exit `with`, the file closes and the lock is released!
-            # The previous code kept the file open intentionally to hold the lock.
-    except BlockingIOError:
+        lock_handle = open(_SCHEDULER_LOCK_PATH, "w")
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_handle.write(str(os.getpid()))
+        lock_handle.flush()
+        _scheduler_lock_handle = lock_handle
+        return True
+    except (BlockingIOError, OSError):
         return False
 
 
