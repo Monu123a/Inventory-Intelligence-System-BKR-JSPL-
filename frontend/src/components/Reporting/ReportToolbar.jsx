@@ -126,6 +126,19 @@ export const ReportToolbar = ({
               onChange={(e) => onEndDateChange && onEndDateChange(e.target.value)}
               title="End Date"
             />
+            {(startDate || endDate) && (
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#64748b', padding: '0 6px', lineHeight: 1 }}
+                title="Clear dates"
+                onClick={() => {
+                  if (onStartDateChange) onStartDateChange('');
+                  if (onEndDateChange) onEndDateChange('');
+                }}
+              >
+                ✕
+              </button>
+            )}
           </div>
         )}
 

@@ -196,9 +196,11 @@ def get_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: 
     }
 
 from typing import Optional
+from sqlalchemy.orm import selectinload
 from app.models.schema import CompanySettings, Company
 from app.models.schema import StockTransferItem
 
+@router.get("")
 @router.get("/")
 def list_transfers(
     status: Optional[str] = None, 
@@ -223,7 +225,9 @@ def list_transfers(
     elif status:
         query = query.filter(StockTransfer.status == status)
         
-    query = query.order_by(StockTransfer.created_at.desc())
+    query = query.options(
+        selectinload(StockTransfer.items).selectinload(StockTransferItem.product)
+    ).order_by(StockTransfer.created_at.desc())
     transfers = query.all()
     
     # Pre-fetch companies for fast mapping

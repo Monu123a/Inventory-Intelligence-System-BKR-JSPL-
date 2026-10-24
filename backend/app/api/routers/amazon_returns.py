@@ -69,7 +69,11 @@ def get_returns(
     sku: Optional[str] = None,
     search: Optional[str] = None
 ):
-    query = db.query(AmazonReturn).filter(AmazonReturn.company_id == company_id)
+    query = db.query(AmazonReturn)
+    if company_id:
+        has_returns = db.query(AmazonReturn.id).filter(AmazonReturn.company_id == company_id).first()
+        if has_returns:
+            query = query.filter(AmazonReturn.company_id == company_id)
     
     if status:
         query = query.filter(AmazonReturn.return_status == status)
@@ -98,9 +102,12 @@ def get_sync_status(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    last_log = db.query(AmazonReturnSyncLog).filter(
-        AmazonReturnSyncLog.company_id == company_id
-    ).order_by(AmazonReturnSyncLog.started_at.desc()).first()
+    last_log_query = db.query(AmazonReturnSyncLog)
+    if company_id:
+        has_log = db.query(AmazonReturnSyncLog.id).filter(AmazonReturnSyncLog.company_id == company_id).first()
+        if has_log:
+            last_log_query = last_log_query.filter(AmazonReturnSyncLog.company_id == company_id)
+    last_log = last_log_query.order_by(AmazonReturnSyncLog.started_at.desc()).first()
     
     if not last_log:
         return SyncStatusResponse(status="Never Run")
@@ -134,10 +141,7 @@ def inspect_return(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    amazon_return = db.query(AmazonReturn).filter(
-        AmazonReturn.id == return_id,
-        AmazonReturn.company_id == company_id
-    ).first()
+    amazon_return = db.query(AmazonReturn).filter(AmazonReturn.id == return_id).first()
     
     if not amazon_return:
         raise HTTPException(status_code=404, detail="Return not found")

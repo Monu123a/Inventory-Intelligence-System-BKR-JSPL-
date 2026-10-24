@@ -138,9 +138,11 @@ export const SalesReport = () => {
   const totalPages = data?.total_pages || Math.ceil(total / limit) || 1;
 
   const columns = [
-    { key: 'period', label: 'Period' },
+    { key: 'period', label: 'Period / Date' },
     { key: 'total_orders', label: 'Total Orders' },
-    { key: 'total_items_sold', label: 'Total Items Sold' },
+    { key: 'total_items_sold', label: 'Items Sold' },
+    { key: 'total_taxable_amount', label: 'Taxable Amount', render: (val) => val != null ? `₹${Number(val || 0).toFixed(2)}` : '-' },
+    { key: 'total_tax', label: 'Total GST', render: (val) => val != null ? `₹${Number(val || 0).toFixed(2)}` : '-' },
     { key: 'total_revenue', label: 'Total Revenue', render: (val) => `₹${Number(val || 0).toFixed(2)}` }
   ];
 
@@ -158,7 +160,7 @@ export const SalesReport = () => {
           {
             label: 'Series',
             value: selectedSeries,
-            onChange: setSelectedSeries,
+            onChange: (val) => { setSelectedSeries(val); setPage(1); },
             options: seriesOptions
           }
         ]}

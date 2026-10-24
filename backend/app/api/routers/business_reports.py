@@ -64,7 +64,11 @@ def get_sales_report(
             else:
                 period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM-DD").label("period")
 
-        alloc_query = db.query(AmazonLiveAllocation).filter(AmazonLiveAllocation.company_id == company_id)
+        alloc_query = db.query(AmazonLiveAllocation)
+        if company_id:
+            has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
+            if has_allocs:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
 
         if s_clean == "AFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
@@ -77,13 +81,15 @@ def get_sales_report(
             alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
 
         if search:
-            search_pattern = f"%{search.strip()}%"
-            alloc_query = alloc_query.filter(
-                or_(
-                    AmazonLiveAllocation.order_id.ilike(search_pattern),
-                    AmazonLiveAllocation.sku.ilike(search_pattern)
+            s_val = search if isinstance(search, str) else ""
+            if s_val.strip():
+                search_pattern = f"%{s_val.strip()}%"
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.order_id.ilike(search_pattern),
+                        AmazonLiveAllocation.sku.ilike(search_pattern)
+                    )
                 )
-            )
 
         # Revenue and GST calculation matching accountant standard
         selling_price_expr = case(
@@ -97,10 +103,7 @@ def get_sales_report(
 
         agg_query = alloc_query.outerjoin(
             Product,
-            and_(
-                Product.sku == AmazonLiveAllocation.sku,
-                Product.company_id == AmazonLiveAllocation.company_id
-            )
+            Product.sku == AmazonLiveAllocation.sku
         ).with_entities(
             period_col,
             func.count(distinct(AmazonLiveAllocation.order_id)).label("total_orders"),
@@ -533,7 +536,11 @@ def get_fc_returns_report(
             })
     else:
         # Fall back to Amazon Returns
-        amz_query = db.query(AmazonReturn).filter(AmazonReturn.company_id == company_id)
+        amz_query = db.query(AmazonReturn)
+        if company_id:
+            has_ret = db.query(AmazonReturn.id).filter(AmazonReturn.company_id == company_id).first()
+            if has_ret:
+                amz_query = amz_query.filter(AmazonReturn.company_id == company_id)
         if status:
             amz_query = amz_query.filter(
                 or_(
@@ -737,7 +744,11 @@ def export_sales(
             else:
                 period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM-DD").label("period")
 
-        alloc_query = db.query(AmazonLiveAllocation).filter(AmazonLiveAllocation.company_id == company_id)
+        alloc_query = db.query(AmazonLiveAllocation)
+        if company_id:
+            has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
+            if has_allocs:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
 
         if s_clean == "AFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
@@ -750,13 +761,15 @@ def export_sales(
             alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
 
         if search:
-            search_pattern = f"%{search.strip()}%"
-            alloc_query = alloc_query.filter(
-                or_(
-                    AmazonLiveAllocation.order_id.ilike(search_pattern),
-                    AmazonLiveAllocation.sku.ilike(search_pattern)
+            s_val = search if isinstance(search, str) else ""
+            if s_val.strip():
+                search_pattern = f"%{s_val.strip()}%"
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.order_id.ilike(search_pattern),
+                        AmazonLiveAllocation.sku.ilike(search_pattern)
+                    )
                 )
-            )
 
         selling_price_expr = case(
             (Product.item_rate > 0, Product.item_rate * 1.35),
@@ -769,10 +782,7 @@ def export_sales(
 
         agg_query = alloc_query.outerjoin(
             Product,
-            and_(
-                Product.sku == AmazonLiveAllocation.sku,
-                Product.company_id == AmazonLiveAllocation.company_id
-            )
+            Product.sku == AmazonLiveAllocation.sku
         ).with_entities(
             period_col,
             func.count(distinct(AmazonLiveAllocation.order_id)).label("total_orders"),
@@ -1099,7 +1109,11 @@ def export_returns(
             writer.writerow([r.return_number, r.status, r.created_at.isoformat() if r.created_at else ""])
     else:
         # Fall back to Amazon Returns
-        amz_query = db.query(AmazonReturn).filter(AmazonReturn.company_id == company_id)
+        amz_query = db.query(AmazonReturn)
+        if company_id:
+            has_ret = db.query(AmazonReturn.id).filter(AmazonReturn.company_id == company_id).first()
+            if has_ret:
+                amz_query = amz_query.filter(AmazonReturn.company_id == company_id)
         if status:
             amz_query = amz_query.filter(
                 or_(AmazonReturn.return_status == status, AmazonReturn.inspection_status == status)
