@@ -69,8 +69,8 @@ def _orchestrate_amazon_returns_sync():
         # Find companies where amazon_returns_sync_enabled is True
         settings = db.query(CompanySettings).filter(CompanySettings.amazon_returns_sync_enabled == True).all()
         for setting in settings:
-            # Check if company is Active
-            company = db.query(Company).filter(Company.id == setting.company_id, Company.status == "Active").first()
+            # Check if company is Active (handle ACTIVE or Active)
+            company = db.query(Company).filter(Company.id == setting.company_id, Company.status.in_(["ACTIVE", "Active"])).first()
             if company:
                 logger.info(f"Triggering Amazon Returns Sync for company {company.code} (ID: {company.id})")
                 run_amazon_returns_sync_job(company_id=company.id)

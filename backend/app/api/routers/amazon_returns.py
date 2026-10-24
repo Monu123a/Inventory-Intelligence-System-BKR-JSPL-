@@ -36,7 +36,8 @@ class AmazonReturnBase(BaseModel):
     inspected_at: Optional[datetime] = None
 
 class InspectRequest(BaseModel):
-    decision: str  # RESTOCK, DEFECTIVE
+    decision: str  # RESTOCK, DEFECTIVE, REJECTED
+    warehouse_id: Optional[int] = None
     notes: Optional[str] = None
     images: Optional[list] = []
 
@@ -64,6 +65,7 @@ def get_returns(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db),
     status: Optional[str] = None,
+    inspection_status: Optional[str] = None,
     sku: Optional[str] = None,
     search: Optional[str] = None
 ):
@@ -71,6 +73,15 @@ def get_returns(
     
     if status:
         query = query.filter(AmazonReturn.return_status == status)
+    if inspection_status:
+        if inspection_status.upper() in ["PENDING", "UNVERIFIED"]:
+            query = query.filter(
+                (AmazonReturn.inspection_status.is_(None)) | 
+                (AmazonReturn.inspection_status == "") | 
+                (AmazonReturn.inspection_status == "PENDING")
+            )
+        else:
+            query = query.filter(AmazonReturn.inspection_status == inspection_status.upper())
     if sku:
         query = query.filter(AmazonReturn.sku.ilike(f"%{sku}%"))
     if search:
@@ -107,9 +118,6 @@ def trigger_manual_sync(
     request: Request,
     company_id: int = Depends(get_current_company_id)
 ):
-    # This runs the sync job directly and blocks until complete.
-    # In a real heavy environment, this might trigger a background task, 
-    # but for manual trigger we can block and return success.
     try:
         run_amazon_returns_sync_job(company_id=company_id)
         return {"status": "Success", "message": "Manual sync completed."}
@@ -134,20 +142,26 @@ def inspect_return(
     if not amazon_return:
         raise HTTPException(status_code=404, detail="Return not found")
         
-    if amazon_return.return_status != "Received":
-        raise HTTPException(status_code=400, detail="Cannot inspect return before it is received")
+    if amazon_return.inspection_status in ["RESTOCKED", "DEFECTIVE", "REJECTED"]:
+        raise HTTPException(status_code=400, detail="Return has already been verified and inspected")
         
-    if amazon_return.inspection_status in ["RESTOCKED", "DEFECTIVE"]:
-        raise HTTPException(status_code=400, detail="Return has already been inspected")
-        
-    if request.decision not in ["RESTOCK", "DEFECTIVE"]:
-        raise HTTPException(status_code=400, detail="Invalid decision")
+    valid_decisions = ["RESTOCK", "DEFECTIVE", "REJECTED"]
+    if request.decision.upper() not in valid_decisions:
+        raise HTTPException(status_code=400, detail=f"Invalid decision. Must be one of: {valid_decisions}")
 
-    amazon_return.inspection_status = "RESTOCKED" if request.decision == "RESTOCK" else request.decision
+    dec = request.decision.upper()
+    amazon_return.inspection_status = "RESTOCKED" if dec == "RESTOCK" else dec
     amazon_return.inspection_notes = request.notes
-    amazon_return.inspection_images = request.images
+    amazon_return.inspection_images = request.images or []
     amazon_return.inspected_by = current_user.id
     amazon_return.inspected_at = datetime.utcnow()
+    
+    # Mark as received once inspected
+    if amazon_return.return_status != "Received":
+        amazon_return.return_status = "Received"
+        if not amazon_return.received_at:
+            amazon_return.received_at = datetime.utcnow()
+
     
     product = db.query(Product).filter(
         Product.sku == amazon_return.sku,
@@ -162,21 +176,36 @@ def inspect_return(
     inventory_event_id = None
     inventory_quantity = None
     
-    if request.decision == "RESTOCK":
-        warehouses = db.query(Warehouse).filter(
-            Warehouse.company_id == company_id,
-            Warehouse.status == "ACTIVE"
-        ).order_by(Warehouse.id.asc()).all()
-        if not warehouses:
-            raise HTTPException(status_code=400, detail="No active warehouse configured for company")
-            
-        warehouse_id = warehouses[0].id
-        for w in warehouses:
-            code = (w.code or "").strip().upper()
-            name = (w.name or "").strip().lower()
-            if code in ["DEFAULT", "MAIN", "POS"] or "default" in name or "main" in name:
-                warehouse_id = w.id
-                break
+    audit_log = None
+    if dec == "RESTOCK":
+        target_wh_id = request.warehouse_id
+        if target_wh_id:
+            wh = db.query(Warehouse).filter(
+                Warehouse.id == target_wh_id,
+                Warehouse.company_id == company_id,
+                Warehouse.status == "ACTIVE"
+            ).first()
+            if not wh:
+                raise HTTPException(status_code=400, detail="Selected warehouse is not valid or active for this company")
+            warehouse_id = wh.id
+            wh_name = wh.name
+        else:
+            warehouses = db.query(Warehouse).filter(
+                Warehouse.company_id == company_id,
+                Warehouse.status == "ACTIVE"
+            ).order_by(Warehouse.id.asc()).all()
+            if not warehouses:
+                raise HTTPException(status_code=400, detail="No active warehouse configured for company")
+                
+            warehouse_id = warehouses[0].id
+            wh_name = warehouses[0].name
+            for w in warehouses:
+                code = (w.code or "").strip().upper()
+                name = (w.name or "").strip().lower()
+                if code in ["DEFAULT", "MAIN", "POS"] or "default" in name or "main" in name:
+                    warehouse_id = w.id
+                    wh_name = w.name
+                    break
                 
         # Process RESTOCK via InventoryEventEngine
         movement = InventoryEventEngine.process_event(
@@ -189,7 +218,7 @@ def inspect_return(
             source="Amazon Return",
             reference_id=amazon_return.amazon_return_id,
             user_id=current_user.id,
-            metadata_payload={"notes": request.notes}
+            metadata_payload={"notes": request.notes, "warehouse_name": wh_name}
         )
         inventory_event_id = movement.id
         inventory_quantity = movement.qty_after
@@ -200,12 +229,12 @@ def inspect_return(
             entity_type="AmazonReturn",
             entity_id=amazon_return.id,
             event_type="INSPECTION_RESTOCKED",
-            message=f"Return {amazon_return.amazon_return_id} inspected and restocked by {current_user.username}",
-            metadata_payload={"movement_id": movement.id}
+            message=f"Return {amazon_return.amazon_return_id} inspected & verified by {current_user.username}: Restocked {amazon_return.quantity} to {wh_name}",
+            metadata_payload={"movement_id": movement.id, "warehouse_id": warehouse_id}
         )
         db.add(audit_log)
         
-    elif request.decision == "DEFECTIVE":
+    elif dec == "DEFECTIVE":
         # Add to DefectiveInventory
         defective = DefectiveInventory(
             company_id=company_id,
@@ -216,7 +245,7 @@ def inspect_return(
             quantity=amazon_return.quantity,
             return_reason=amazon_return.return_reason,
             inspection_notes=request.notes,
-            inspection_images=request.images,
+            inspection_images=request.images or [],
             inspector_id=current_user.id,
             inspection_date=datetime.utcnow(),
             status="NEW"
@@ -230,18 +259,34 @@ def inspect_return(
             entity_id=amazon_return.id,
             event_type="INSPECTION_DEFECTIVE",
             message=f"Return {amazon_return.amazon_return_id} marked defective by {current_user.username}",
-            metadata_payload={}
+            metadata_payload={"notes": request.notes}
+        )
+        db.add(audit_log)
+
+    elif dec == "REJECTED":
+        # Create Audit Log for rejected return (no inventory movement)
+        audit_log = AuditLog(
+            company_id=company_id,
+            entity_type="AmazonReturn",
+            entity_id=amazon_return.id,
+            event_type="INSPECTION_REJECTED",
+            message=f"Return {amazon_return.amazon_return_id} rejected by {current_user.username}: No inventory reverted",
+            metadata_payload={"notes": request.notes}
         )
         db.add(audit_log)
         
     db.commit()
     db.refresh(amazon_return)
-    db.refresh(audit_log)
+    audit_id = 0
+    if audit_log:
+        db.refresh(audit_log)
+        audit_id = audit_log.id
+
     
     return InspectResponse(
         updated_return=amazon_return,
         inventory_event_id=inventory_event_id,
         inspection_status=amazon_return.inspection_status,
         inventory_quantity=inventory_quantity,
-        audit_id=audit_log.id
+        audit_id=audit_id
     )
