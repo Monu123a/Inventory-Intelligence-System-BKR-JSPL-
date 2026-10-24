@@ -71,7 +71,8 @@ class StockTransferService:
             if transfer.destination_warehouse_id:
                 dest_warehouse = db.query(Warehouse).filter(Warehouse.id == transfer.destination_warehouse_id).first()
             else:
-                dest_warehouse = db.query(Warehouse).filter(Warehouse.company_id == transfer.to_company_id).first()
+                from app.api.routers.pos import _resolve_default_warehouse
+                dest_warehouse = _resolve_default_warehouse(db, transfer.to_company_id)
                 
             if not dest_warehouse:
                 raise ValueError(f"Destination company {transfer.to_company_id} has no valid warehouse.")

@@ -1487,7 +1487,10 @@ def update_sale(
     dest_company_id = None
     if linked_transfer:
         dest_company_id = linked_transfer.to_company_id
-        dw = db.query(Warehouse).filter(Warehouse.company_id == linked_transfer.to_company_id).first()
+        if linked_transfer.destination_warehouse_id:
+            dw = db.query(Warehouse).filter(Warehouse.id == linked_transfer.destination_warehouse_id).first()
+        else:
+            dw = _resolve_default_warehouse(db, linked_transfer.to_company_id)
         if dw:
             dest_warehouse_id = dw.id
 
