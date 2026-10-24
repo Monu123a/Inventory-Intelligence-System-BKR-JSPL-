@@ -118,8 +118,8 @@ def export_series_wise_sales_report(
     report_type: str = Query("sales", description="Category: sales, purchases, amazon_returns, sales_returns"),
     series: str = Query("GST", description="Series name: GST, AMAZON, BKR, JGST, ALL, or custom prefix"),
     vendor_id: Optional[int] = Query(None, description="Optional Vendor ID for purchase reports"),
-    date_from: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    date_to: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     format: str = Query("csv", pattern="^(csv|excel)$"),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
@@ -154,8 +154,8 @@ def export_series_wise_sales_report(
 @router.get("/purchases/export")
 def export_purchases_report(
     vendor_id: Optional[int] = Query(None),
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     format: str = Query("csv", pattern="^(csv|excel)$"),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)

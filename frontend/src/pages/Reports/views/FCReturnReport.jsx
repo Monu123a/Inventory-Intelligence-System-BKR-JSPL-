@@ -16,18 +16,18 @@ export const FCReturnReport = () => {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['returnsReport', { page, search, dateFrom, dateTo }],
     queryFn: async () => {
-      const params = { skip: (page - 1) * limit, limit };
-      if (search) params.search = search;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
+      const params = { page, limit };
+      if (search?.trim()) params.search = search.trim();
+      if (dateFrom?.trim()) params.date_from = dateFrom.trim();
+      if (dateTo?.trim()) params.date_to = dateTo.trim();
       
       return reportsService.getFCReturnsReport(params);
     }
   });
 
-  const items = data?.items || (Array.isArray(data) ? data : []);
-  const total = data?.total || items.length;
-  const totalPages = Math.ceil(total / limit);
+  const items = data?.items || data?.data || (Array.isArray(data) ? data : []);
+  const total = data?.total_records ?? data?.total ?? items.length;
+  const totalPages = data?.total_pages || Math.ceil(total / limit) || 1;
 
   const columns = [
     { key: 'created_at', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },

@@ -13,6 +13,7 @@ from app.models.schema import (
     SalesReturn, SalesReturnItem, AmazonReturn,
     FCReturn, FCReturnItem, InventoryMovement
 )
+from app.utils.date_utils import parse_date_param
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
@@ -331,13 +332,15 @@ class SeriesReportService:
         db: Session,
         company_id: Optional[int] = None,
         series: str = "GST",
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, str]] = None,
+        date_to: Optional[Union[date, str]] = None,
         file_format: str = "csv"
     ) -> Tuple[Union[str, bytes], str, str, int]:
         """
         Generates the Accountant Series-Wise Sales Report in the exact 47-column format.
         """
+        date_from = parse_date_param(date_from)
+        date_to = parse_date_param(date_to)
         series_clean = (series or "GST").strip().upper()
         
         # 1. Fetch Sales Matching Filter
@@ -828,14 +831,16 @@ class SeriesReportService:
         db: Session,
         company_id: Optional[int] = None,
         vendor_id: Optional[int] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, str]] = None,
+        date_to: Optional[Union[date, str]] = None,
         file_format: str = "csv"
     ) -> Tuple[Union[str, bytes], str, str, int]:
         """
         Generates the Official Accountant Purchase Register in the exact 47-column format.
         Includes Bill No. Wise Totals and Grand Totals.
         """
+        date_from = parse_date_param(date_from)
+        date_to = parse_date_param(date_to)
         query = db.query(Purchase)
         if company_id:
             query = query.filter(Purchase.company_id == company_id)
@@ -1087,13 +1092,15 @@ class SeriesReportService:
     def generate_amazon_returns_report(
         db: Session,
         company_id: Optional[int] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, str]] = None,
+        date_to: Optional[Union[date, str]] = None,
         file_format: str = "csv"
     ) -> Tuple[Union[str, bytes], str, str, int]:
         """
         Generates the Accountant Amazon Returns Register in the exact 47-column format.
         """
+        date_from = parse_date_param(date_from)
+        date_to = parse_date_param(date_to)
         query = db.query(AmazonReturn)
         if company_id:
             query = query.filter(AmazonReturn.company_id == company_id)
@@ -1242,13 +1249,15 @@ class SeriesReportService:
     def generate_sales_returns_report(
         db: Session,
         company_id: Optional[int] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, str]] = None,
+        date_to: Optional[Union[date, str]] = None,
         file_format: str = "csv"
     ) -> Tuple[Union[str, bytes], str, str, int]:
         """
         Generates the Accountant POS Sales Returns / Credit Notes Register in the exact 47-column format.
         """
+        date_from = parse_date_param(date_from)
+        date_to = parse_date_param(date_to)
         query = db.query(SalesReturn)
         if company_id:
             query = query.filter(SalesReturn.company_id == company_id)
@@ -1383,13 +1392,15 @@ class SeriesReportService:
         company_id: Optional[int] = None,
         series: str = "GST",
         vendor_id: Optional[int] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, str]] = None,
+        date_to: Optional[Union[date, str]] = None,
         file_format: str = "csv"
     ) -> Tuple[Union[str, bytes], str, str, int]:
         """
         Master dispatcher generating the requested report category in the exact 47-column accountant format.
         """
+        date_from = parse_date_param(date_from)
+        date_to = parse_date_param(date_to)
         rt = (report_type or "sales").strip().lower()
         if rt in ("purchases", "purchase", "purchase_register"):
             return SeriesReportService.generate_purchase_report(

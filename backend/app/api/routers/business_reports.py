@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, case, distinct
 from datetime import datetime, date
 from typing import Optional
 
@@ -9,23 +9,25 @@ from app.api.dependencies import get_current_user, get_current_company_id
 from app.models.schema import (
     User, Sale, SaleItem, Inventory, Product, Warehouse,
     FCDispatch, FCReturn, DamageClaim, DefectiveInventory,
-    StateHub
+    StateHub, AmazonLiveAllocation, AmazonNetworkType, AmazonReturn
 )
+from app.utils.date_utils import parse_date_param
 
 router = APIRouter(prefix="/business-reports", tags=["Business Reports"])
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # 1. GET /sales - Paginated Sales Analytics grouped by Day / Week / Month
 # ---------------------------------------------------------------------------
 @router.get("/sales")
 def get_sales_report(
-    date_from: Optional[date] = Query(None, description="Start date filter (YYYY-MM-DD)"),
-    date_to: Optional[date] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    date_from: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
     group_by: str = Query("day", pattern="^(day|week|month)$", description="Grouping dimension"),
     status: Optional[str] = Query(None, description="Sale status (e.g., Completed, Draft, Cancelled)"),
-    search: Optional[str] = Query(None, description="Search by bill number, invoice number, customer name"),
-    series: Optional[str] = Query(None, description="Series filter: GST, JGST, BKR, SERVICE, AMAZON, etc."),
+    search: Optional[str] = Query(None, description="Search by bill number, invoice number, customer name, SKU"),
+    series: Optional[str] = Query(None, description="Series filter: GST, JGST, BKR, SERVICE, AFN, MFN, AMAZON, etc."),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     company_id: int = Depends(get_current_company_id),
@@ -34,15 +36,123 @@ def get_sales_report(
 ):
     """
     Returns aggregated sales metrics grouped dynamically by day, week, or month.
-    Avoids N+1 queries by aggregating directly in the database engine.
+    Seamlessly supports POS/Standard Sales and Amazon AFN/MFN Orders (from AmazonLiveAllocation).
     """
-    # Define date grouping field (SQLite compatible)
-    if group_by == "month":
-        period_col = func.strftime("%Y-%m", Sale.sale_date).label("period")
-    elif group_by == "week":
-        period_col = func.strftime("%Y-%W", Sale.sale_date).label("period")
+    s_clean = (series or "").strip().upper() if series else None
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
+    is_sqlite = (db.bind.dialect.name == "sqlite") if db.bind else False
+
+    # -----------------------------------------------------------------------
+    # Branch A: Amazon AFN / MFN / AMAZON Series
+    # Amazon orders are stored in AmazonLiveAllocation (not Sale table).
+    # -----------------------------------------------------------------------
+    if s_clean in ("AFN", "MFN", "AMAZON"):
+        if is_sqlite:
+            if group_by == "month":
+                period_col = func.strftime("%Y-%m", AmazonLiveAllocation.created_at).label("period")
+            elif group_by == "week":
+                period_col = func.strftime("%Y-%W", AmazonLiveAllocation.created_at).label("period")
+            else:
+                period_col = func.date(AmazonLiveAllocation.created_at).label("period")
+        else:
+            if group_by == "month":
+                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM").label("period")
+            elif group_by == "week":
+                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-WW").label("period")
+            else:
+                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM-DD").label("period")
+
+        alloc_query = db.query(AmazonLiveAllocation).filter(AmazonLiveAllocation.company_id == company_id)
+
+        if s_clean == "AFN":
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
+        elif s_clean == "MFN":
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
+
+        if parsed_date_from:
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
+
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            alloc_query = alloc_query.filter(
+                or_(
+                    AmazonLiveAllocation.order_id.ilike(search_pattern),
+                    AmazonLiveAllocation.sku.ilike(search_pattern)
+                )
+            )
+
+        # Revenue and GST calculation matching accountant standard
+        selling_price_expr = case(
+            (Product.item_rate > 0, Product.item_rate * 1.35),
+            else_=500.0
+        )
+        tax_rate_expr = func.coalesce(Product.default_gst_rate, 18.0)
+        gross_expr = (selling_price_expr / (1.0 + tax_rate_expr / 100.0)) * AmazonLiveAllocation.allocated_qty
+        revenue_expr = selling_price_expr * AmazonLiveAllocation.allocated_qty
+        tax_expr = revenue_expr - gross_expr
+
+        agg_query = alloc_query.outerjoin(
+            Product,
+            and_(
+                Product.sku == AmazonLiveAllocation.sku,
+                Product.company_id == AmazonLiveAllocation.company_id
+            )
+        ).with_entities(
+            period_col,
+            func.count(distinct(AmazonLiveAllocation.order_id)).label("total_orders"),
+            func.sum(AmazonLiveAllocation.allocated_qty).label("total_items_sold"),
+            func.sum(gross_expr).label("total_taxable_amount"),
+            func.sum(tax_expr).label("total_tax"),
+            func.sum(revenue_expr).label("total_revenue")
+        ).group_by(period_col).order_by(period_col.desc())
+
+        total_count = agg_query.count()
+        skip = (page - 1) * limit
+        results = agg_query.offset(skip).limit(limit).all()
+
+        items = [
+            {
+                "period": str(row.period),
+                "total_orders": int(row.total_orders or 0),
+                "total_items_sold": int(row.total_items_sold or 0),
+                "total_taxable_amount": round(float(row.total_taxable_amount or 0.0), 2),
+                "total_tax": round(float(row.total_tax or 0.0), 2),
+                "total_revenue": round(float(row.total_revenue or 0.0), 2),
+            }
+            for row in results
+        ]
+
+        return {
+            "page": page,
+            "limit": limit,
+            "total": total_count,
+            "total_records": total_count,
+            "total_pages": (total_count + limit - 1) // limit if total_count > 0 else 0,
+            "data": items,
+            "items": items
+        }
+
+    # -----------------------------------------------------------------------
+    # Branch B: Standard Sales (GST, JGST, BKR, SERVICE, ALL)
+    # -----------------------------------------------------------------------
+    if is_sqlite:
+        if group_by == "month":
+            period_col = func.strftime("%Y-%m", Sale.sale_date).label("period")
+        elif group_by == "week":
+            period_col = func.strftime("%Y-%W", Sale.sale_date).label("period")
+        else:
+            period_col = func.date(Sale.sale_date).label("period")
     else:
-        period_col = func.date(Sale.sale_date).label("period")
+        if group_by == "month":
+            period_col = func.to_char(Sale.sale_date, "YYYY-MM").label("period")
+        elif group_by == "week":
+            period_col = func.to_char(Sale.sale_date, "YYYY-WW").label("period")
+        else:
+            period_col = func.to_char(Sale.sale_date, "YYYY-MM-DD").label("period")
 
     # 1. Filter Sales First (No Joins)
     sale_base = db.query(
@@ -53,14 +163,14 @@ def get_sales_report(
         Sale.grand_total
     ).filter(Sale.company_id == company_id)
 
-    if date_from:
-        sale_base = sale_base.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        sale_base = sale_base.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
+    if parsed_date_from:
+        sale_base = sale_base.filter(Sale.sale_date >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        sale_base = sale_base.filter(Sale.sale_date <= datetime.combine(parsed_date_to, datetime.max.time()))
     if status:
         sale_base = sale_base.filter(Sale.status == status)
     if search:
-        search_pattern = f"%{search}%"
+        search_pattern = f"%{search.strip()}%"
         sale_base = sale_base.filter(
             or_(
                 Sale.bill_number.ilike(search_pattern),
@@ -68,8 +178,7 @@ def get_sales_report(
                 Sale.customer_name.ilike(search_pattern)
             )
         )
-    if series:
-        s_clean = series.strip().upper()
+    if s_clean:
         if s_clean == "GST":
             sale_base = sale_base.filter(
                 and_(
@@ -97,20 +206,6 @@ def get_sales_report(
                         ~Sale.invoice_number.ilike("GST%")
                     )
                 )
-        elif s_clean == "AFN":
-            sale_base = sale_base.filter(
-                or_(
-                    Sale.bill_number.ilike("AFN%"),
-                    Sale.invoice_number.ilike("AFN%")
-                )
-            )
-        elif s_clean == "MFN":
-            sale_base = sale_base.filter(
-                or_(
-                    Sale.bill_number.ilike("MFN%"),
-                    Sale.invoice_number.ilike("MFN%")
-                )
-            )
         elif s_clean == "BKR":
             if company_id != 2:
                 sale_base = sale_base.filter(Sale.id == -1)
@@ -129,20 +224,6 @@ def get_sales_report(
                     Sale.invoice_number.ilike("SERVICE%"),
                     Sale.bill_number.ilike("SERV%"),
                     Sale.invoice_number.ilike("SERV%")
-                )
-            )
-        elif s_clean == "AMAZON":
-            sale_base = sale_base.filter(
-                or_(
-                    Sale.transaction_origin == "AMAZON",
-                    Sale.bill_number.ilike("AMZ%"),
-                    Sale.invoice_number.ilike("AMZ%"),
-                    Sale.bill_number.ilike("%AMZN%"),
-                    Sale.invoice_number.ilike("%AMZN%"),
-                    Sale.bill_number.ilike("AFN%"),
-                    Sale.invoice_number.ilike("AFN%"),
-                    Sale.bill_number.ilike("MFN%"),
-                    Sale.invoice_number.ilike("MFN%")
                 )
             )
         elif s_clean == "ALL":
@@ -208,8 +289,6 @@ def get_sales_report(
 
     # Count total aggregated groups for pagination
     total_count = query.count()
-    
-    print(f"[REVENUE FIX] {company_id}, {total_count}")
 
     # Apply pagination
     skip = (page - 1) * limit
@@ -218,11 +297,11 @@ def get_sales_report(
     items = [
         {
             "period": str(row.period),
-            "total_orders": row.total_orders or 0,
-            "total_items_sold": row.total_items_sold or 0,
-            "total_taxable_amount": round(row.total_taxable_amount or 0.0, 2),
-            "total_tax": round(row.total_tax or 0.0, 2),
-            "total_revenue": round(row.total_revenue or 0.0, 2),
+            "total_orders": int(row.total_orders or 0),
+            "total_items_sold": int(row.total_items_sold or 0),
+            "total_taxable_amount": round(float(row.total_taxable_amount or 0.0), 2),
+            "total_tax": round(float(row.total_tax or 0.0), 2),
+            "total_revenue": round(float(row.total_revenue or 0.0), 2),
         }
         for row in results
     ]
@@ -230,9 +309,11 @@ def get_sales_report(
     return {
         "page": page,
         "limit": limit,
+        "total": total_count,
         "total_records": total_count,
-        "total_pages": (total_count + limit - 1) // limit,
-        "data": items
+        "total_pages": (total_count + limit - 1) // limit if total_count > 0 else 0,
+        "data": items,
+        "items": items
     }
 
 
@@ -330,8 +411,8 @@ def get_inventory_report(
 # ---------------------------------------------------------------------------
 @router.get("/dispatches")
 def get_fc_dispatches_report(
-    date_from: Optional[date] = Query(None, description="Start date filter"),
-    date_to: Optional[date] = Query(None, description="End date filter"),
+    date_from: Optional[str] = Query(None, description="Start date filter"),
+    date_to: Optional[str] = Query(None, description="End date filter"),
     warehouse_id: Optional[int] = Query(None, description="Filter by Warehouse ID"),
     status: Optional[str] = Query(None, description="Dispatch status filter"),
     search: Optional[str] = Query(None, description="Search by dispatch number"),
@@ -344,18 +425,21 @@ def get_fc_dispatches_report(
     """
     Returns paginated FC Dispatch records with associated warehouse and document numbers.
     """
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
     query = db.query(FCDispatch).filter(FCDispatch.company_id == company_id)
 
     if warehouse_id:
         query = query.filter(FCDispatch.warehouse_id == warehouse_id)
     if status:
         query = query.filter(FCDispatch.dispatch_status == status)
-    if date_from:
-        query = query.filter(FCDispatch.created_at >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        query = query.filter(FCDispatch.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if parsed_date_from:
+        query = query.filter(FCDispatch.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        query = query.filter(FCDispatch.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
     if search:
-        query = query.filter(FCDispatch.dispatch_number.ilike(f"%{search}%"))
+        query = query.filter(FCDispatch.dispatch_number.ilike(f"%{search.strip()}%"))
 
     total_records = query.count()
     skip = (page - 1) * limit
@@ -382,22 +466,24 @@ def get_fc_dispatches_report(
     return {
         "page": page,
         "limit": limit,
+        "total": total_records,
         "total_records": total_records,
-        "total_pages": (total_records + limit - 1) // limit,
-        "data": data
+        "total_pages": (total_records + limit - 1) // limit if total_records > 0 else 0,
+        "data": data,
+        "items": data
     }
 
 
 # ---------------------------------------------------------------------------
-# 4. GET /returns - Paginated FCReturn Reports
+# 4. GET /returns - Paginated FCReturn / Amazon Returns Reports
 # ---------------------------------------------------------------------------
 @router.get("/returns")
 def get_fc_returns_report(
-    date_from: Optional[date] = Query(None, description="Start date filter"),
-    date_to: Optional[date] = Query(None, description="End date filter"),
+    date_from: Optional[str] = Query(None, description="Start date filter"),
+    date_to: Optional[str] = Query(None, description="End date filter"),
     warehouse_id: Optional[int] = Query(None, description="Filter by Warehouse ID"),
     status: Optional[str] = Query(None, description="Return status filter"),
-    search: Optional[str] = Query(None, description="Search by return number"),
+    search: Optional[str] = Query(None, description="Search by return number or SKU"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     company_id: int = Depends(get_current_company_id),
@@ -405,46 +491,100 @@ def get_fc_returns_report(
     db: Session = Depends(get_db)
 ):
     """
-    Returns paginated Fulfillment Center Returns records.
+    Returns paginated Return records (Fulfillment Center and Amazon SP-API Returns).
     """
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
     query = db.query(FCReturn).filter(FCReturn.company_id == company_id)
 
     if warehouse_id:
         query = query.filter(FCReturn.warehouse_id == warehouse_id)
     if status:
         query = query.filter(FCReturn.status == status)
-    if date_from:
-        query = query.filter(FCReturn.created_at >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        query = query.filter(FCReturn.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if parsed_date_from:
+        query = query.filter(FCReturn.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        query = query.filter(FCReturn.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
     if search:
-        query = query.filter(FCReturn.return_number.ilike(f"%{search}%"))
+        query = query.filter(FCReturn.return_number.ilike(f"%{search.strip()}%"))
 
-    total_records = query.count()
-    skip = (page - 1) * limit
-    returns = query.order_by(FCReturn.created_at.desc()).offset(skip).limit(limit).all()
+    fc_count = query.count()
 
-    data = []
-    for r in returns:
-        total_returned_qty = sum(item.quantity for item in r.items) if r.items else 0
-        data.append({
-            "id": r.id,
-            "return_number": r.return_number,
-            "status": r.status,
-            "warehouse_id": r.warehouse_id,
-            "warehouse_name": r.warehouse.name if r.warehouse else None,
-            "dispatch_id": r.dispatch_id,
-            "dispatch_number": r.dispatch.dispatch_number if r.dispatch else None,
-            "total_returned_qty": total_returned_qty,
-            "created_at": r.created_at.isoformat() if r.created_at else None
-        })
+    # If FCReturn has records, use FCReturn. Otherwise fall back to AmazonReturn.
+    if fc_count > 0:
+        total_records = fc_count
+        skip = (page - 1) * limit
+        returns = query.order_by(FCReturn.created_at.desc()).offset(skip).limit(limit).all()
+
+        data = []
+        for r in returns:
+            total_returned_qty = sum(item.quantity for item in r.items) if r.items else 0
+            data.append({
+                "id": r.id,
+                "return_number": r.return_number,
+                "status": r.status,
+                "warehouse_id": r.warehouse_id,
+                "warehouse_name": r.warehouse.name if r.warehouse else None,
+                "dispatch_id": r.dispatch_id,
+                "dispatch_number": r.dispatch.dispatch_number if r.dispatch else None,
+                "total_returned_qty": total_returned_qty,
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            })
+    else:
+        # Fall back to Amazon Returns
+        amz_query = db.query(AmazonReturn).filter(AmazonReturn.company_id == company_id)
+        if status:
+            amz_query = amz_query.filter(
+                or_(
+                    AmazonReturn.return_status == status,
+                    AmazonReturn.inspection_status == status
+                )
+            )
+        date_col = func.coalesce(AmazonReturn.received_at, AmazonReturn.requested_at, AmazonReturn.created_at)
+        if parsed_date_from:
+            amz_query = amz_query.filter(date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            amz_query = amz_query.filter(date_col <= datetime.combine(parsed_date_to, datetime.max.time()))
+        if search:
+            s_pat = f"%{search.strip()}%"
+            amz_query = amz_query.filter(
+                or_(
+                    AmazonReturn.amazon_return_id.ilike(s_pat),
+                    AmazonReturn.amazon_order_id.ilike(s_pat),
+                    AmazonReturn.sku.ilike(s_pat),
+                    AmazonReturn.product_name.ilike(s_pat)
+                )
+            )
+        total_records = amz_query.count()
+        skip = (page - 1) * limit
+        returns = amz_query.order_by(date_col.desc()).offset(skip).limit(limit).all()
+
+        data = []
+        for r in returns:
+            ret_dt = r.received_at or r.requested_at or r.created_at
+            data.append({
+                "id": r.id,
+                "return_number": r.amazon_return_id or r.amazon_order_id,
+                "status": r.inspection_status or r.return_status or "Verified",
+                "warehouse_id": None,
+                "warehouse_name": "Amazon FBA",
+                "dispatch_id": None,
+                "dispatch_number": r.amazon_order_id,
+                "total_returned_qty": r.quantity or 1,
+                "sku": r.sku,
+                "product_name": r.product_name,
+                "created_at": ret_dt.isoformat() if ret_dt else None
+            })
 
     return {
         "page": page,
         "limit": limit,
+        "total": total_records,
         "total_records": total_records,
-        "total_pages": (total_records + limit - 1) // limit,
-        "data": data
+        "total_pages": (total_records + limit - 1) // limit if total_records > 0 else 0,
+        "data": data,
+        "items": data
     }
 
 
@@ -454,8 +594,8 @@ def get_fc_returns_report(
 @router.get("/defective")
 def get_defective_reports(
     report_type: str = Query("claims", pattern="^(claims|inventory)$", description="claims or inventory"),
-    date_from: Optional[date] = Query(None, description="Start date filter"),
-    date_to: Optional[date] = Query(None, description="End date filter"),
+    date_from: Optional[str] = Query(None, description="Start date filter"),
+    date_to: Optional[str] = Query(None, description="End date filter"),
     warehouse_id: Optional[int] = Query(None, description="Filter by Warehouse ID"),
     status: Optional[str] = Query(None, description="Status filter"),
     search: Optional[str] = Query(None, description="Search by SKU, claim number, or return ID"),
@@ -468,6 +608,8 @@ def get_defective_reports(
     """
     Returns paginated Damage Claims and Defective Inventory records.
     """
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
     skip = (page - 1) * limit
 
     if report_type == "claims":
@@ -477,12 +619,12 @@ def get_defective_reports(
             query = query.filter(DamageClaim.warehouse_id == warehouse_id)
         if status:
             query = query.filter(DamageClaim.claim_status == status)
-        if date_from:
-            query = query.filter(DamageClaim.created_at >= datetime.combine(date_from, datetime.min.time()))
-        if date_to:
-            query = query.filter(DamageClaim.created_at <= datetime.combine(date_to, datetime.max.time()))
+        if parsed_date_from:
+            query = query.filter(DamageClaim.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            query = query.filter(DamageClaim.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
         if search:
-            search_pattern = f"%{search}%"
+            search_pattern = f"%{search.strip()}%"
             query = query.join(Product, Product.id == DamageClaim.product_id)\
                          .filter(or_(DamageClaim.claim_number.ilike(search_pattern), Product.sku.ilike(search_pattern)))
 
@@ -511,12 +653,12 @@ def get_defective_reports(
 
         if status:
             query = query.filter(DefectiveInventory.status == status)
-        if date_from:
-            query = query.filter(DefectiveInventory.created_at >= datetime.combine(date_from, datetime.min.time()))
-        if date_to:
-            query = query.filter(DefectiveInventory.created_at <= datetime.combine(date_to, datetime.max.time()))
+        if parsed_date_from:
+            query = query.filter(DefectiveInventory.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            query = query.filter(DefectiveInventory.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
         if search:
-            search_pattern = f"%{search}%"
+            search_pattern = f"%{search.strip()}%"
             query = query.filter(
                 or_(
                     DefectiveInventory.sku_snapshot.ilike(search_pattern),
@@ -548,9 +690,11 @@ def get_defective_reports(
         "report_type": report_type,
         "page": page,
         "limit": limit,
+        "total": total_records,
         "total_records": total_records,
-        "total_pages": (total_records + limit - 1) // limit,
-        "data": data
+        "total_pages": (total_records + limit - 1) // limit if total_records > 0 else 0,
+        "data": data,
+        "items": data
     }
 
 import io
@@ -562,77 +706,234 @@ from fastapi.responses import Response
 # ---------------------------------------------------------------------------
 @router.get("/sales/export")
 def export_sales(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     group_by: str = Query("day", pattern="^(day|week|month)$"),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    series: Optional[str] = Query(None),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    if group_by == "month":
-        period_col = func.strftime("%Y-%m", Sale.sale_date).label("period")
-    elif group_by == "week":
-        period_col = func.strftime("%Y-%W", Sale.sale_date).label("period")
-    else:
-        period_col = func.date(Sale.sale_date).label("period")
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+    s_clean = (series or "").strip().upper() if series else None
 
-    # 1. Filter Sales First (No Joins)
-    sale_base = db.query(
-        Sale.id,
-        period_col,
-        Sale.total_taxable_amount,
-        Sale.total_tax,
-        Sale.grand_total
-    ).filter(Sale.company_id == company_id)
+    is_sqlite = (db.bind.dialect.name == "sqlite") if db.bind else False
 
-    if date_from:
-        sale_base = sale_base.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        sale_base = sale_base.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
-    if status:
-        sale_base = sale_base.filter(Sale.status == status)
-    if search:
-        search_pattern = f"%{search}%"
-        sale_base = sale_base.filter(
-            or_(Sale.bill_number.ilike(search_pattern), Sale.invoice_number.ilike(search_pattern), Sale.customer_name.ilike(search_pattern))
+    if s_clean in ("AFN", "MFN", "AMAZON"):
+        if is_sqlite:
+            if group_by == "month":
+                period_col = func.strftime("%Y-%m", AmazonLiveAllocation.created_at).label("period")
+            elif group_by == "week":
+                period_col = func.strftime("%Y-%W", AmazonLiveAllocation.created_at).label("period")
+            else:
+                period_col = func.date(AmazonLiveAllocation.created_at).label("period")
+        else:
+            if group_by == "month":
+                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM").label("period")
+            elif group_by == "week":
+                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-WW").label("period")
+            else:
+                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM-DD").label("period")
+
+        alloc_query = db.query(AmazonLiveAllocation).filter(AmazonLiveAllocation.company_id == company_id)
+
+        if s_clean == "AFN":
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
+        elif s_clean == "MFN":
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
+
+        if parsed_date_from:
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
+
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            alloc_query = alloc_query.filter(
+                or_(
+                    AmazonLiveAllocation.order_id.ilike(search_pattern),
+                    AmazonLiveAllocation.sku.ilike(search_pattern)
+                )
+            )
+
+        selling_price_expr = case(
+            (Product.item_rate > 0, Product.item_rate * 1.35),
+            else_=500.0
         )
+        tax_rate_expr = func.coalesce(Product.default_gst_rate, 18.0)
+        gross_expr = (selling_price_expr / (1.0 + tax_rate_expr / 100.0)) * AmazonLiveAllocation.allocated_qty
+        revenue_expr = selling_price_expr * AmazonLiveAllocation.allocated_qty
+        tax_expr = revenue_expr - gross_expr
 
-    sale_sq = sale_base.subquery()
+        agg_query = alloc_query.outerjoin(
+            Product,
+            and_(
+                Product.sku == AmazonLiveAllocation.sku,
+                Product.company_id == AmazonLiveAllocation.company_id
+            )
+        ).with_entities(
+            period_col,
+            func.count(distinct(AmazonLiveAllocation.order_id)).label("total_orders"),
+            func.sum(AmazonLiveAllocation.allocated_qty).label("total_items_sold"),
+            func.sum(gross_expr).label("total_taxable_amount"),
+            func.sum(tax_expr).label("total_tax"),
+            func.sum(revenue_expr).label("total_revenue")
+        ).group_by(period_col).order_by(period_col.desc())
 
-    item_sq = db.query(
-        SaleItem.sale_id,
-        func.sum(SaleItem.quantity).label("qty")
-    ).group_by(SaleItem.sale_id).subquery()
+        results = agg_query.all()
+    else:
+        if is_sqlite:
+            if group_by == "month":
+                period_col = func.strftime("%Y-%m", Sale.sale_date).label("period")
+            elif group_by == "week":
+                period_col = func.strftime("%Y-%W", Sale.sale_date).label("period")
+            else:
+                period_col = func.date(Sale.sale_date).label("period")
+        else:
+            if group_by == "month":
+                period_col = func.to_char(Sale.sale_date, "YYYY-MM").label("period")
+            elif group_by == "week":
+                period_col = func.to_char(Sale.sale_date, "YYYY-WW").label("period")
+            else:
+                period_col = func.to_char(Sale.sale_date, "YYYY-MM-DD").label("period")
 
-    query = db.query(
-        sale_sq.c.period,
-        func.count(sale_sq.c.id).label("total_orders"),
-        func.sum(func.coalesce(item_sq.c.qty, 0)).label("total_items_sold"),
-        func.sum(sale_sq.c.total_taxable_amount).label("total_taxable_amount"),
-        func.sum(sale_sq.c.total_tax).label("total_tax"),
-        func.sum(sale_sq.c.grand_total).label("total_revenue")
-    ).outerjoin(item_sq, item_sq.c.sale_id == sale_sq.c.id)
+        sale_base = db.query(
+            Sale.id,
+            period_col,
+            Sale.total_taxable_amount,
+            Sale.total_tax,
+            Sale.grand_total
+        ).filter(Sale.company_id == company_id)
 
-    query = query.group_by(sale_sq.c.period).order_by(sale_sq.c.period.desc())
-    results = query.all()
+        if parsed_date_from:
+            sale_base = sale_base.filter(Sale.sale_date >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            sale_base = sale_base.filter(Sale.sale_date <= datetime.combine(parsed_date_to, datetime.max.time()))
+        if status:
+            sale_base = sale_base.filter(Sale.status == status)
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            sale_base = sale_base.filter(
+                or_(Sale.bill_number.ilike(search_pattern), Sale.invoice_number.ilike(search_pattern), Sale.customer_name.ilike(search_pattern))
+            )
+        if s_clean:
+            if s_clean == "GST":
+                sale_base = sale_base.filter(
+                    and_(
+                        or_(
+                            Sale.bill_number.ilike("GST%"),
+                            Sale.invoice_number.ilike("GST%"),
+                            Sale.bill_number.ilike("BKR-GST%"),
+                            Sale.invoice_number.ilike("BKR-GST%"),
+                        ),
+                        ~Sale.bill_number.ilike("JGST%"),
+                        ~Sale.invoice_number.ilike("JGST%"),
+                    )
+                )
+            elif s_clean == "JGST":
+                if company_id != 3:
+                    sale_base = sale_base.filter(Sale.id == -1)
+                else:
+                    sale_base = sale_base.filter(
+                        and_(
+                            or_(
+                                Sale.bill_number.ilike("JGST%"),
+                                Sale.invoice_number.ilike("JGST%"),
+                            ),
+                            ~Sale.bill_number.ilike("GST%"),
+                            ~Sale.invoice_number.ilike("GST%")
+                        )
+                    )
+            elif s_clean == "BKR":
+                if company_id != 2:
+                    sale_base = sale_base.filter(Sale.id == -1)
+                else:
+                    sale_base = sale_base.filter(
+                        and_(
+                            or_(Sale.bill_number.ilike("BKR%"), Sale.invoice_number.ilike("BKR%")),
+                            ~Sale.bill_number.ilike("%GST%"),
+                            ~Sale.invoice_number.ilike("%GST%")
+                        )
+                    )
+            elif s_clean in ("SERVICE", "SERV"):
+                sale_base = sale_base.filter(
+                    or_(
+                        Sale.bill_number.ilike("SERVICE%"),
+                        Sale.invoice_number.ilike("SERVICE%"),
+                        Sale.bill_number.ilike("SERV%"),
+                        Sale.invoice_number.ilike("SERV%")
+                    )
+                )
+            elif s_clean == "ALL":
+                sale_base = sale_base.filter(
+                    and_(
+                        or_(Sale.transaction_origin == None, Sale.transaction_origin != "AMAZON"),
+                        ~Sale.bill_number.ilike("AMZ%"),
+                        ~Sale.invoice_number.ilike("AMZ%"),
+                        ~Sale.bill_number.ilike("%AMZN%"),
+                        ~Sale.invoice_number.ilike("%AMZN%"),
+                        ~Sale.bill_number.ilike("AFN%"),
+                        ~Sale.invoice_number.ilike("AFN%"),
+                        ~Sale.bill_number.ilike("MFN%"),
+                        ~Sale.invoice_number.ilike("MFN%")
+                    )
+                )
+                if company_id == 3:
+                    sale_base = sale_base.filter(and_(~Sale.bill_number.ilike("BKR%"), ~Sale.invoice_number.ilike("BKR%")))
+                elif company_id == 2:
+                    sale_base = sale_base.filter(and_(~Sale.bill_number.ilike("JGST%"), ~Sale.invoice_number.ilike("JGST%"), ~Sale.bill_number.ilike("JSPL%"), ~Sale.invoice_number.ilike("JSPL%")))
+            else:
+                pattern = f"{s_clean}%"
+                sale_base = sale_base.filter(or_(Sale.bill_number.ilike(pattern), Sale.invoice_number.ilike(pattern)))
+
+        sale_sq = sale_base.subquery()
+
+        item_sq = db.query(
+            SaleItem.sale_id,
+            func.sum(SaleItem.quantity).label("qty")
+        ).group_by(SaleItem.sale_id).subquery()
+
+        query = db.query(
+            sale_sq.c.period,
+            func.count(sale_sq.c.id).label("total_orders"),
+            func.sum(func.coalesce(item_sq.c.qty, 0)).label("total_items_sold"),
+            func.sum(sale_sq.c.total_taxable_amount).label("total_taxable_amount"),
+            func.sum(sale_sq.c.total_tax).label("total_tax"),
+            func.sum(sale_sq.c.grand_total).label("total_revenue")
+        ).outerjoin(item_sq, item_sq.c.sale_id == sale_sq.c.id)
+
+        query = query.group_by(sale_sq.c.period).order_by(sale_sq.c.period.desc())
+        results = query.all()
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Period", "Total Orders", "Total Items Sold", "Total Taxable Amount", "Total Tax", "Total Revenue"])
     for row in results:
-        writer.writerow([row.period, row.total_orders, row.total_items_sold, round(row.total_taxable_amount or 0, 2), round(row.total_tax or 0, 2), round(row.total_revenue or 0, 2)])
+        writer.writerow([
+            row.period,
+            row.total_orders,
+            row.total_items_sold,
+            round(float(row.total_taxable_amount or 0), 2),
+            round(float(row.total_tax or 0), 2),
+            round(float(row.total_revenue or 0), 2)
+        ])
     
-    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=sales_report.csv"})
+    filename = f"sales_report_{s_clean or 'all'}.csv"
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 @router.get("/sales/detailed/export")
 def export_detailed_sales(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
     query = db.query(
         Sale.bill_number,
         Sale.customer_name,
@@ -648,12 +949,12 @@ def export_detailed_sales(
         Product, SaleItem.product_id == Product.id
     ).filter(Sale.company_id == company_id)
 
-    if date_from:
-        query = query.filter(Sale.sale_date >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        query = query.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
+    if parsed_date_from:
+        query = query.filter(Sale.sale_date >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        query = query.filter(Sale.sale_date <= datetime.combine(parsed_date_to, datetime.max.time()))
     if search:
-        search_pattern = f"%{search}%"
+        search_pattern = f"%{search.strip()}%"
         query = query.filter(
             or_(
                 Sale.bill_number.ilike(search_pattern),
@@ -677,8 +978,8 @@ def export_detailed_sales(
             row.sku,
             row.product_name,
             row.quantity,
-            round(row.selling_price or 0, 2),
-            round(row.line_total or 0, 2)
+            round(float(row.selling_price or 0), 2),
+            round(float(row.line_total or 0), 2)
         ])
     
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=detailed_sales_report.csv"})
@@ -686,8 +987,8 @@ def export_detailed_sales(
 @router.get("/sales/series-export")
 def export_series_sales(
     series: str = Query("GST"),
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     format: str = Query("csv", pattern="^(csv|excel)$"),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
@@ -718,7 +1019,7 @@ def export_inventory(
 ):
     query = db.query(Inventory, Product, Warehouse).join(Product, Inventory.product_id == Product.id).join(Warehouse, Inventory.warehouse_id == Warehouse.id).filter(Inventory.company_id == company_id)
     if search:
-        search_pattern = f"%{search}%"
+        search_pattern = f"%{search.strip()}%"
         query = query.filter(
             or_(Product.name.ilike(search_pattern), Product.sku.ilike(search_pattern), Warehouse.name.ilike(search_pattern))
         )
@@ -734,22 +1035,25 @@ def export_inventory(
 
 @router.get("/dispatches/export")
 def export_dispatches(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
     query = db.query(FCDispatch).filter(FCDispatch.company_id == company_id)
     if status:
         query = query.filter(FCDispatch.dispatch_status == status)
-    if date_from:
-        query = query.filter(FCDispatch.created_at >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        query = query.filter(FCDispatch.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if parsed_date_from:
+        query = query.filter(FCDispatch.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        query = query.filter(FCDispatch.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
     if search:
-        query = query.filter(FCDispatch.dispatch_number.ilike(f"%{search}%"))
+        query = query.filter(FCDispatch.dispatch_number.ilike(f"%{search.strip()}%"))
         
     results = query.order_by(FCDispatch.created_at.desc()).all()
 
@@ -763,51 +1067,95 @@ def export_dispatches(
 
 @router.get("/returns/export")
 def export_returns(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    query = db.query(FCReturn).filter(FCReturn.company_id == company_id)
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
+    fc_query = db.query(FCReturn).filter(FCReturn.company_id == company_id)
     if status:
-        query = query.filter(FCReturn.status == status)
-    if date_from:
-        query = query.filter(FCReturn.created_at >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        query = query.filter(FCReturn.created_at <= datetime.combine(date_to, datetime.max.time()))
+        fc_query = fc_query.filter(FCReturn.status == status)
+    if parsed_date_from:
+        fc_query = fc_query.filter(FCReturn.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        fc_query = fc_query.filter(FCReturn.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
     if search:
-        query = query.filter(FCReturn.return_number.ilike(f"%{search}%"))
+        fc_query = fc_query.filter(FCReturn.return_number.ilike(f"%{search.strip()}%"))
         
-    results = query.order_by(FCReturn.created_at.desc()).all()
+    fc_count = fc_query.count()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Return Number", "Status", "Date"])
-    for r in results:
-        writer.writerow([r.return_number, r.status, r.created_at.isoformat() if r.created_at else ""])
+
+    if fc_count > 0:
+        results = fc_query.order_by(FCReturn.created_at.desc()).all()
+        writer.writerow(["Return Number", "Status", "Date"])
+        for r in results:
+            writer.writerow([r.return_number, r.status, r.created_at.isoformat() if r.created_at else ""])
+    else:
+        # Fall back to Amazon Returns
+        amz_query = db.query(AmazonReturn).filter(AmazonReturn.company_id == company_id)
+        if status:
+            amz_query = amz_query.filter(
+                or_(AmazonReturn.return_status == status, AmazonReturn.inspection_status == status)
+            )
+        date_col = func.coalesce(AmazonReturn.received_at, AmazonReturn.requested_at, AmazonReturn.created_at)
+        if parsed_date_from:
+            amz_query = amz_query.filter(date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
+        if parsed_date_to:
+            amz_query = amz_query.filter(date_col <= datetime.combine(parsed_date_to, datetime.max.time()))
+        if search:
+            s_pat = f"%{search.strip()}%"
+            amz_query = amz_query.filter(
+                or_(
+                    AmazonReturn.amazon_return_id.ilike(s_pat),
+                    AmazonReturn.amazon_order_id.ilike(s_pat),
+                    AmazonReturn.sku.ilike(s_pat),
+                    AmazonReturn.product_name.ilike(s_pat)
+                )
+            )
+        results = amz_query.order_by(date_col.desc()).all()
+        writer.writerow(["Return Number", "Order ID", "SKU", "Product Name", "Quantity", "Status", "Date"])
+        for r in results:
+            ret_dt = r.received_at or r.requested_at or r.created_at
+            writer.writerow([
+                r.amazon_return_id,
+                r.amazon_order_id,
+                r.sku,
+                r.product_name,
+                r.quantity,
+                r.inspection_status or r.return_status,
+                ret_dt.isoformat() if ret_dt else ""
+            ])
     
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=returns_report.csv"})
 
 @router.get("/defective/export")
 def export_defective(
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
     query = db.query(DefectiveInventory).filter(DefectiveInventory.company_id == company_id)
     if status:
         query = query.filter(DefectiveInventory.status == status)
-    if date_from:
-        query = query.filter(DefectiveInventory.created_at >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        query = query.filter(DefectiveInventory.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if parsed_date_from:
+        query = query.filter(DefectiveInventory.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        query = query.filter(DefectiveInventory.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
     if search:
-        search_pattern = f"%{search}%"
+        search_pattern = f"%{search.strip()}%"
         query = query.filter(or_(DefectiveInventory.sku_snapshot.ilike(search_pattern), DefectiveInventory.product_name_snapshot.ilike(search_pattern)))
         
     results = query.order_by(DefectiveInventory.created_at.desc()).all()
@@ -816,6 +1164,14 @@ def export_defective(
     writer = csv.writer(output)
     writer.writerow(["SKU", "Product Name", "Quantity", "Reason", "Status", "Inspection Date", "Created At"])
     for d in results:
-        writer.writerow([d.sku_snapshot, d.product_name_snapshot, d.quantity, d.return_reason, d.status, d.inspection_date.isoformat() if d.inspection_date else "", d.created_at.isoformat() if d.created_at else ""])
+        writer.writerow([
+            d.sku_snapshot,
+            d.product_name_snapshot,
+            d.quantity,
+            d.return_reason,
+            d.status,
+            d.inspection_date.isoformat() if d.inspection_date else "",
+            d.created_at.isoformat() if d.created_at else ""
+        ])
     
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=defective_report.csv"})

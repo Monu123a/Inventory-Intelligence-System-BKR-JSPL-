@@ -65,10 +65,10 @@ export const SalesReport = () => {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['salesReport', { page, search, dateFrom, dateTo, selectedSeries, companyId }],
     queryFn: async () => {
-      const params = { skip: (page - 1) * limit, limit };
-      if (search) params.search = search;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
+      const params = { page, limit };
+      if (search?.trim()) params.search = search.trim();
+      if (dateFrom?.trim()) params.date_from = dateFrom.trim();
+      if (dateTo?.trim()) params.date_to = dateTo.trim();
       if (selectedSeries) params.series = selectedSeries;
       
       return reportsService.getSalesReport(params);
@@ -133,9 +133,9 @@ export const SalesReport = () => {
   };
 
   // Handle backend formats flexibly
-  const items = data?.items || (Array.isArray(data) ? data : []);
-  const total = data?.total || items.length;
-  const totalPages = Math.ceil(total / limit);
+  const items = data?.items || data?.data || (Array.isArray(data) ? data : []);
+  const total = data?.total_records ?? data?.total ?? items.length;
+  const totalPages = data?.total_pages || Math.ceil(total / limit) || 1;
 
   const columns = [
     { key: 'period', label: 'Period' },

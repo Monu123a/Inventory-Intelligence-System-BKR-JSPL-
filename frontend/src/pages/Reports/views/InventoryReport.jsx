@@ -23,21 +23,21 @@ export const InventoryReport = () => {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['inventoryReport', { page, search, company, stateHub, warehouseType, fcCode, gstin }],
     queryFn: async () => {
-      const params = { skip: (page - 1) * limit, limit };
-      if (search) params.search = search;
-      if (company) params.company = company;
-      if (stateHub) params.state_hub = stateHub;
-      if (warehouseType) params.warehouse_type = warehouseType;
-      if (fcCode) params.fc_code = fcCode;
-      if (gstin) params.gstin = gstin;
+      const params = { page, limit };
+      if (search?.trim()) params.search = search.trim();
+      if (company?.trim()) params.company = company.trim();
+      if (stateHub?.trim()) params.state_hub = stateHub.trim();
+      if (warehouseType?.trim()) params.warehouse_type = warehouseType.trim();
+      if (fcCode?.trim()) params.fc_code = fcCode.trim();
+      if (gstin?.trim()) params.gstin = gstin.trim();
       
       return reportsService.getInventoryReport(params);
     }
   });
 
-  const items = data?.items || (Array.isArray(data) ? data : []);
-  const total = data?.total || items.length;
-  const totalPages = Math.ceil(total / limit);
+  const items = data?.items || data?.data || (Array.isArray(data) ? data : []);
+  const total = data?.total_records ?? data?.total ?? items.length;
+  const totalPages = data?.total_pages || Math.ceil(total / limit) || 1;
 
   const columns = [
     { key: 'sku', label: 'SKU' },
