@@ -145,7 +145,40 @@ def get_sales_report(
                     Sale.invoice_number.ilike("MFN%")
                 )
             )
-        elif s_clean != "ALL":
+        elif s_clean == "ALL":
+            # All Series Combined must strictly exclude Amazon orders and respect company exclusivity
+            sale_base = sale_base.filter(
+                and_(
+                    or_(Sale.transaction_origin == None, Sale.transaction_origin != "AMAZON"),
+                    ~Sale.bill_number.ilike("AMZ%"),
+                    ~Sale.invoice_number.ilike("AMZ%"),
+                    ~Sale.bill_number.ilike("%AMZN%"),
+                    ~Sale.invoice_number.ilike("%AMZN%"),
+                    ~Sale.bill_number.ilike("AFN%"),
+                    ~Sale.invoice_number.ilike("AFN%"),
+                    ~Sale.bill_number.ilike("MFN%"),
+                    ~Sale.invoice_number.ilike("MFN%")
+                )
+            )
+            if company_id == 3:
+                # JSPL: strictly exclude BKR series
+                sale_base = sale_base.filter(
+                    and_(
+                        ~Sale.bill_number.ilike("BKR%"),
+                        ~Sale.invoice_number.ilike("BKR%")
+                    )
+                )
+            elif company_id == 2:
+                # BKR: strictly exclude JGST/JSPL series
+                sale_base = sale_base.filter(
+                    and_(
+                        ~Sale.bill_number.ilike("JGST%"),
+                        ~Sale.invoice_number.ilike("JGST%"),
+                        ~Sale.bill_number.ilike("JSPL%"),
+                        ~Sale.invoice_number.ilike("JSPL%")
+                    )
+                )
+        else:
             pattern = f"{s_clean}%"
             sale_base = sale_base.filter(
                 or_(

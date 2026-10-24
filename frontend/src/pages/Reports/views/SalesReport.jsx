@@ -32,7 +32,7 @@ export const SalesReport = () => {
         { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { value: 'SERVICE', label: 'Service Series (SERVICE-)' },
-        { value: 'ALL', label: 'All Series Combined' }
+        { value: 'ALL', label: 'All Series (Excl. Amazon)' }
       ];
     }
     if (isBkr) {
@@ -42,7 +42,7 @@ export const SalesReport = () => {
         { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
         { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
-        { value: 'ALL', label: 'All Series Combined' }
+        { value: 'ALL', label: 'All Series (Excl. Amazon)' }
       ];
     }
     return [
@@ -50,7 +50,7 @@ export const SalesReport = () => {
       { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
       { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
       { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
-      { value: 'ALL', label: 'All Series Combined' }
+      { value: 'ALL', label: 'All Series (Excl. Amazon)' }
     ];
   }, [isJspl, isBkr]);
 

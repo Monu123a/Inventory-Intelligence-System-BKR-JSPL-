@@ -144,7 +144,7 @@ class SeriesReportService:
                 {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
                 {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
                 {"id": "SERVICE", "label": "Service Series (SERVICE-)"},
-                {"id": "ALL", "label": "All Invoices & Series Combined"}
+                {"id": "ALL", "label": "All Series Combined (Excl. Amazon)"}
             ]
             for p in sorted(series_set):
                 if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "SERVICE", "SERV", "DELETED", "EDITED", "CANCELLED") and not p.startswith("BKR"):
@@ -157,7 +157,7 @@ class SeriesReportService:
                 {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
                 {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
                 {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
-                {"id": "ALL", "label": "All Invoices & Series Combined"}
+                {"id": "ALL", "label": "All Series Combined (Excl. Amazon)"}
             ]
             for p in sorted(series_set):
                 if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED") and not p.startswith("JGST") and not p.startswith("JSPL"):
@@ -170,7 +170,7 @@ class SeriesReportService:
                 {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
                 {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
                 {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
-                {"id": "ALL", "label": "All Invoices & Series Combined"}
+                {"id": "ALL", "label": "All Series Combined (Excl. Amazon)"}
             ]
             for p in sorted(series_set):
                 if p not in ("GST", "BKR", "JGST", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED"):
@@ -432,7 +432,38 @@ class SeriesReportService:
                 )
             )
         elif series_clean == "ALL":
-            pass
+            # All Series Combined must strictly exclude Amazon orders and respect company exclusivity
+            sales_query = sales_query.filter(
+                and_(
+                    or_(Sale.transaction_origin == None, Sale.transaction_origin != "AMAZON"),
+                    ~Sale.bill_number.ilike("AMZ%"),
+                    ~Sale.invoice_number.ilike("AMZ%"),
+                    ~Sale.bill_number.ilike("%AMZN%"),
+                    ~Sale.invoice_number.ilike("%AMZN%"),
+                    ~Sale.bill_number.ilike("AFN%"),
+                    ~Sale.invoice_number.ilike("AFN%"),
+                    ~Sale.bill_number.ilike("MFN%"),
+                    ~Sale.invoice_number.ilike("MFN%")
+                )
+            )
+            if company_id == 3:
+                # JSPL: strictly exclude BKR retail series
+                sales_query = sales_query.filter(
+                    and_(
+                        ~Sale.bill_number.ilike("BKR%"),
+                        ~Sale.invoice_number.ilike("BKR%")
+                    )
+                )
+            elif company_id == 2:
+                # BKR: strictly exclude JGST/JSPL series
+                sales_query = sales_query.filter(
+                    and_(
+                        ~Sale.bill_number.ilike("JGST%"),
+                        ~Sale.invoice_number.ilike("JGST%"),
+                        ~Sale.bill_number.ilike("JSPL%"),
+                        ~Sale.invoice_number.ilike("JSPL%")
+                    )
+                )
         else:
             pattern = f"{series_clean}%"
             sales_query = sales_query.filter(
@@ -448,7 +479,7 @@ class SeriesReportService:
         sales = sales_query.order_by(Sale.sale_date.asc(), Sale.id.asc()).all()
 
         amazon_allocations = []
-        if series_clean in ("AMAZON", "ALL", "AFN", "MFN"):
+        if series_clean in ("AMAZON", "AFN", "MFN"):
             alloc_query = db.query(AmazonLiveAllocation)
             if company_id:
                 has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
@@ -466,7 +497,10 @@ class SeriesReportService:
 
         d_from_str = date_from.strftime("%d/%m/%Y") if date_from else "01/10/2026"
         d_to_str = date_to.strftime("%d/%m/%Y") if date_to else datetime.utcnow().strftime("%d/%m/%Y")
-        title_str = f"SALE REPORT FOR ACCOUNTANT-{series_clean} From {d_from_str} to {d_to_str}"
+        if series_clean == "ALL":
+            title_str = f"SALE REPORT FOR ACCOUNTANT-ALL (EXCL. AMAZON) From {d_from_str} to {d_to_str}"
+        else:
+            title_str = f"SALE REPORT FOR ACCOUNTANT-{series_clean} From {d_from_str} to {d_to_str}"
 
         data_rows: List[List[Any]] = []
         sno = 0
@@ -674,7 +708,7 @@ class SeriesReportService:
             grand_cash += bill_cash
 
         # Process Amazon allocations
-        if series_clean in ("AMAZON", "ALL", "AFN", "MFN") and amazon_allocations:
+        if series_clean in ("AMAZON", "AFN", "MFN") and amazon_allocations:
             prod_query = db.query(Product)
             if company_id:
                 prod_query = prod_query.filter(Product.company_id == company_id)
@@ -775,6 +809,8 @@ class SeriesReportService:
             report_label = "Accountant Sales (Amazon AFN - FBA)"
         elif series_clean == "MFN":
             report_label = "Accountant Sales (Amazon MFN - Merchant)"
+        elif series_clean == "ALL":
+            report_label = "Accountant Sales (All Series - Excl. Amazon)"
 
         return SeriesReportService._export_dataset(
             db=db,

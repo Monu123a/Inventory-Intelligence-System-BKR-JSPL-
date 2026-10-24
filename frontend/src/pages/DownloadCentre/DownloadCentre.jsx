@@ -93,7 +93,7 @@ const DownloadCentre = () => {
         { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { id: 'SERVICE', label: 'Service Series (SERVICE-)' },
-        { id: 'ALL', label: 'All Series (Combined)' },
+        { id: 'ALL', label: 'All Series (Excl. Amazon)' },
         { id: 'CUSTOM', label: 'Custom Series...' }
       ];
     }
@@ -104,7 +104,7 @@ const DownloadCentre = () => {
         { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
         { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
-        { id: 'ALL', label: 'All Series (Combined)' },
+        { id: 'ALL', label: 'All Series (Excl. Amazon)' },
         { id: 'CUSTOM', label: 'Custom Series...' }
       ];
     }
@@ -113,7 +113,7 @@ const DownloadCentre = () => {
       { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
       { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
       { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
-      { id: 'ALL', label: 'All Series (Combined)' },
+      { id: 'ALL', label: 'All Series (Excl. Amazon)' },
       { id: 'CUSTOM', label: 'Custom Series...' }
     ];
   }, [isJspl, isBkr]);
