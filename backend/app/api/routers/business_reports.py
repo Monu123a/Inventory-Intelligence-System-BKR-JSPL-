@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
 from datetime import datetime, date
 from typing import Optional
 
@@ -25,6 +25,7 @@ def get_sales_report(
     group_by: str = Query("day", pattern="^(day|week|month)$", description="Grouping dimension"),
     status: Optional[str] = Query(None, description="Sale status (e.g., Completed, Draft, Cancelled)"),
     search: Optional[str] = Query(None, description="Search by bill number, invoice number, customer name"),
+    series: Optional[str] = Query(None, description="Series filter: GST, JGST, BKR, SERVICE, AMAZON, etc."),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     company_id: int = Depends(get_current_company_id),
@@ -67,6 +68,71 @@ def get_sales_report(
                 Sale.customer_name.ilike(search_pattern)
             )
         )
+    if series:
+        s_clean = series.strip().upper()
+        if s_clean == "GST":
+            sale_base = sale_base.filter(
+                and_(
+                    or_(
+                        Sale.bill_number.ilike("GST%"),
+                        Sale.invoice_number.ilike("GST%"),
+                        Sale.bill_number.ilike("BKR-GST%"),
+                        Sale.invoice_number.ilike("BKR-GST%"),
+                    ),
+                    ~Sale.bill_number.ilike("JGST%"),
+                    ~Sale.invoice_number.ilike("JGST%"),
+                )
+            )
+        elif s_clean == "JGST":
+            if company_id != 3:
+                sale_base = sale_base.filter(Sale.id == -1)
+            else:
+                sale_base = sale_base.filter(
+                    or_(
+                        Sale.bill_number.ilike("JGST%"),
+                        Sale.invoice_number.ilike("JGST%"),
+                        Sale.bill_number.ilike("JSPL%"),
+                        Sale.invoice_number.ilike("JSPL%")
+                    )
+                )
+        elif s_clean == "BKR":
+            if company_id != 2:
+                sale_base = sale_base.filter(Sale.id == -1)
+            else:
+                sale_base = sale_base.filter(
+                    and_(
+                        or_(Sale.bill_number.ilike("BKR%"), Sale.invoice_number.ilike("BKR%")),
+                        ~Sale.bill_number.ilike("%GST%"),
+                        ~Sale.invoice_number.ilike("%GST%")
+                    )
+                )
+        elif s_clean in ("SERVICE", "SERV"):
+            sale_base = sale_base.filter(
+                or_(
+                    Sale.bill_number.ilike("SERVICE%"),
+                    Sale.invoice_number.ilike("SERVICE%"),
+                    Sale.bill_number.ilike("SERV%"),
+                    Sale.invoice_number.ilike("SERV%")
+                )
+            )
+        elif s_clean == "AMAZON":
+            sale_base = sale_base.filter(
+                or_(
+                    Sale.transaction_origin == "AMAZON",
+                    Sale.bill_number.ilike("AMZ%"),
+                    Sale.invoice_number.ilike("AMZ%"),
+                    Sale.bill_number.ilike("%AMZN%"),
+                    Sale.invoice_number.ilike("%AMZN%")
+                )
+            )
+        elif s_clean != "ALL":
+            pattern = f"{s_clean}%"
+            sale_base = sale_base.filter(
+                or_(
+                    Sale.bill_number.ilike(pattern),
+                    Sale.invoice_number.ilike(pattern)
+                )
+            )
 
     sale_sq = sale_base.subquery()
 

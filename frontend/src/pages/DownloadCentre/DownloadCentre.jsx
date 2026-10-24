@@ -8,6 +8,7 @@ import Button from '../../components/forms/Button';
 import { ConfirmationDialog } from '../../components/Modal/ConfirmationDialog';
 import { DownloadHistoryModal } from './components/DownloadHistoryModal';
 import { useDownloadHistory, saveDownloadMetadata } from '../../hooks/useDownloadHistory';
+import useCompanyStore from '../../stores/useCompanyStore';
 import { reportsService } from '../../services/reports';
 import api from '../../services/api';
 import { 
@@ -59,16 +60,12 @@ const REPORT_CATEGORIES = [
   }
 ];
 
-const SERIES_PRESETS = [
-  { id: 'GST', label: 'GST Series (GST- / BKR-GST- / JGST-)' },
-  { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
-  { id: 'BKR', label: 'BKR Retail Series (BKR-)' },
-  { id: 'JGST', label: 'JSPL GST Series (JGST-)' },
-  { id: 'ALL', label: 'All Series (Combined)' },
-  { id: 'CUSTOM', label: 'Custom Series...' }
-];
-
 const DownloadCentre = () => {
+  const { currentCompany, companyId } = useCompanyStore();
+  const companyCode = (currentCompany?.code || '').toUpperCase();
+  const isBkr = companyCode === 'BKR' || companyId === 2;
+  const isJspl = companyCode === 'JSPL' || companyId === 3;
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [reportTypeFilter, setReportTypeFilter] = useState('');
@@ -86,6 +83,42 @@ const DownloadCentre = () => {
   const [dateTo, setDateTo] = useState('2027-03-31');
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState(null);
+
+  const seriesPresets = React.useMemo(() => {
+    if (isJspl) {
+      return [
+        { id: 'GST', label: 'GST Series (GST-)' },
+        { id: 'JGST', label: 'JSPL GST Series (JGST-)' },
+        { id: 'SERVICE', label: 'Service Series (SERVICE-)' },
+        { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
+        { id: 'ALL', label: 'All Series (Combined)' },
+        { id: 'CUSTOM', label: 'Custom Series...' }
+      ];
+    }
+    if (isBkr) {
+      return [
+        { id: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
+        { id: 'BKR', label: 'BKR Retail Series (BKR-)' },
+        { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
+        { id: 'ALL', label: 'All Series (Combined)' },
+        { id: 'CUSTOM', label: 'Custom Series...' }
+      ];
+    }
+    return [
+      { id: 'GST', label: 'GST Series (GST-)' },
+      { id: 'AMAZON', label: 'Amazon Series (SP-API & AFN/MFN)' },
+      { id: 'ALL', label: 'All Series (Combined)' },
+      { id: 'CUSTOM', label: 'Custom Series...' }
+    ];
+  }, [isJspl, isBkr]);
+
+  useEffect(() => {
+    if (isJspl && selectedSeries === 'BKR') {
+      setSelectedSeries('GST');
+    } else if (isBkr && (selectedSeries === 'JGST' || selectedSeries === 'SERVICE')) {
+      setSelectedSeries('GST');
+    }
+  }, [isJspl, isBkr, selectedSeries]);
 
   // Vendor list for Purchases category
   const [vendors, setVendors] = useState([]);
@@ -307,7 +340,7 @@ const DownloadCentre = () => {
                 Select Invoice / Order Series
               </div>
               <div className={styles.seriesPills}>
-                {SERIES_PRESETS.map((preset) => (
+                {seriesPresets.map((preset) => (
                   <button
                     key={preset.id}
                     type="button"

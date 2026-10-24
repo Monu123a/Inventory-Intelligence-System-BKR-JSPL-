@@ -117,6 +117,9 @@ class SeriesReportService:
     @staticmethod
     def get_detected_series(db: Session, company_id: Optional[int] = None) -> List[Dict[str, str]]:
         """Returns detected series / prefixes from existing sales and Amazon orders."""
+        company = db.query(Company).filter(Company.id == company_id).first() if company_id else None
+        company_code = (company.code or "").strip().upper() if company else ""
+
         query = db.query(Sale.bill_number, Sale.invoice_number)
         if company_id:
             query = query.filter(Sale.company_id == company_id)
@@ -132,18 +135,40 @@ class SeriesReportService:
             elif ref and not ref.isdigit():
                 series_set.add(ref[:3].upper())
 
-        options = [
-            {"id": "GST", "label": "GST Series (GST- / BKR-GST- / JGST-)"},
-            {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
-            {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
-            {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
-            {"id": "ALL", "label": "All Invoices & Series Combined"}
-        ]
-        
-        # Add any other unique prefixes discovered
-        for p in sorted(series_set):
-            if p not in ("GST", "BKR", "JGST", "DELETED", "EDITED"):
-                options.append({"id": p, "label": f"{p} Series ({p}-*)"})
+        if company_code == "JSPL" or company_id == 3:
+            # JSPL: GST, JGST, SERVICE, AMAZON, ALL. BKR series is strictly excluded.
+            options = [
+                {"id": "GST", "label": "GST Series (GST-)"},
+                {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
+                {"id": "SERVICE", "label": "Service Series (SERVICE-)"},
+                {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
+                {"id": "ALL", "label": "All Invoices & Series Combined"}
+            ]
+            for p in sorted(series_set):
+                if p not in ("GST", "BKR", "JGST", "JSPL", "SERVICE", "SERV", "DELETED", "EDITED", "CANCELLED") and not p.startswith("BKR"):
+                    options.append({"id": p, "label": f"{p} Series ({p}-*)"})
+        elif company_code == "BKR" or company_id == 2:
+            # BKR: GST, BKR, AMAZON, ALL. JGST and JSPL series are strictly excluded.
+            options = [
+                {"id": "GST", "label": "GST Series (GST- / BKR-GST-)"},
+                {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
+                {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
+                {"id": "ALL", "label": "All Invoices & Series Combined"}
+            ]
+            for p in sorted(series_set):
+                if p not in ("GST", "BKR", "JGST", "JSPL", "DELETED", "EDITED", "CANCELLED") and not p.startswith("JGST") and not p.startswith("JSPL"):
+                    options.append({"id": p, "label": f"{p} Series ({p}-*)"})
+        else:
+            options = [
+                {"id": "GST", "label": "GST Series (GST-)"},
+                {"id": "AMAZON", "label": "Amazon Series (SP-API & AFN/MFN Orders)"},
+                {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
+                {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
+                {"id": "ALL", "label": "All Invoices & Series Combined"}
+            ]
+            for p in sorted(series_set):
+                if p not in ("GST", "BKR", "JGST", "DELETED", "EDITED", "CANCELLED"):
+                    options.append({"id": p, "label": f"{p} Series ({p}-*)"})
 
         return options
 
@@ -320,13 +345,17 @@ class SeriesReportService:
             sales_query = sales_query.filter(Sale.sale_date <= datetime.combine(date_to, datetime.max.time()))
 
         if series_clean == "GST":
+            # Strictly GST- or BKR-GST- bills. Explicitly exclude JGST- (JSPL GST series).
             sales_query = sales_query.filter(
-                or_(
-                    Sale.bill_number.ilike("GST%"),
-                    Sale.invoice_number.ilike("GST%"),
-                    Sale.bill_number.ilike("%GST%"),
-                    Sale.invoice_number.ilike("%GST%"),
-                    Sale.invoice_type == "B2B"
+                and_(
+                    or_(
+                        Sale.bill_number.ilike("GST%"),
+                        Sale.invoice_number.ilike("GST%"),
+                        Sale.bill_number.ilike("BKR-GST%"),
+                        Sale.invoice_number.ilike("BKR-GST%"),
+                    ),
+                    ~Sale.bill_number.ilike("JGST%"),
+                    ~Sale.invoice_number.ilike("JGST%"),
                 )
             )
         elif series_clean == "AMAZON":
@@ -340,20 +369,37 @@ class SeriesReportService:
                 )
             )
         elif series_clean == "BKR":
-            sales_query = sales_query.filter(
-                and_(
-                    or_(Sale.bill_number.ilike("BKR%"), Sale.invoice_number.ilike("BKR%")),
-                    ~Sale.bill_number.ilike("%GST%"),
-                    ~Sale.invoice_number.ilike("%GST%")
+            # BKR is strictly company exclusive to BKR (company_id = 2)
+            if company_id and company_id != 2:
+                sales_query = sales_query.filter(Sale.id == -1)
+            else:
+                sales_query = sales_query.filter(
+                    and_(
+                        or_(Sale.bill_number.ilike("BKR%"), Sale.invoice_number.ilike("BKR%")),
+                        ~Sale.bill_number.ilike("%GST%"),
+                        ~Sale.invoice_number.ilike("%GST%")
+                    )
                 )
-            )
         elif series_clean == "JGST":
+            # JGST is strictly company exclusive to JSPL (company_id = 3)
+            if company_id and company_id != 3:
+                sales_query = sales_query.filter(Sale.id == -1)
+            else:
+                sales_query = sales_query.filter(
+                    or_(
+                        Sale.bill_number.ilike("JGST%"),
+                        Sale.invoice_number.ilike("JGST%"),
+                        Sale.bill_number.ilike("JSPL%"),
+                        Sale.invoice_number.ilike("JSPL%")
+                    )
+                )
+        elif series_clean in ("SERVICE", "SERV"):
             sales_query = sales_query.filter(
                 or_(
-                    Sale.bill_number.ilike("JGST%"),
-                    Sale.invoice_number.ilike("JGST%"),
-                    Sale.bill_number.ilike("JSPL%"),
-                    Sale.invoice_number.ilike("JSPL%")
+                    Sale.bill_number.ilike("SERVICE%"),
+                    Sale.invoice_number.ilike("SERVICE%"),
+                    Sale.bill_number.ilike("SERV%"),
+                    Sale.invoice_number.ilike("SERV%")
                 )
             )
         elif series_clean == "ALL":
@@ -666,26 +712,27 @@ class SeriesReportService:
                 grand_cash += net_amt
 
         # Final Grand Totals Row
-        grand_total_row = [
-            "",                                                # 0: SNO.
-            "GRAND TOTALS",                                    # 1: BILL NO.
-            "", "", "", "", "", "", "", "", "",                # 2-10: (empty)
-            grand_qty,                                         # 11: SALE QUANTITY
-            "",                                                # 12: RATE/UNIT
-            round(grand_gross, 2),                             # 13: GROSS AMOUNT
-            round(grand_sgst, 2) if grand_sgst > 0 else "",    # 14: TOTAL SGST AMOUNT
-            round(grand_cgst, 2) if grand_cgst > 0 else "",    # 15: TOTAL CGST AMOUNT
-            round(grand_igst, 2) if grand_igst > 0 else "",    # 16: TOTAL IGST AMOUNT
-            "", "", "", "",                                    # 17-20: (empty)
-            round(grand_net, 2),                               # 21: NET AMOUNT
-            "",                                                # 22: CD VALUE
-            round(grand_cost, 2) if grand_cost > 0 else "",    # 23: AMOUNT (USER DEFINED RATE)
-            round(grand_credit, 2) if grand_credit > 0 else "",# 24: CREDIT
-            round(grand_cash, 2) if grand_cash > 0 else "",    # 25: CASH
-            "", "", "", "", "", "", "", "", "", "",            # 26-35: (empty)
-            "", "", "", "", "", "", "", "", "", "", ""         # 36-46: (empty)
-        ]
-        data_rows.append(grand_total_row)
+        if sno > 0:
+            grand_total_row = [
+                "",                                                # 0: SNO.
+                "GRAND TOTALS",                                    # 1: BILL NO.
+                "", "", "", "", "", "", "", "", "",                # 2-10: (empty)
+                grand_qty,                                         # 11: SALE QUANTITY
+                "",                                                # 12: RATE/UNIT
+                round(grand_gross, 2),                             # 13: GROSS AMOUNT
+                round(grand_sgst, 2) if grand_sgst > 0 else "",    # 14: TOTAL SGST AMOUNT
+                round(grand_cgst, 2) if grand_cgst > 0 else "",    # 15: TOTAL CGST AMOUNT
+                round(grand_igst, 2) if grand_igst > 0 else "",    # 16: TOTAL IGST AMOUNT
+                "", "", "", "",                                    # 17-20: (empty)
+                round(grand_net, 2),                               # 21: NET AMOUNT
+                "",                                                # 22: CD VALUE
+                round(grand_cost, 2) if grand_cost > 0 else "",    # 23: AMOUNT (USER DEFINED RATE)
+                round(grand_credit, 2) if grand_credit > 0 else "",# 24: CREDIT
+                round(grand_cash, 2) if grand_cash > 0 else "",    # 25: CASH
+                "", "", "", "", "", "", "", "", "", "",            # 26-35: (empty)
+                "", "", "", "", "", "", "", "", "", "", ""         # 36-46: (empty)
+            ]
+            data_rows.append(grand_total_row)
 
         timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         filename_base = f"Accountant_Sales_{series_clean}_{timestamp_str}"

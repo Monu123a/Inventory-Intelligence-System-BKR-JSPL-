@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import useCompanyStore from '../../../stores/useCompanyStore';
 import { reportsService } from '../../../services/reports';
 import { saveDownloadMetadata } from '../../../hooks/useDownloadHistory';
 import { DataTable } from '../../../components/DataTable';
@@ -9,6 +10,11 @@ import { FiDownload, FiFileText } from 'react-icons/fi';
 
 export const SalesReport = () => {
   const navigate = useNavigate();
+  const { currentCompany, companyId } = useCompanyStore();
+  const companyCode = (currentCompany?.code || '').toUpperCase();
+  const isBkr = companyCode === 'BKR' || companyId === 2;
+  const isJspl = companyCode === 'JSPL' || companyId === 3;
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -17,14 +23,47 @@ export const SalesReport = () => {
   const [isExporting, setIsExporting] = useState(false);
   const limit = 20;
 
+  const seriesOptions = useMemo(() => {
+    if (isJspl) {
+      return [
+        { value: 'GST', label: 'GST Series (GST-)' },
+        { value: 'JGST', label: 'JSPL Series (JGST-)' },
+        { value: 'SERVICE', label: 'Service Series (SERVICE-)' },
+        { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
+        { value: 'ALL', label: 'All Series Combined' }
+      ];
+    }
+    if (isBkr) {
+      return [
+        { value: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
+        { value: 'BKR', label: 'BKR Series (BKR-)' },
+        { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
+        { value: 'ALL', label: 'All Series Combined' }
+      ];
+    }
+    return [
+      { value: 'GST', label: 'GST Series (GST-)' },
+      { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
+      { value: 'ALL', label: 'All Series Combined' }
+    ];
+  }, [isJspl, isBkr]);
+
+  useEffect(() => {
+    if (isJspl && selectedSeries === 'BKR') {
+      setSelectedSeries('GST');
+    } else if (isBkr && (selectedSeries === 'JGST' || selectedSeries === 'SERVICE')) {
+      setSelectedSeries('GST');
+    }
+  }, [isJspl, isBkr, selectedSeries]);
+
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['salesReport', { page, search, dateFrom, dateTo, selectedSeries }],
+    queryKey: ['salesReport', { page, search, dateFrom, dateTo, selectedSeries, companyId }],
     queryFn: async () => {
       const params = { skip: (page - 1) * limit, limit };
       if (search) params.search = search;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
-      if (selectedSeries && selectedSeries !== 'ALL') params.status = undefined;
+      if (selectedSeries) params.series = selectedSeries;
       
       return reportsService.getSalesReport(params);
     }
@@ -114,13 +153,7 @@ export const SalesReport = () => {
             label: 'Series',
             value: selectedSeries,
             onChange: setSelectedSeries,
-            options: [
-              { value: 'GST', label: 'GST Series (GST-)' },
-              { value: 'AMAZON', label: 'Amazon Series (SP-API Orders)' },
-              { value: 'BKR', label: 'BKR Series (BKR-)' },
-              { value: 'JGST', label: 'JSPL Series (JGST-)' },
-              { value: 'ALL', label: 'All Series Combined' }
-            ]
+            options: seriesOptions
           }
         ]}
         onRefresh={() => refetch()}

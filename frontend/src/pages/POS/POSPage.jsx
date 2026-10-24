@@ -126,10 +126,34 @@ const POSPage = () => {
   const currentCompany = useCompanyStore(state => state.currentCompany);
   const companyName = currentCompany?.name || 'POS';
   const companyCode = useCompanyStore(state => state.companyCode) || '';
+  const isBkr = (companyCode || '').toUpperCase() === 'BKR';
+  const isJspl = (companyCode || '').toUpperCase() === 'JSPL';
+
+  const validSeriesOptions = React.useMemo(() => {
+    const base = ['GST'];
+    if (!isBkr) base.push('JGST', 'SERVICE', 'SERV', 'JSPL');
+    if (!isJspl) base.push('BKR');
+    if (companyCode && !base.includes(companyCode)) base.push(companyCode);
+    return base;
+  }, [isJspl, isBkr, companyCode]);
 
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
-  const [invoicePrefix, setInvoicePrefix] = useState(savedState.invoicePrefix || companyCode || 'GST');
+  const [invoicePrefix, setInvoicePrefix] = useState(() => {
+    const init = savedState.invoicePrefix || companyCode || 'GST';
+    if (isJspl && init === 'BKR') return 'GST';
+    if (isBkr && ['JGST', 'JSPL', 'SERVICE', 'SERV'].includes(init)) return 'GST';
+    return init;
+  });
+
+  useEffect(() => {
+    if (isJspl && invoicePrefix === 'BKR') {
+      setInvoicePrefix('GST');
+    } else if (isBkr && ['JGST', 'JSPL', 'SERVICE', 'SERV'].includes(invoicePrefix)) {
+      setInvoicePrefix('GST');
+    }
+  }, [isJspl, isBkr, invoicePrefix]);
+
   const isServiceSeries = ['SERVICE', 'SERV'].includes((invoicePrefix || '').trim().toUpperCase());
   const [searchResults, setSearchResults] = useState([]);
 
@@ -895,7 +919,7 @@ const POSPage = () => {
                 <label>Bill Series</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <select 
-                    value={['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
+                    value={validSeriesOptions.includes(invoicePrefix) ? invoicePrefix : 'CUSTOM'}
                     onChange={e => {
                       if (e.target.value !== 'CUSTOM') {
                         setInvoicePrefix(e.target.value);
@@ -907,17 +931,17 @@ const POSPage = () => {
                     style={{ width: '110px' }}
                   >
                     <option value="GST">GST-</option>
-                    <option value="JGST">JGST-</option>
-                    <option value="SERVICE">SERVICE-</option>
-                    <option value="SERV">SERV-</option>
-                    <option value="BKR">BKR-</option>
-                    <option value="JSPL">JSPL-</option>
-                    {companyCode && !['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL'].includes(companyCode) && (
+                    {!isBkr && <option value="JGST">JGST-</option>}
+                    {!isBkr && <option value="SERVICE">SERVICE-</option>}
+                    {!isBkr && <option value="SERV">SERV-</option>}
+                    {!isJspl && <option value="BKR">BKR-</option>}
+                    {!isBkr && <option value="JSPL">JSPL-</option>}
+                    {companyCode && !validSeriesOptions.includes(companyCode) && (
                       <option value={companyCode}>{companyCode}-</option>
                     )}
                     <option value="CUSTOM">Custom</option>
                   </select>
-                  {!['GST', 'JGST', 'SERVICE', 'SERV', 'BKR', 'JSPL', companyCode].filter(Boolean).includes(invoicePrefix) && (
+                  {!validSeriesOptions.includes(invoicePrefix) && (
                     <input 
                       type="text" 
                       value={invoicePrefix} 
