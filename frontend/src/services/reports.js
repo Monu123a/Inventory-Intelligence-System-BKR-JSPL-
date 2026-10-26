@@ -73,5 +73,22 @@ export const reportsService = {
       responseType: 'blob'
     });
     return response;
+  },
+  downloadAmazonMtrReport: async ({ warehouseCode, dateFrom, dateTo, format = 'excel' }) => {
+    const params = {
+      ...(warehouseCode ? { warehouse_code: warehouseCode } : {}),
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {}),
+      format
+    };
+    const response = await api.get('/api/reports/amazon-mtr/export', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+  getAmazonMtrWarehouses: async () => {
+    const response = await api.get('/api/reports/amazon-mtr/warehouses');
+    return normalizeResponse(response.data);
   }
 };

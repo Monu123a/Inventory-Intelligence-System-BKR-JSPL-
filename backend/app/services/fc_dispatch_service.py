@@ -445,7 +445,11 @@ class FCDispatchService:
                         source_warehouse_id=source_warehouse.id if source_warehouse else None,
                         destination_warehouse_id=dest_warehouse.id if dest_warehouse else None,
                         status="Completed",
-                        invoice_id=sale_id
+                        invoice_id=sale_id,
+                        total_value=taxable_total + tax_total,
+                        created_by=user_id,
+                        approved_by=user_id,
+                        notes=f"Cross-company transfer from {source_warehouse.name} ({source_warehouse.code}) to {dest_warehouse.name} ({dest_warehouse.code})"
                     )
                     db.add(st_obj)
                     db.flush()

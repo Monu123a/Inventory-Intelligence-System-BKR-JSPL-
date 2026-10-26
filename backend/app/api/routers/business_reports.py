@@ -45,10 +45,17 @@ def get_sales_report(
     is_sqlite = (db.bind.dialect.name == "sqlite") if db.bind else False
 
     # -----------------------------------------------------------------------
-    # Branch A: Amazon AFN / MFN / AMAZON Series
+    # Branch A: Amazon AFN / MFN / AMAZON or Warehouse Series (e.g. VSHB, KWZ2, BLR4)
     # Amazon orders are stored in AmazonLiveAllocation (not Sale table).
     # -----------------------------------------------------------------------
-    if s_clean in ("AFN", "MFN", "AMAZON"):
+    matched_wh = None
+    if s_clean and s_clean not in ("GST", "JGST", "BKR", "SERVICE", "SERV", "ALL", "AFN", "MFN", "AMAZON"):
+        wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == s_clean, Warehouse.status == "ACTIVE")
+        if company_id:
+            wh_q = wh_q.filter(Warehouse.company_id == company_id)
+        matched_wh = wh_q.first()
+
+    if s_clean in ("AFN", "MFN", "AMAZON") or bool(matched_wh):
         if is_sqlite:
             if group_by == "month":
                 period_col = func.strftime("%Y-%m", AmazonLiveAllocation.created_at).label("period")
@@ -74,6 +81,19 @@ def get_sales_report(
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
+        elif matched_wh:
+            is_central = (matched_wh.code.upper() in ("VSHB", "BKR_CENTRAL")) or (
+                matched_wh.warehouse_type and (str(matched_wh.warehouse_type).upper() == "CENTRAL" or getattr(matched_wh.warehouse_type, "value", "") == "CENTRAL")
+            )
+            if is_central:
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.warehouse_id == matched_wh.id,
+                        AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
+                    )
+                )
+            else:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
 
         if parsed_date_from:
             alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))

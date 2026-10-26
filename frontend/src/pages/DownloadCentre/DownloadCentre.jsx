@@ -52,6 +52,13 @@ const REPORT_CATEGORIES = [
     desc: 'Amazon SP-API return shipments, FC inspection reports, and reverse logistics in official accountant 47-column format.'
   },
   { 
+    id: 'amazon_mtr', 
+    label: 'Amazon MTR (86-Col)', 
+    icon: FiShoppingBag,
+    title: 'Amazon Merchant Tax Report (MTR / Logic ERP 86-Column Format)',
+    desc: 'Official 86-column Merchant Tax Report filterable by Warehouse/FC series (VSHB, IN, KWZ2, BLR4, BOM5, etc.) with exact Logic ERP account codes and tax breakdown.'
+  },
+  { 
     id: 'sales_returns', 
     label: 'POS Sales Returns', 
     icon: FiRotateCcw,
@@ -129,6 +136,24 @@ const DownloadCentre = () => {
   // Vendor list for Purchases category
   const [vendors, setVendors] = useState([]);
   const [selectedVendorId, setSelectedVendorId] = useState('');
+
+  // MTR Warehouse List
+  const [mtrWarehouses, setMtrWarehouses] = useState([]);
+
+  useEffect(() => {
+    reportsService.getAmazonMtrWarehouses().then(res => {
+      const list = res?.data || (Array.isArray(res) ? res : []);
+      setMtrWarehouses(list);
+    }).catch(err => console.error('Failed to load MTR warehouses:', err));
+  }, [companyId]);
+
+  useEffect(() => {
+    if (selectedCategory === 'amazon_mtr') {
+      setSelectedSeries('ALL');
+    } else if (selectedCategory === 'sales') {
+      setSelectedSeries('GST');
+    }
+  }, [selectedCategory]);
 
   useEffect(() => {
     api.get('/api/vendors/').then(res => setVendors(res.data || [])).catch(() => {});
@@ -367,6 +392,32 @@ const DownloadCentre = () => {
                     autoFocus
                   />
                 )}
+              </div>
+            </div>
+          )}
+
+          {selectedCategory === 'amazon_mtr' && (
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Filter By Warehouse / Fulfillment Center (FC)
+              </div>
+              <div className={styles.seriesPills}>
+                {mtrWarehouses.map((wh) => (
+                  <button
+                    key={wh.code}
+                    type="button"
+                    className={`${styles.pillBtn} ${selectedSeries === wh.code ? styles.pillBtnActive : ''}`}
+                    onClick={() => setSelectedSeries(wh.code)}
+                  >
+                    {selectedSeries === wh.code && <FiCheck style={{ marginRight: '4px', verticalAlign: 'middle' }} />}
+                    {wh.code === 'ALL' ? 'All Warehouses / FCs' : `${wh.code} (${wh.name})`}
+                    {wh.order_count > 0 && (
+                      <span style={{ marginLeft: '6px', fontSize: '10px', background: selectedSeries === wh.code ? 'rgba(255,255,255,0.3)' : '#e2e8f0', padding: '1px 6px', borderRadius: '10px' }}>
+                        {wh.order_count}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
           )}

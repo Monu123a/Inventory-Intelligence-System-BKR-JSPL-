@@ -208,3 +208,88 @@ def export_returns_report(
         raise HTTPException(status_code=500, detail=f"Failed to generate returns report: {str(e)}")
 
 
+@router.get("/amazon-mtr/warehouses")
+def get_amazon_mtr_warehouses(
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    """Returns warehouses and FCs available for filtering the Amazon MTR report."""
+    from app.models.schema import Warehouse, StateHub, AmazonLiveAllocation
+    whs = db.query(Warehouse).filter(
+        Warehouse.company_id == company_id,
+        Warehouse.status == "ACTIVE"
+    ).order_by(Warehouse.id.asc()).all()
+
+    # Pre-count allocations per warehouse
+    counts = dict(
+        db.query(AmazonLiveAllocation.warehouse_id, func.count(AmazonLiveAllocation.id))
+        .filter(AmazonLiveAllocation.company_id == company_id)
+        .group_by(AmazonLiveAllocation.warehouse_id)
+        .all()
+    )
+
+    hub_map = {h.id: h for h in db.query(StateHub).all()}
+
+    results = []
+    total_allocs = sum(counts.values())
+    results.append({
+        "code": "ALL",
+        "name": "All Warehouses & FCs",
+        "state": "All India",
+        "gstin": "",
+        "order_count": total_allocs
+    })
+
+    for w in whs:
+        code = (w.code or "").strip().upper()
+        if not code or code in ("DEFAULT", "TEST-WH-MFN", "AUTO_GODOWN"):
+            continue
+        hub = hub_map.get(w.hub_id) if w.hub_id else None
+        results.append({
+            "code": code,
+            "name": w.name,
+            "state": hub.state if hub else "",
+            "gstin": hub.gstin if hub else "",
+            "order_count": counts.get(w.id, 0)
+        })
+
+    return {"data": results}
+
+
+@router.get("/amazon-mtr/export")
+def export_amazon_mtr_report(
+    warehouse_code: Optional[str] = Query(None, description="Warehouse or FC code: VSHB, IN, KWZ2, BLR4, BOM5, etc. or ALL"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    format: str = Query("excel", pattern="^(excel|csv)$"),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Exports the official 86-column Amazon Merchant Tax Report (MTR / Logic ERP format)
+    matching the accountant format, filterable by warehouse / FC code.
+    """
+    try:
+        content, filename, media_type, row_count = SeriesReportService.generate_amazon_mtr_report(
+            db=db,
+            company_id=company_id,
+            warehouse_code=warehouse_code,
+            date_from=date_from,
+            date_to=date_to,
+            file_format=format
+        )
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Row-Count": str(row_count)
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate Amazon MTR report: {str(e)}")
+
+
+

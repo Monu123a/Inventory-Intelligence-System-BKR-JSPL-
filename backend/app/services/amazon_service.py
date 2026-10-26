@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from app.services.amazon_client import get_amazon_client
 from app.models.schema import (
-    Product, Warehouse, WarehouseExternalMapping, AmazonSyncLog,
+    Product, Warehouse, WarehouseType, WarehouseExternalMapping, AmazonSyncLog,
     AmazonLiveAllocation, AmazonOrderEventLog, AmazonDLQ, AmazonNetworkType, AllocationStatus, DLQType
 )
 
@@ -125,18 +125,26 @@ class AmazonService:
         existing_ids = {r[0] for r in existing_order_tuples if r[0]}
 
         # 3. Resolve warehouse mappings
-        # MFN Warehouse: prefer MFN mapping for this company, or CENTRAL warehouse
-        mfn_wh = db.query(Warehouse).join(
-            WarehouseExternalMapping, Warehouse.id == WarehouseExternalMapping.warehouse_id
-        ).filter(
+        # MFN Warehouse: strictly resolve to CENTRAL warehouse (e.g. VSHB for JSPL, BKR_CENTRAL for BKR)
+        mfn_wh = db.query(Warehouse).filter(
             Warehouse.company_id == company_id,
-            WarehouseExternalMapping.amazon_network == AmazonNetworkType.MFN,
+            Warehouse.warehouse_type == WarehouseType.CENTRAL,
             Warehouse.status == "ACTIVE"
         ).first()
 
         if not mfn_wh:
             mfn_wh = db.query(Warehouse).filter(
                 Warehouse.company_id == company_id,
+                Warehouse.code.in_(("VSHB", "BKR_CENTRAL")),
+                Warehouse.status == "ACTIVE"
+            ).first()
+
+        if not mfn_wh:
+            mfn_wh = db.query(Warehouse).join(
+                WarehouseExternalMapping, Warehouse.id == WarehouseExternalMapping.warehouse_id
+            ).filter(
+                Warehouse.company_id == company_id,
+                WarehouseExternalMapping.amazon_network == AmazonNetworkType.MFN,
                 Warehouse.status == "ACTIVE"
             ).first()
 

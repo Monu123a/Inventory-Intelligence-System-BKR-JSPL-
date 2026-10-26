@@ -676,12 +676,17 @@ class StockTransfer(Base):
 
     # Link to the generated B2B Sale Invoice
     invoice_id = Column(Integer, ForeignKey("sales.id"), nullable=True)
+    source_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
+    destination_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
+    execution_idempotency_key = Column(String, nullable=True)
 
     from_company = relationship("Company", foreign_keys=[from_company_id])
     to_company = relationship("Company", foreign_keys=[to_company_id])
     creator = relationship("User", foreign_keys=[created_by])
     approver = relationship("User", foreign_keys=[approved_by])
     invoice = relationship("Sale", foreign_keys=[invoice_id])
+    source_warehouse = relationship("Warehouse", foreign_keys=[source_warehouse_id])
+    destination_warehouse = relationship("Warehouse", foreign_keys=[destination_warehouse_id])
     items = relationship("StockTransferItem", back_populates="transfer", cascade="all, delete-orphan")
 
 

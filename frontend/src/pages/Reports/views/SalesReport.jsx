@@ -6,7 +6,7 @@ import { reportsService } from '../../../services/reports';
 import { saveDownloadMetadata } from '../../../hooks/useDownloadHistory';
 import { DataTable } from '../../../components/DataTable';
 import { ReportToolbar } from '../../../components/Reporting/ReportToolbar';
-import { FiDownload, FiFileText } from 'react-icons/fi';
+import { FiDownload, FiFileText, FiShoppingBag } from 'react-icons/fi';
 
 export const SalesReport = () => {
   const navigate = useNavigate();
@@ -23,7 +23,20 @@ export const SalesReport = () => {
   const [isExporting, setIsExporting] = useState(false);
   const limit = 20;
 
+  const { data: detectedSeriesData } = useQuery({
+    queryKey: ['seriesList', companyId],
+    queryFn: () => reportsService.getSeriesList(),
+    staleTime: 60000
+  });
+
   const seriesOptions = useMemo(() => {
+    const list = detectedSeriesData?.data || (Array.isArray(detectedSeriesData) ? detectedSeriesData : []);
+    if (list.length > 0) {
+      return list.map(item => ({
+        value: item.id || item.value,
+        label: item.label || item.name || item.id
+      }));
+    }
     if (isJspl) {
       return [
         { value: 'GST', label: 'GST Series (GST-)' },
@@ -31,6 +44,11 @@ export const SalesReport = () => {
         { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
         { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
+        { value: 'VSHB', label: 'VSHB Series (Central MFN)' },
+        { value: 'IN', label: 'IN Series (Bilaspur FC)' },
+        { value: 'KWZ2', label: 'KWZ2 Series (Karnataka FC)' },
+        { value: 'BLR4', label: 'BLR4 Series (Bangalore FC)' },
+        { value: 'BOM5', label: 'BOM5 Series (Mumbai FC)' },
         { value: 'SERVICE', label: 'Service Series (SERVICE-)' },
         { value: 'ALL', label: 'All Series (Excl. Amazon)' }
       ];
@@ -52,7 +70,14 @@ export const SalesReport = () => {
       { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
       { value: 'ALL', label: 'All Series (Excl. Amazon)' }
     ];
-  }, [isJspl, isBkr]);
+  }, [detectedSeriesData, isJspl, isBkr]);
+
+  const isAmazonOrWarehouseSeries = useMemo(() => {
+    const s = (selectedSeries || '').toUpperCase();
+    if (!s) return false;
+    if (['GST', 'JGST', 'BKR', 'SERVICE', 'SERV', 'ALL'].includes(s)) return false;
+    return true;
+  }, [selectedSeries]);
 
   useEffect(() => {
     if (isJspl && selectedSeries === 'BKR') {
@@ -132,6 +157,63 @@ export const SalesReport = () => {
     }
   };
 
+  const handleExportAmazonMtrReport = async (format = 'excel') => {
+    setIsExporting(true);
+    try {
+      const response = await reportsService.downloadAmazonMtrReport({
+        warehouseCode: selectedSeries,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        format
+      });
+
+      const contentDisposition = response.headers['content-disposition'] || '';
+      let filename = `Amazon_MTR_${selectedSeries}_${format === 'excel' ? 'xlsx' : 'csv'}`;
+      const match = contentDisposition.match(/filename="?([^"]+)"?/);
+      if (match && match[1]) {
+        filename = match[1];
+      }
+
+      const blob = new Blob([response.data], {
+        type: format === 'excel'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'text/csv;charset=utf-8;'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+
+      saveDownloadMetadata({
+        reportType: `AMAZON_MTR_${selectedSeries}`,
+        filename,
+        rowCount: response.headers['x-row-count'] ? parseInt(response.headers['x-row-count']) : undefined,
+        fileFormat: format.toUpperCase(),
+        status: 'Completed'
+      });
+    } catch (err) {
+      console.error('Amazon MTR export failed:', err);
+      let errorMsg = err.message;
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errorMsg = parsed.detail || parsed.message || text;
+        } catch {
+          // ignore
+        }
+      } else if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      }
+      alert('Failed to export Amazon MTR report: ' + errorMsg);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Handle backend formats flexibly
   const items = data?.items || data?.data || (Array.isArray(data) ? data : []);
   const total = data?.total_records ?? data?.total ?? items.length;
@@ -172,6 +254,60 @@ export const SalesReport = () => {
         onPrint={() => window.print()}
       />
 
+      {/* Quick Series Navigation Pills */}
+      <div style={{ display: 'flex', gap: '8px', padding: '0 16px 10px 16px', overflowX: 'auto', alignItems: 'center' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>Quick Select:</span>
+        {(isJspl ? [
+          { id: 'GST', label: 'GST Series' },
+          { id: 'JGST', label: 'JSPL (JGST)' },
+          { id: 'AMAZON', label: 'Amazon All' },
+          { id: 'MFN', label: 'MFN' },
+          { id: 'AFN', label: 'AFN' },
+          { id: 'VSHB', label: 'VSHB (Central MFN)' },
+          { id: 'BLR4', label: 'BLR4 FC' },
+          { id: 'KWZ2', label: 'KWZ2 FC' },
+          { id: 'BLR8', label: 'BLR8 FC' },
+          { id: 'LKO1', label: 'LKO1 FC' },
+          { id: 'ALL', label: 'All Series (Excl. Amz)' }
+        ] : isBkr ? [
+          { id: 'GST', label: 'GST Series' },
+          { id: 'BKR', label: 'BKR Retail' },
+          { id: 'AMAZON', label: 'Amazon All' },
+          { id: 'MFN', label: 'MFN' },
+          { id: 'AFN', label: 'AFN' },
+          { id: 'ALL', label: 'All Series (Excl. Amz)' }
+        ] : [
+          { id: 'GST', label: 'GST Series' },
+          { id: 'AMAZON', label: 'Amazon All' },
+          { id: 'MFN', label: 'MFN' },
+          { id: 'AFN', label: 'AFN' },
+          { id: 'VSHB', label: 'VSHB' },
+          { id: 'BLR4', label: 'BLR4' },
+          { id: 'KWZ2', label: 'KWZ2' }
+        ]).map((pill) => (
+          <button
+            key={pill.id}
+            type="button"
+            onClick={() => { setSelectedSeries(pill.id); setPage(1); }}
+            style={{
+              padding: '4px 12px',
+              fontSize: '12px',
+              fontWeight: selectedSeries === pill.id ? 600 : 500,
+              borderRadius: '16px',
+              border: selectedSeries === pill.id ? '1px solid #2563eb' : '1px solid #cbd5e1',
+              backgroundColor: selectedSeries === pill.id ? '#eff6ff' : '#ffffff',
+              color: selectedSeries === pill.id ? '#1d4ed8' : '#475569',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              boxShadow: selectedSeries === pill.id ? '0 1px 2px rgba(37, 99, 235, 0.1)' : 'none',
+              transition: 'all 0.15s'
+            }}
+          >
+            {pill.label}
+          </button>
+        ))}
+      </div>
+
       {/* Series Accountant Report Download Banner */}
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', margin: '12px 16px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -204,6 +340,41 @@ export const SalesReport = () => {
           </button>
         </div>
       </div>
+
+      {/* Amazon MTR 86-Column Report Banner when viewing Amazon or Warehouse series */}
+      {isAmazonOrWarehouseSeries && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', margin: '-4px 16px 12px 16px', padding: '10px 14px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FiShoppingBag style={{ color: '#16a34a', fontSize: '18px' }} />
+            <div>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#14532d' }}>
+                Amazon Merchant Tax Report (86-Column Logic ERP Format - {selectedSeries})
+              </span>
+              <span style={{ display: 'block', fontSize: '11px', color: '#15803d' }}>
+                Matches official Amazon MTR format with 86 itemized tax, state hub, and account code columns.
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => handleExportAmazonMtrReport('csv')}
+              disabled={isExporting}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', background: '#334155', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: isExporting ? 0.7 : 1 }}
+            >
+              <FiDownload /> {isExporting ? 'Exporting...' : 'Download MTR CSV'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportAmazonMtrReport('excel')}
+              disabled={isExporting}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: isExporting ? 0.7 : 1 }}
+            >
+              <FiFileText /> {isExporting ? 'Exporting...' : 'Download MTR Excel (.xlsx)'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <DataTable 
         columns={columns}

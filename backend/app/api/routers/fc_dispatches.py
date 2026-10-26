@@ -20,7 +20,8 @@ def create_batch_dispatch(
     """Create single or batch dispatch to Fulfillment Centers"""
         
     try:
-        dispatches = FCDispatchService.create_batch_dispatch(db, company_id, request, 1)
+        user_id = current_user.id if current_user else 1
+        dispatches = FCDispatchService.create_batch_dispatch(db, company_id, request, user_id)
         db.commit()
         return {"message": f"Successfully created {len(dispatches)} dispatches", "dispatches": [{"id": d.id, "dispatch_number": d.dispatch_number} for d in dispatches]}
     except HTTPException:
@@ -35,7 +36,7 @@ def create_batch_dispatch(
         logging.getLogger(__name__).error(str(e), exc_info=True)
         with open("dispatch_error.log", "a") as f:
             f.write(traceback.format_exc() + "\n")
-        raise HTTPException(status_code=500, detail="An internal error occurred while creating the dispatch.")
+        raise HTTPException(status_code=500, detail=f"Failed to create dispatch: {str(e)}")
 
 @router.get("/")
 def get_dispatches(
