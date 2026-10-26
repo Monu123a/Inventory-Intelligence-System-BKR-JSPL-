@@ -807,12 +807,65 @@ class SeriesReportService:
                 prod_query = prod_query.filter(Product.company_id == company_id)
             prod_map = {p.sku.upper(): p for p in prod_query.all()}
             wh_map = {w.id: w for w in db.query(Warehouse).all()}
+            hub_map = {h.id: h for h in db.query(StateHub).all()}
 
             for alloc in amazon_allocations:
                 sno += 1
                 prod = prod_map.get((alloc.sku or "").upper())
                 wh = wh_map.get(alloc.warehouse_id) if alloc.warehouse_id else None
+                hub = hub_map.get(wh.hub_id) if (wh and wh.hub_id) else None
                 
+                # Resolve GST State accurately from StateHub or warehouse metadata
+                if hub and hub.state:
+                    state_name = hub.state.strip().title()
+                elif wh and ((wh.code or "").upper() in ("VSHB", "IN", "BKR_CENTRAL", "AUTO_GODOWN") or (wh.warehouse_type and "CENTRAL" in str(wh.warehouse_type).upper())):
+                    state_name = "Chandigarh"
+                elif alloc.amazon_network_at_allocation and getattr(alloc.amazon_network_at_allocation, "value", str(alloc.amazon_network_at_allocation)).upper() == "MFN":
+                    state_name = "Chandigarh"
+                elif wh and ("KARNATAKA" in (wh.name or "").upper() or any((wh.code or "").upper().startswith(p) for p in ("BLR", "KWZ"))):
+                    state_name = "Karnataka"
+                elif wh and ("MAHARASTRA" in (wh.name or "").upper() or "MAHARASHTRA" in (wh.name or "").upper() or any((wh.code or "").upper().startswith(p) for p in ("BOM", "PNQ", "ISK"))):
+                    state_name = "Maharashtra"
+                elif wh and ("WEST_BANGA" in (wh.name or "").upper() or "WEST BENGAL" in (wh.name or "").upper() or any((wh.code or "").upper().startswith(p) for p in ("CCX", "CCU"))):
+                    state_name = "West Bengal"
+                elif wh and ("TAMIL_NADU" in (wh.name or "").upper() or "TAMIL NADU" in (wh.name or "").upper() or any((wh.code or "").upper().startswith(p) for p in ("CJB", "MAA"))):
+                    state_name = "Tamil Nadu"
+                elif wh and ("TELANGANA" in (wh.name or "").upper() or (wh.code or "").upper().startswith("HYD")):
+                    state_name = "Telangana"
+                elif wh and ("MADHYA_PRA" in (wh.name or "").upper() or "MADHYA PRADESH" in (wh.name or "").upper() or any((wh.code or "").upper().startswith(p) for p in ("SIDA", "IDX"))):
+                    state_name = "Madhya Pradesh"
+                elif wh and ("UTTARPRADE" in (wh.name or "").upper() or "UTTAR PRADESH" in (wh.name or "").upper() or (wh.code or "").upper().startswith("LKO")):
+                    state_name = "Uttar Pradesh"
+                elif wh and ("GUJARATH" in (wh.name or "").upper() or "GUJARAT" in (wh.name or "").upper() or (wh.code or "").upper().startswith("AMD")):
+                    state_name = "Gujarat"
+                else:
+                    state_name = "Chandigarh" if (company_id in (2, 3) or series_clean in ("VSHB", "IN", "MFN")) else "Karnataka"
+
+                is_central = (
+                    (wh and (wh.code or "").upper() in ("VSHB", "IN", "BKR_CENTRAL", "AUTO_GODOWN")) or
+                    (wh and wh.warehouse_type and "CENTRAL" in str(wh.warehouse_type).upper()) or
+                    (alloc.amazon_network_at_allocation and getattr(alloc.amazon_network_at_allocation, "value", str(alloc.amazon_network_at_allocation)).upper() == "MFN") or
+                    series_clean in ("VSHB", "IN", "MFN")
+                )
+
+                godown_name = wh.name if wh else (alloc.amazon_network_at_allocation.value if alloc.amazon_network_at_allocation else "Amazon AFN")
+                hsn_desc = prod.category if prod and prod.category else "Other"
+
+                # Structure addresses accurately
+                if is_central:
+                    addr_1 = hub.address if (hub and hub.address) else "Plot no: 150, Industrial & Business Park-2"
+                    addr_2 = hub.city if (hub and hub.city) else "Chandigarh"
+                    addr_3 = f"{state_name} - 160002"
+                elif hub and hub.address:
+                    addr_parts = [p.strip() for p in hub.address.split(",") if p.strip()]
+                    addr_1 = addr_parts[0] if len(addr_parts) > 0 else f"Amazon FC {godown_name}"
+                    addr_2 = addr_parts[1] if len(addr_parts) > 1 else (hub.city or "")
+                    addr_3 = addr_parts[2] if len(addr_parts) > 2 else state_name
+                else:
+                    addr_1 = f"Amazon FC {godown_name}"
+                    addr_2 = hub.city if (hub and hub.city) else ""
+                    addr_3 = state_name
+
                 order_id = alloc.order_id
                 item_code = alloc.sku
                 item_name = prod.name if prod else alloc.sku
@@ -833,14 +886,11 @@ class SeriesReportService:
                 net_amt = round(gross_amt + igst, 2)
                 cost_amt = round(pur_rate * qty, 2) if pur_rate > 0 else ""
 
-                godown_name = wh.name if wh else (alloc.amazon_network_at_allocation.value if alloc.amazon_network_at_allocation else "Amazon AFN")
-                hsn_desc = prod.category if prod and prod.category else "Other"
-
                 alloc_dt = alloc.created_at.strftime("%d/%m/%Y") if alloc.created_at else datetime.utcnow().strftime("%d/%m/%Y")
                 row = [
                     sno, order_id, item_code, item_name, hsn_code, group_tax,
                     alloc_dt, "",
-                    wh.name.split()[-1] if wh and " " in wh.name else "Karnataka",
+                    state_name,
                     "Amazon Retail Customer", pack_size, qty, rate_unit, gross_amt,
                     "", "", igst if igst > 0 else "",
                     "", "", "", tax_3, net_amt, "", cost_amt, "",
@@ -848,7 +898,7 @@ class SeriesReportService:
                     "", "", "", "", order_id, godown_name,
                     f"{round(pur_rate, 2):g}" if pur_rate > 0 else "",
                     f"{pur_rate:.4f}" if pur_rate > 0 else "",
-                    "", "Amazon Logistics", "", f"Amazon FC {godown_name}", "", "",
+                    "", "Amazon Logistics", "", addr_1, addr_2, addr_3,
                     hsn_code, hsn_desc
                 ]
                 data_rows.append(row)
@@ -1205,8 +1255,22 @@ class SeriesReportService:
         d_to_str = date_to.strftime("%d/%m/%Y") if date_to else datetime.utcnow().strftime("%d/%m/%Y")
         title_str = f"AMAZON RETURNS REPORT FOR ACCOUNTANT From {d_from_str} to {d_to_str}"
 
-        # Pre-cache products in memory
+        # Pre-cache products and state hubs in memory
         prod_map = {prod.sku: prod for prod in db.query(Product).all()}
+        hub_map = {h.id: h for h in db.query(StateHub).all()}
+
+        central_hub = None
+        if company_id == 2:
+            central_hub = hub_map.get(13)
+        elif company_id == 3:
+            central_hub = hub_map.get(12)
+        else:
+            central_hub = next((h for h in hub_map.values() if "CHANDIGARH" in (h.state or "").upper()), None)
+
+        return_state = central_hub.state.strip().title() if (central_hub and central_hub.state) else "Chandigarh"
+        ret_addr1 = central_hub.address if (central_hub and central_hub.address) else "Plot no: 150, Industrial & Business Park-2"
+        ret_addr2 = central_hub.city if (central_hub and central_hub.city) else "Chandigarh"
+        ret_addr3 = f"{return_state} - 160002"
 
         data_rows: List[List[Any]] = []
         sno = 0
@@ -1249,7 +1313,7 @@ class SeriesReportService:
                 group_tax,                                 # 5: GROUP11.GRP1
                 bill_date,                                 # 6: BILL DATE
                 "",                                        # 7: GST NO.
-                "Karnataka",                               # 8: GST STATE NAME
+                return_state,                              # 8: GST STATE NAME
                 "Amazon Retail Customer",                  # 9: PARTY NAME
                 pack_size,                                 # 10: PACK / SIZE
                 qty,                                       # 11: SALE QUANTITY (Returned Qty)
@@ -1277,8 +1341,8 @@ class SeriesReportService:
                 "",                                        # 39: LOT PURCHASE RATE
                 "Amazon Return Logistics",                 # 40: TRANSPORT MODE
                 r.return_reason or "Amazon Customer Return", # 41: CREDIT NOTE DESC
-                "Amazon Fulfillment Network",              # 42: ADDRESS-1
-                "", "",                                    # 43-44: ADDRESS-2, 3
+                ret_addr1,                                 # 42: ADDRESS-1
+                ret_addr2, ret_addr3,                      # 43-44: ADDRESS-2, 3
                 hsn_code,                                  # 45: HSN CODE
                 hsn_desc                                   # 46: HSN DESCRIPTION
             ]
