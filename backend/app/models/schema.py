@@ -578,6 +578,8 @@ class Sale(Base):
     einvoice_error_message = Column(Text, nullable=True)
     einvoice_canceled_at = Column(DateTime, nullable=True)
     einvoice_cancel_reason = Column(String, nullable=True)
+    eway_bill_number = Column(String, nullable=True)
+    eway_bill_date = Column(DateTime, nullable=True)
 
     # Tally sync metadata (B2B only, optional and configurable)
     tally_sync_status = Column(String, default="NOT_APPLICABLE")  # NOT_APPLICABLE|PENDING|PROCESSING|SUCCESS|FAILED|RETRYING|CANCELLED

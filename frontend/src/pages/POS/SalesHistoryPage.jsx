@@ -7,7 +7,7 @@ import { handleApiError } from '../../utils/errorHandler';
 import { DataTable, TableHeader, TableRow, TablePagination } from '../../components/DataTable';
 import Button from '../../components/forms/Button';
 import styles from './SalesHistoryPage.module.css';
-import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit, FiXCircle } from 'react-icons/fi';
+import { FiEye, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit, FiXCircle, FiDownload, FiUpload } from 'react-icons/fi';
 
 const SalesHistoryPage = () => {
   const navigate = useNavigate();
@@ -28,6 +28,9 @@ const SalesHistoryPage = () => {
   const [retryingId, setRetryingId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
   const [generatingIrnId, setGeneratingIrnId] = useState(null);
+  const [exportingBulkJson, setExportingBulkJson] = useState(false);
+  const [importingResponse, setImportingResponse] = useState(false);
+  const fileInputRef = React.useRef(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['sales', skip, limit, search, status, invoiceType, returnStatus, tallyStatus, startDate, endDate],
@@ -127,6 +130,63 @@ const SalesHistoryPage = () => {
       handleApiError(err, 'Failed to generate E-Invoice IRN');
     } finally {
       setGeneratingIrnId(null);
+    }
+  };
+
+  const handleDownloadSingleJson = async (sale) => {
+    try {
+      const response = await einvoiceService.downloadSingleJson(sale.id);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const invNo = (sale.invoice_number || sale.bill_number || `Bill_${sale.id}`).replace(/[\/\\]/g, '_');
+      link.setAttribute('download', `EInvoice_${invNo}.json`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      handleApiError(err, 'Failed to download E-Invoice JSON');
+    }
+  };
+
+  const handleDownloadBulkJson = async () => {
+    try {
+      setExportingBulkJson(true);
+      const response = await einvoiceService.downloadBulkJson({
+        date_from: startDate || undefined,
+        date_to: endDate || undefined
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `EInvoice_Bulk_Upload_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      handleApiError(err, 'Failed to export Bulk E-Invoice JSON');
+    } finally {
+      setExportingBulkJson(false);
+    }
+  };
+
+  const handleFileImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setImportingResponse(true);
+      const res = await einvoiceService.importResponse(file);
+      alert(res.message || 'Government E-Invoice response imported successfully!');
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+    } catch (err) {
+      handleApiError(err, 'Failed to import Government E-Invoice response');
+    } finally {
+      setImportingResponse(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -262,6 +322,15 @@ const SalesHistoryPage = () => {
               {generatingIrnId === sale.id ? ' Generating...' : (sale.einvoice_status === 'FAILED' ? ' Retry IRN' : ' Gen IRN')}
             </button>
           )}
+          {sale.invoice_type === 'B2B' && sale.status !== 'Cancelled' && (
+            <button 
+              className={`${styles.actionBtn} ${styles.jsonBtn}`} 
+              title="Download Government E-Invoice JSON (INV-01)"
+              onClick={() => handleDownloadSingleJson(sale)}
+            >
+              <FiDownload /> JSON
+            </button>
+          )}
         </div>
       )
     }
@@ -360,6 +429,32 @@ const SalesHistoryPage = () => {
           <button className={styles.clearBtn} onClick={() => {
             setSearch(''); setStatus(''); setInvoiceType(''); setReturnStatus(''); setTallyStatus(''); setStartDate(''); setEndDate(''); setSkip(0);
           }}>Clear Filters</button>
+
+          <button 
+            className={styles.bulkExportBtn} 
+            onClick={handleDownloadBulkJson}
+            disabled={exportingBulkJson}
+            title="Download Government-compliant Bulk JSON (INV-01) for einvoice1.gst.gov.in"
+          >
+            <FiDownload /> {exportingBulkJson ? 'Exporting JSON...' : 'Export E-Invoice JSON'}
+          </button>
+
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            style={{ display: 'none' }} 
+            accept=".json"
+            onChange={handleFileImport}
+          />
+
+          <button 
+            className={styles.importBtn} 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importingResponse}
+            title="Upload official Government response JSON downloaded from portal"
+          >
+            <FiUpload /> {importingResponse ? 'Importing...' : 'Import Govt Response'}
+          </button>
         </div>
       </div>
 

@@ -29,6 +29,48 @@ VALID_GST_UOMS = {
     "UNT": "UNT"
 }
 
+STATE_NAME_TO_CODE = {
+    "jammu and kashmir": "01",
+    "himachal pradesh": "02",
+    "punjab": "03",
+    "chandigarh": "04",
+    "uttarakhand": "05",
+    "haryana": "06",
+    "delhi": "07",
+    "rajasthan": "08",
+    "uttar pradesh": "09",
+    "bihar": "10",
+    "sikkim": "11",
+    "arunachal pradesh": "12",
+    "nagaland": "13",
+    "manipur": "14",
+    "mizoram": "15",
+    "tripura": "16",
+    "meghalaya": "17",
+    "assam": "18",
+    "west bengal": "19",
+    "jharkhand": "20",
+    "odisha": "21",
+    "chhattisgarh": "22",
+    "madhya pradesh": "23",
+    "gujarat": "24",
+    "daman and diu": "26",
+    "dadra and nagar haveli": "26",
+    "dadra and nagar haveli and daman and diu": "26",
+    "maharashtra": "27",
+    "andhra pradesh": "37",
+    "karnataka": "29",
+    "goa": "30",
+    "lakshadweep": "31",
+    "kerala": "32",
+    "tamil nadu": "33",
+    "puducherry": "34",
+    "andaman and nicobar islands": "35",
+    "telangana": "36",
+    "ladakh": "38",
+    "other territory": "97"
+}
+
 def clean_pin(val: Any) -> int:
     """Extract 6-digit numeric PIN code."""
     if not val:
@@ -36,20 +78,38 @@ def clean_pin(val: Any) -> int:
     m = re.search(r'\b\d{6}\b', str(val))
     return int(m.group(0)) if m else 160002
 
-def clean_state_code(val: Any) -> str:
-    """Format state code as 2-digit string (e.g., '04', '29')."""
+def clean_state_code(val: Any, default: str = "04") -> str:
+    """Format state code as strict 2-digit numeric string (e.g., '04', '23', '29')."""
     if not val:
-        return "04"
+        return default
     s = str(val).strip()
-    if len(s) == 1:
-        return f"0{s}"
-    return s[:2]
+    if s.isdigit():
+        return s.zfill(2)
+    s_lower = s.lower()
+    if s_lower in STATE_NAME_TO_CODE:
+        return STATE_NAME_TO_CODE[s_lower]
+    # Check partial contains (e.g. "Madhya Pradesh - 452010")
+    for name, code in STATE_NAME_TO_CODE.items():
+        if name in s_lower:
+            return code
+    # Check if string starts with 2 digits (e.g. GSTIN)
+    if len(s) >= 2 and s[:2].isdigit():
+        return s[:2]
+    return default
 
 def clean_str(val: Any, default: str = "", max_len: int = 100) -> str:
     """Clean string, strip whitespace, and limit length."""
     if val is None:
         return default
     s = str(val).strip()
+    return s[:max_len] if s else default
+
+def clean_addr(val: Any, default: str = "Market", max_len: int = 100) -> str:
+    """Clean address, remove newlines/tabs, and normalize spacing for GST IRP."""
+    if not val:
+        return default
+    s = str(val).replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    s = re.sub(r'\s+', ' ', s).strip()
     return s[:max_len] if s else default
 
 def build_einvoice_payload(sale: Sale, db: Optional[Session] = None) -> Dict[str, Any]:
@@ -66,10 +126,22 @@ def build_einvoice_payload(sale: Sale, db: Optional[Session] = None) -> Dict[str
     sale_date = getattr(sale, "sale_date", None) or getattr(sale, "created_at", None) or datetime.utcnow()
     formatted_date = sale_date.strftime("%d/%m/%Y")
 
-    # 2. Seller Details (Resolved from snapshot or dispatch warehouse)
+    # 2. Seller Details (Resolved from snapshot with company fallback)
     seller_gstin = clean_str(sale.company_gstin_snapshot, max_len=15).upper()
-    seller_name = clean_str(sale.company_name_snapshot, default="B K RAMAN AND CO", max_len=100)
-    seller_addr = clean_str(sale.company_address_snapshot, default="Plot No.150, Industrial Area", max_len=100)
+    seller_name = clean_str(sale.company_name_snapshot, default="", max_len=100)
+    seller_addr = clean_addr(sale.company_address_snapshot, default="", max_len=100)
+
+    # Fallback to registered company profile if snapshot is empty
+    if not seller_gstin or len(seller_gstin) < 15:
+        if sale.company_id == 3:
+            seller_gstin = "04AAFCJ8215N1ZC"
+            seller_name = "JAGAN SHOPSMART PRIVATE LIMITED"
+            seller_addr = "Plot no: 150, Industrial & Business Park-2"
+        else:
+            seller_gstin = "04AEFPS6301F1ZU"
+            seller_name = "B K RAMAN AND CO"
+            seller_addr = "Plot No.150, Business & Industrial Park -2"
+
     seller_state_code = clean_state_code(sale.company_state_code_snapshot or (seller_gstin[:2] if len(seller_gstin) >= 2 else "04"))
     seller_state_name = clean_str(sale.company_state_snapshot, default="Chandigarh", max_len=50)
     seller_pin = clean_pin(seller_addr)
@@ -79,11 +151,11 @@ def build_einvoice_payload(sale: Sale, db: Optional[Session] = None) -> Dict[str
     # 3. Buyer Details
     buyer_gstin = clean_str(sale.customer_gstin, max_len=15).upper()
     buyer_name = clean_str(sale.customer_name, default="Cash Customer", max_len=100)
-    buyer_addr = clean_str(sale.customer_address, default="Market", max_len=100)
+    buyer_addr = clean_addr(sale.customer_address, default="Market", max_len=100)
     buyer_loc = clean_str(sale.customer_state or getattr(sale, "customer_city", "Local"), default="Local", max_len=50)
     buyer_pin = clean_pin(sale.customer_address)
     buyer_state_code = clean_state_code(sale.customer_state_code or (buyer_gstin[:2] if len(buyer_gstin) >= 2 else seller_state_code))
-    pos = clean_state_code(sale.place_of_supply or buyer_state_code)
+    pos = clean_state_code(sale.place_of_supply, default=buyer_state_code)
 
     # 4. Supply Type (B2B by default for GST customers, or SEZWP, EXPWOP, etc.)
     sup_typ = "B2B"
@@ -223,10 +295,27 @@ def build_einvoice_payload(sale: Sale, db: Optional[Session] = None) -> Dict[str
             hub_stcd = getattr(hub, "state_code", None) if hub else None
             payload["DispDtls"] = {
                 "Nm": clean_str(getattr(wh, "name", "Warehouse"), default="Warehouse", max_len=100),
-                "Addr1": clean_str(wh.address, default="Warehouse Address", max_len=100),
+                "Addr1": clean_addr(wh.address, default="Warehouse Address", max_len=100),
                 "Loc": clean_str(hub_city, default="Warehouse", max_len=50),
                 "Pin": clean_pin(wh.address),
                 "Stcd": clean_state_code(hub_stcd or seller_state_code)
+            }
+
+    # Optional E-Way Bill Details (for road transport)
+    veh_no = getattr(sale, "vehicle_number", None)
+    dispatch_through = getattr(sale, "dispatch_through", None)
+    lr_no = getattr(sale, "lr_rr_number", None)
+    if veh_no or dispatch_through:
+        clean_vno = clean_str(veh_no, default="", max_len=20).replace(" ", "").upper()
+        if clean_vno or dispatch_through:
+            payload["EwbDtls"] = {
+                "TransId": None,
+                "TransName": clean_str(dispatch_through, default="", max_len=100) or None,
+                "Distance": 0,
+                "TransDocNo": clean_str(lr_no, default="", max_len=15) or None,
+                "TransDocDt": formatted_date if lr_no else None,
+                "VehNo": clean_vno or None,
+                "VehType": "R"
             }
 
     return payload

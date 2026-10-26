@@ -257,6 +257,54 @@
   border-color: #cbd5e1;
 }
 
+.jsonBtn {
+  color: #0284c7;
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.jsonBtn:hover {
+  background: #e0f2fe;
+}
+
+.bulkExportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #0284c7;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulkExportBtn:hover {
+  background: #0369a1;
+}
+
+.importBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: white;
+  color: #0284c7;
+  border: 1px solid #0284c7;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.importBtn:hover {
+  background: #f0f9ff;
+}
+
 .retryBtn {
   color: #0284c7;
   border-color: #bae6fd;

@@ -27,5 +27,30 @@ export const einvoiceService = {
   getStatus: async (saleId) => {
     const res = await api.get(`/api/einvoice/status/${saleId}`);
     return res.data;
+  },
+
+  downloadSingleJson: async (saleId) => {
+    const res = await api.get(`/api/einvoice/export-json/${saleId}`, {
+      responseType: 'blob'
+    });
+    return res;
+  },
+
+  downloadBulkJson: async (payload) => {
+    const res = await api.post('/api/einvoice/export-bulk-json', payload, {
+      responseType: 'blob'
+    });
+    return res;
+  },
+
+  importResponse: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/api/einvoice/import-response', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return res.data;
   }
 };

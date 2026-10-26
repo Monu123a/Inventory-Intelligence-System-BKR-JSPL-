@@ -120,6 +120,23 @@ export default function InvoicePreviewPage() {
     }
   };
 
+  const handleDownloadEInvoiceJson = async () => {
+    try {
+      const response = await einvoiceService.downloadSingleJson(invoice.id);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const invNo = (invoice.invoice_number || invoice.bill_number || `Bill_${invoice.id}`).replace(/[\/\\]/g, '_');
+      link.setAttribute('download', `EInvoice_${invNo}.json`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      handleApiError(err, 'Failed to download E-Invoice JSON');
+    }
+  };
+
   const handlePrint = () => {
     const originalTitle = document.title;
     const invNo = invoice?.invoice_number || invoice?.bill_number || 'Invoice';
@@ -296,6 +313,14 @@ export default function InvoicePreviewPage() {
                     {generatingIrn ? 'Generating...' : (einvoiceStatus === 'FAILED' ? 'Retry IRN' : 'Gen IRN')}
                   </button>
                 )}
+                <button 
+                  className={styles.actionButton} 
+                  onClick={handleDownloadEInvoiceJson}
+                  title="Download Government-compliant E-Invoice JSON for einvoice1.gst.gov.in"
+                  style={{ marginLeft: '6px' }}
+                >
+                  <FiDownload /> E-Invoice JSON
+                </button>
               </div>
             </>
           )}

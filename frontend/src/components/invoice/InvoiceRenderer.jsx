@@ -35,7 +35,8 @@ const InvoiceRenderer = forwardRef(({ invoice }, ref) => {
             ack_no: invoice.einvoice_ack_no,
             ack_date: invoice.einvoice_ack_date,
             qr_code_data: invoice.einvoice_qr_code_data,
-            status: invoice.einvoice_status
+            status: invoice.einvoice_status,
+            eway_bill_number: invoice.eway_bill_number
           }}
         />
 

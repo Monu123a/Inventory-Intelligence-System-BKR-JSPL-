@@ -97,6 +97,7 @@ const InvoiceHeader = ({ company, invoiceType, tallyData, items, einvoice }) => 
                 <div>IRN: {irn.length > 14 ? `${irn.substring(0, 7)}...${irn.substring(irn.length - 5)}` : irn}</div>
                 {ackNo && <div>Ack: {ackNo}</div>}
                 {formattedAckDate && <div>Dt: {formattedAckDate}</div>}
+                {einvoice?.eway_bill_number && <div style={{ color: '#047857', fontWeight: 600 }}>EWB: {einvoice.eway_bill_number}</div>}
               </div>
             </div>
           )}
