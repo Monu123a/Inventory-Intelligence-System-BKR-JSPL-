@@ -33,9 +33,12 @@ def create_batch_dispatch(
     except Exception as e:
         db.rollback()
         import logging, traceback
-        logging.getLogger(__name__).error(str(e), exc_info=True)
-        with open("dispatch_error.log", "a") as f:
-            f.write(traceback.format_exc() + "\n")
+        logging.getLogger(__name__).error(f"FC Dispatch error: {str(e)}", exc_info=True)
+        try:
+            with open("dispatch_error.log", "a") as f:
+                f.write(traceback.format_exc() + "\n")
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Failed to create dispatch: {str(e)}")
 
 @router.get("/")

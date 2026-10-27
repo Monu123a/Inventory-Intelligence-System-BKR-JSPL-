@@ -50,6 +50,44 @@ class DocumentNumberService:
         return max_num, found_len
 
     @staticmethod
+    def get_last_dispatch_number(db: Session, company_id: int, prefix: str, fiscal_year: str) -> int:
+        """Scan existing FCDispatches for this prefix and fiscal year to find highest number."""
+        from app.models.schema import FCDispatch
+        pattern = f"{prefix}/{fiscal_year}/%"
+        dispatches = db.query(FCDispatch.dispatch_number).filter(
+            FCDispatch.dispatch_number.like(pattern)
+        ).all()
+        max_num = 0
+        for (d_num,) in dispatches:
+            if not d_num:
+                continue
+            m = re.search(r'(\d+)$', d_num.strip())
+            if m:
+                num = int(m.group(1))
+                if num > max_num:
+                    max_num = num
+        return max_num
+
+    @staticmethod
+    def get_last_challan_number(db: Session, company_id: int, prefix: str, fiscal_year: str) -> int:
+        """Scan existing DeliveryChallans for this prefix and fiscal year to find highest number."""
+        from app.models.schema import DeliveryChallan
+        pattern = f"{prefix}/{fiscal_year}/%"
+        challans = db.query(DeliveryChallan.challan_number).filter(
+            DeliveryChallan.challan_number.like(pattern)
+        ).all()
+        max_num = 0
+        for (c_num,) in challans:
+            if not c_num:
+                continue
+            m = re.search(r'(\d+)$', c_num.strip())
+            if m:
+                num = int(m.group(1))
+                if num > max_num:
+                    max_num = num
+        return max_num
+
+    @staticmethod
     def _format_sale_number(prefix: str, num: int, digits_len: int = 0) -> str:
         pref = prefix.strip().upper()
         if pref in ['SERVICE', 'SERV', 'BKR', 'JSPL', 'GST', 'JGST']:
@@ -91,6 +129,40 @@ class DocumentNumberService:
             next_num = current_max + 1
             formatted = DocumentNumberService._format_sale_number(prefix, next_num, digits_len)
 
+            return {
+                "prefix": prefix,
+                "last_number": current_max,
+                "next_number": next_num,
+                "formatted_next_number": formatted
+            }
+        elif document_type == DocumentTypeEnum.DISPATCH:
+            last_dispatch_num = DocumentNumberService.get_last_dispatch_number(db, company_id, prefix, fiscal_year)
+            seq = db.query(DocumentSequence).filter(
+                DocumentSequence.company_id == company_id,
+                DocumentSequence.document_type == document_type,
+                DocumentSequence.fiscal_year == fiscal_year,
+                DocumentSequence.prefix == prefix
+            ).first()
+            current_max = max(seq.last_number if seq else 0, last_dispatch_num)
+            next_num = current_max + 1
+            formatted = f"{prefix}/{fiscal_year}/{next_num:05d}"
+            return {
+                "prefix": prefix,
+                "last_number": current_max,
+                "next_number": next_num,
+                "formatted_next_number": formatted
+            }
+        elif document_type == DocumentTypeEnum.CHALLAN:
+            last_challan_num = DocumentNumberService.get_last_challan_number(db, company_id, prefix, fiscal_year)
+            seq = db.query(DocumentSequence).filter(
+                DocumentSequence.company_id == company_id,
+                DocumentSequence.document_type == document_type,
+                DocumentSequence.fiscal_year == fiscal_year,
+                DocumentSequence.prefix == prefix
+            ).first()
+            current_max = max(seq.last_number if seq else 0, last_challan_num)
+            next_num = current_max + 1
+            formatted = f"{prefix}/{fiscal_year}/{next_num:05d}"
             return {
                 "prefix": prefix,
                 "last_number": current_max,
@@ -208,7 +280,108 @@ class DocumentNumberService:
             db.flush()
             return DocumentNumberService._format_sale_number(prefix, next_num, digits_len)
 
-        # Standard handling for other document types (e.g. DISPATCH, CHALLAN)
+        # Handling for DISPATCH: always base on MAX(existing dispatches, seq.last_number) + 1
+        if document_type == DocumentTypeEnum.DISPATCH:
+            from app.models.schema import FCDispatch
+            last_dispatch_num = DocumentNumberService.get_last_dispatch_number(db, company_id, prefix, fiscal_year)
+
+            seq = db.query(DocumentSequence).filter(
+                DocumentSequence.company_id == company_id,
+                DocumentSequence.document_type == document_type,
+                DocumentSequence.fiscal_year == fiscal_year,
+                DocumentSequence.prefix == prefix
+            ).with_for_update().first()
+
+            if seq:
+                current_max = max(seq.last_number, last_dispatch_num)
+                seq.last_number = current_max + 1
+                next_num = seq.last_number
+            else:
+                next_num = last_dispatch_num + 1
+                seq = DocumentSequence(
+                    company_id=company_id,
+                    document_type=document_type,
+                    fiscal_year=fiscal_year,
+                    prefix=prefix,
+                    last_number=next_num
+                )
+                db.add(seq)
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    seq = db.query(DocumentSequence).filter(
+                        DocumentSequence.company_id == company_id,
+                        DocumentSequence.document_type == document_type,
+                        DocumentSequence.fiscal_year == fiscal_year,
+                        DocumentSequence.prefix == prefix
+                    ).with_for_update().first()
+                    current_max = max(seq.last_number, last_dispatch_num)
+                    seq.last_number = current_max + 1
+                    next_num = seq.last_number
+
+            db.flush()
+            # Double safety check: loop until candidate does not exist in DB
+            candidate = f"{prefix}/{fiscal_year}/{next_num:05d}"
+            while db.query(FCDispatch.id).filter(FCDispatch.dispatch_number == candidate).first():
+                next_num += 1
+                seq.last_number = next_num
+                candidate = f"{prefix}/{fiscal_year}/{next_num:05d}"
+                db.flush()
+
+            return candidate
+
+        # Handling for CHALLAN: always base on MAX(existing challans, seq.last_number) + 1
+        if document_type == DocumentTypeEnum.CHALLAN:
+            from app.models.schema import DeliveryChallan
+            last_challan_num = DocumentNumberService.get_last_challan_number(db, company_id, prefix, fiscal_year)
+
+            seq = db.query(DocumentSequence).filter(
+                DocumentSequence.company_id == company_id,
+                DocumentSequence.document_type == document_type,
+                DocumentSequence.fiscal_year == fiscal_year,
+                DocumentSequence.prefix == prefix
+            ).with_for_update().first()
+
+            if seq:
+                current_max = max(seq.last_number, last_challan_num)
+                seq.last_number = current_max + 1
+                next_num = seq.last_number
+            else:
+                next_num = last_challan_num + 1
+                seq = DocumentSequence(
+                    company_id=company_id,
+                    document_type=document_type,
+                    fiscal_year=fiscal_year,
+                    prefix=prefix,
+                    last_number=next_num
+                )
+                db.add(seq)
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    seq = db.query(DocumentSequence).filter(
+                        DocumentSequence.company_id == company_id,
+                        DocumentSequence.document_type == document_type,
+                        DocumentSequence.fiscal_year == fiscal_year,
+                        DocumentSequence.prefix == prefix
+                    ).with_for_update().first()
+                    current_max = max(seq.last_number, last_challan_num)
+                    seq.last_number = current_max + 1
+                    next_num = seq.last_number
+
+            db.flush()
+            candidate = f"{prefix}/{fiscal_year}/{next_num:05d}"
+            while db.query(DeliveryChallan.id).filter(DeliveryChallan.challan_number == candidate).first():
+                next_num += 1
+                seq.last_number = next_num
+                candidate = f"{prefix}/{fiscal_year}/{next_num:05d}"
+                db.flush()
+
+            return candidate
+
+        # Standard handling for other document types
         result = db.execute(
             update(DocumentSequence)
             .where(

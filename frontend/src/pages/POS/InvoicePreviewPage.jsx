@@ -18,7 +18,6 @@ import { einvoiceService } from '../../services/einvoice';
 import { handleApiError } from '../../utils/errorHandler';
 import InvoiceRenderer from '../../components/invoice/InvoiceRenderer';
 import { downloadInvoicePdf } from '../../services/invoicePdfService';
-import html2pdf from 'html2pdf.js';
 import styles from './InvoicePreviewPage.module.css';
 
 export default function InvoicePreviewPage() {
@@ -183,7 +182,9 @@ export default function InvoicePreviewPage() {
     setEmailSuccess('');
     
     try {
-      // 1. Generate PDF blob
+      // 1. Generate PDF blob via dynamic import
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
       const opt = {
         margin:       0,
         filename:     `Invoice_${invoice.invoice_number || saleId}.pdf`,
