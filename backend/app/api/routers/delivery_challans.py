@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, joinedload
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.db import get_db
@@ -99,7 +99,7 @@ def list_challans(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    return db.query(DeliveryChallan).filter(DeliveryChallan.company_id == company_id).all()
+    return db.query(DeliveryChallan).options(selectinload(DeliveryChallan.items)).filter(DeliveryChallan.company_id == company_id).order_by(DeliveryChallan.id.desc()).all()
 
 @router.get("/{challan_id}", response_model=DeliveryChallanResponse)
 def get_challan(
@@ -107,7 +107,7 @@ def get_challan(
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    challan = db.query(DeliveryChallan).filter(
+    challan = db.query(DeliveryChallan).options(joinedload(DeliveryChallan.items)).filter(
         DeliveryChallan.id == challan_id,
         DeliveryChallan.company_id == company_id
     ).first()

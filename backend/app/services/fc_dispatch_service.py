@@ -2,7 +2,8 @@ import os
 
 from app.services.audit_log_service import AuditLogService
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 import logging
@@ -68,7 +69,6 @@ class FCDispatchService:
             remarks=remarks
         )
         db.add(timeline)
-        db.flush()
         
     @staticmethod
     def _log_audit(db: Session, company_id: int, user_id: int, action: str, entity_type: str, entity_id: int, message: str, payload: dict = None):
@@ -85,7 +85,6 @@ class FCDispatchService:
             metadata_payload=payload
         )
         db.add(log)
-        db.flush()
 
     @staticmethod
     def create_batch_dispatch(db: Session, company_id: int, request: FCDispatchBatchRequest, user_id: int):
@@ -146,7 +145,7 @@ class FCDispatchService:
                 # User requested ability to dispatch to the same warehouse for dummy bills/adjustments
 
                 # 2. Fetch Dest FC Details
-                dest_warehouse = db.query(Warehouse).filter(Warehouse.id == dest_warehouse_id).first()
+                dest_warehouse = db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == dest_warehouse_id).first()
                 if not dest_warehouse:
                     raise HTTPException(status_code=404, detail=f"Destination Warehouse {dest_warehouse_id} not found")
 
@@ -161,57 +160,61 @@ class FCDispatchService:
                     has_permission = user_obj.role in ["Admin", "SuperAdmin"] or "cross_company_transfer" in (user_obj.permissions or [])
                     if not has_permission:
                         raise HTTPException(status_code=403, detail="Not authorized to create cross-company transfers")
-                        
 
-                    # Validate SKUs exist in destination company
-                    # Automatically create missing products in destination company
+                    # Pre-fetch products in one query to validate and create missing in dest company
+                    req_pids = [req_item.product_id for req_item in request.items]
+                    src_prods = {p.id: p for p in db.query(Product).filter(Product.id.in_(req_pids)).all()}
+                    src_skus = [p.sku for p in src_prods.values() if p and p.sku]
+                    dest_prods = {p.sku: p for p in db.query(Product).filter(Product.company_id == dest_warehouse.company_id, Product.sku.in_(src_skus)).all()}
+                    
+                    new_prods_created = False
                     for req_item in request.items:
-                        src_prod = db.query(Product).filter(Product.id == req_item.product_id).first()
-                        if src_prod:
-                            dest_prod = db.query(Product).filter(Product.sku == src_prod.sku, Product.company_id == dest_warehouse.company_id).first()
-                            if not dest_prod:
-                                # Create product
-                                new_prod = Product(
-                                    company_id=dest_warehouse.company_id,
-                                    sku=src_prod.sku,
-                                    name=src_prod.name,
-                                    category=src_prod.category,
-                                    brand=src_prod.brand,
-                                    item_rate=src_prod.item_rate,
-                                    min_stock_level=src_prod.min_stock_level,
-                                    reorder_level=src_prod.reorder_level,
-                                    safety_stock=src_prod.safety_stock,
-                                    preferred_transfer_qty=src_prod.preferred_transfer_qty,
-                                    status=src_prod.status,
-                                    hsn=src_prod.hsn,
-                                    default_gst_rate=src_prod.default_gst_rate,
-                                    barcode=src_prod.barcode,
-                                    unit=src_prod.unit
-                                )
-                                db.add(new_prod)
-                                db.flush()
-                                
-                                # Initialize 0 inventory for all active warehouses in dest company
-                                dest_warehouses = db.query(Warehouse).filter_by(company_id=dest_warehouse.company_id, status="ACTIVE").all()
-                                for dw in dest_warehouses:
-                                    inv = Inventory(
-                                        company_id=dest_warehouse.company_id,
-                                        warehouse_id=dw.id,
-                                        product_id=new_prod.id
-                                    )
-                                    inv._allow_mutation = True
-                                    inv.current_qty = 0
-                                    inv.available_qty = 0
-                                    inv.reserved_qty = 0
-                                    db.add(inv)
-                                db.flush()
-
+                        src_prod = src_prods.get(req_item.product_id)
+                        if src_prod and src_prod.sku not in dest_prods:
+                            # Create product in destination company
+                            new_prod = Product(
+                                company_id=dest_warehouse.company_id,
+                                sku=src_prod.sku,
+                                name=src_prod.name,
+                                category=src_prod.category,
+                                brand=src_prod.brand,
+                                item_rate=src_prod.item_rate,
+                                min_stock_level=src_prod.min_stock_level,
+                                reorder_level=src_prod.reorder_level,
+                                safety_stock=src_prod.safety_stock,
+                                preferred_transfer_qty=src_prod.preferred_transfer_qty,
+                                status=src_prod.status,
+                                hsn=src_prod.hsn,
+                                default_gst_rate=src_prod.default_gst_rate,
+                                barcode=src_prod.barcode,
+                                unit=src_prod.unit
+                            )
+                            db.add(new_prod)
+                            db.flush()
+                            dest_prods[src_prod.sku] = new_prod
+                            new_prods_created = True
                             
+                            # Initialize 0 inventory for all active warehouses in dest company
+                            dest_warehouses = db.query(Warehouse).filter_by(company_id=dest_warehouse.company_id, status="ACTIVE").all()
+                            for dw in dest_warehouses:
+                                inv = Inventory(
+                                    company_id=dest_warehouse.company_id,
+                                    warehouse_id=dw.id,
+                                    product_id=new_prod.id
+                                )
+                                inv._allow_mutation = True
+                                inv.current_qty = 0
+                                inv.available_qty = 0
+                                inv.reserved_qty = 0
+                                inv._allow_mutation = False
+                                db.add(inv)
+                    if new_prods_created:
+                        db.flush()
+
                     # Audit log
                     AuditLogService.log(
                         db,
                         company_id=company_id,
-                        
                         entity_type="FCDispatch",
                         entity_id=0,
                         event_type="CROSS_COMPANY_TRANSFER_INITIATED",
@@ -220,13 +223,6 @@ class FCDispatchService:
                     )
 
                 # Destination Amazon Validation
-                amazon_mapping = db.query(WarehouseExternalMapping).filter(
-                    WarehouseExternalMapping.warehouse_id == dest_warehouse.id,
-                    WarehouseExternalMapping.marketplace.ilike('%Amazon%')
-                ).first()
-                if False and amazon_mapping:
-                    raise HTTPException(status_code=400, detail="Amazon FCs are not permitted for internal distribution")
-
                 if dest_warehouse.status != WarehouseStatus.ACTIVE:
                     raise HTTPException(status_code=400, detail=f"Destination Warehouse {dest_warehouse.name} is not ACTIVE")
 
@@ -234,34 +230,42 @@ class FCDispatchService:
                 if not hub_id:
                     raise HTTPException(status_code=400, detail=f"Destination Warehouse {dest_warehouse.name} lacks a State Hub (Migration Required)")
                 
-                hub = db.query(StateHub).filter(StateHub.id == hub_id).first()
+                hub = dest_warehouse.hub or db.query(StateHub).filter(StateHub.id == hub_id).first()
                 if not hub:
                     raise HTTPException(status_code=400, detail=f"Fulfillment Center {dest_warehouse.name} is missing a valid State Hub")
                     
                 if (hub.status or "").upper() != "ACTIVE":
                     raise HTTPException(status_code=400, detail=f"State Hub {hub.hub_name} is not Active")
                     
-                # 3. Prepare POS Request & Validate Inventory
+                # 3. Prepare POS Request & Validate Inventory (Batched Pre-fetch)
                 pos_items = []
                 taxable_total = 0.0
                 tax_total = 0.0
+
+                req_pids = [r.product_id for r in request.items]
+                products_by_id = {p.id: p for p in db.query(Product).filter(Product.id.in_(req_pids)).all()}
+                
+                # Check source warehouse inventory in ONE query
+                source_wh_ids = [39, 2] if source_warehouse.id in (39, 2) else [source_warehouse.id]
+                source_inv_records = db.query(
+                    Inventory.product_id,
+                    func.sum(Inventory.available_qty).label("total_avail")
+                ).filter(
+                    Inventory.company_id == source_warehouse.company_id,
+                    Inventory.warehouse_id.in_(source_wh_ids),
+                    Inventory.product_id.in_(req_pids)
+                ).group_by(Inventory.product_id).all()
+                source_avail_map = {r.product_id: (r.total_avail or 0) for r in source_inv_records}
                 
                 for req_item in request.items:
                     if req_item.quantity <= 0:
                         raise HTTPException(status_code=400, detail="Transfer quantity must be greater than zero")
 
-                    product = db.query(Product).filter(Product.id == req_item.product_id).first()
+                    product = products_by_id.get(req_item.product_id)
                     if not product:
                         raise HTTPException(status_code=404, detail=f"Product {req_item.product_id} not found")
                     
-                    # Validate Source Inventory
-                    inventory = db.query(Inventory).filter(
-                        Inventory.company_id == source_warehouse.company_id,
-                        Inventory.warehouse_id == source_warehouse.id,
-                        Inventory.product_id == product.id
-                    ).first()
-                    
-                    avail_qty = inventory.available_qty if inventory else 0
+                    avail_qty = source_avail_map.get(product.id, 0)
                     if req_item.quantity > avail_qty:
                         raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name} at source warehouse. Needed {req_item.quantity}, available {avail_qty}")
                     
@@ -369,15 +373,76 @@ class FCDispatchService:
                     ]
                 }
                 
-                # Create FCDispatch Orchestrator
+                # 4. Generate Dispatch Number & Complete POS Sale
                 dispatch_num = FCDispatchService._generate_dispatch_number(db, company_id, hub.hub_code, company_code)
+                pos_request.dispatch_document_number = dispatch_num
+
+                user_obj = db.query(User).filter(User.id == user_id).first()
+                sale_dto = complete_sale(request=None, payload=pos_request, company_id=company_id, db=db, user=user_obj, commit=False)
+                sale_id = sale_dto["receipt"]["id"]
+                sale_obj = db.query(Sale).filter(Sale.id == sale_id).first()
+                
+                # 5. Create Challan
+                challan_data = {
+                    "sale_id": sale_id,
+                    "challan_number": dispatch_num,
+                    "remarks": f"{request.dispatch_type} Dispatch from {source_warehouse.code}",
+                    "shipping_snapshot": {
+                        "name": dest_warehouse.name,
+                        "address": dest_warehouse.address,
+                        "state": hub.state,
+                        "state_code": hub.state_code,
+                        "gstin": hub.gstin # Usually same GSTIN for same state
+                    },
+                    "seller_snapshot": {
+                        "name": sale_obj.company_name_snapshot,
+                        "gstin": sale_obj.company_gstin_snapshot,
+                        "address": sale_obj.company_address_snapshot
+                    },
+                    "buyer_snapshot": {
+                        "name": sale_obj.customer_name,
+                        "gstin": sale_obj.customer_gstin,
+                        "address": sale_obj.customer_address,
+                        "state": sale_obj.customer_state
+                    },
+                    "items": [
+                        {
+                            "product_id": it.product_id,
+                            "sku_snapshot": it.sku,
+                            "product_name_snapshot": it.product_name,
+                            "hsn_snapshot": it.hsn_sac,
+                            "unit_snapshot": it.unit,
+                            "quantity": it.quantity,
+                            "unit_price": it.selling_price,
+                            "tax_rate": it.gst_rate,
+                            "tax_amount": it.cgst + it.sgst + it.igst,
+                            "total_price": it.line_total
+                        }
+                        for it in pos_items
+                    ]
+                }
+                challan_dto = DeliveryChallanService.create_challan(db, company_id, challan_data, user_id)
+
+                # Determine final status based on XML sync status
+                if sale_obj.tally_sync_status in ["PENDING", "PROCESSING"]:
+                    final_status = "XML Pending"
+                elif sale_obj.tally_sync_status == "SKIPPED":
+                    final_status = "Completed"
+                elif sale_obj.tally_sync_status == "FAILED":
+                    final_status = "Completed with Errors"
+                else:
+                    final_status = "Completed"
+
+                # Create FCDispatch Orchestrator in single insert
                 dispatch = FCDispatch(
                     company_id=company_id,
                     warehouse_id=dest_warehouse.id,
                     dispatch_number=dispatch_num,
                     idempotency_key=f"{request.idempotency_key}_{dest_warehouse.id}" if request.idempotency_key else None,
                     dispatch_type=request.dispatch_type,
-                    dispatch_status="Processing",
+                    dispatch_status=final_status,
+                    invoice_id=sale_id,
+                    delivery_challan_id=challan_dto.id,
                     created_by=user_id
                 )
                 db.add(dispatch)
@@ -397,41 +462,10 @@ class FCDispatchService:
 
                 FCDispatchService._log_timeline(db, dispatch.id, "Created", "Success", user_id, f"Dispatch {dispatch_num} initiated from {source_warehouse.name}")
                 FCDispatchService._log_audit(db, company_id, user_id, "CREATE", "FCDispatch", dispatch.id, f"Dispatch {dispatch_num} Created")
-
-                # 4. Call pos.py complete_sale (with commit=False)
-                user_obj = db.query(User).filter(User.id == user_id).first()
-                sale_dto = complete_sale(request=None, payload=pos_request, company_id=company_id, db=db, user=user_obj, commit=False)
-                sale_id = sale_dto["receipt"]["id"]
-                sale_obj = db.query(Sale).filter(Sale.id == sale_id).first()
-                sale_obj.transaction_origin = transaction_origin
-                dispatch.invoice_id = sale_id
-                
-                # Prevent accounting export if disabled for internal dist
-                if not export_to_accounting:
-                    sale_obj.tally_sync_status = "SKIPPED"
-                
-                db.flush()
                 FCDispatchService._log_timeline(db, dispatch.id, "Invoice Generated", "Success", user_id, f"Invoice ID {sale_id}")
-                
-                # 5. Create Challan
-                challan_data = {
-                    "sale_id": sale_id,
-                    "challan_number": dispatch_num,
-                    "remarks": f"{request.dispatch_type} Dispatch from {source_warehouse.code}",
-                    "shipping_snapshot": {
-                        "name": dest_warehouse.name,
-                        "address": dest_warehouse.address,
-                        "state": hub.state,
-                        "state_code": hub.state_code,
-                        "gstin": hub.gstin # Usually same GSTIN for same state
-                    },
-                }
-                challan_dto = DeliveryChallanService.create_challan(db, company_id, challan_data, user_id)
-                dispatch.delivery_challan_id = challan_dto.id
-                db.flush()
                 FCDispatchService._log_timeline(db, dispatch.id, "Challan Generated", "Success", user_id, f"Challan ID {challan_dto.id}")
                 
-# 6. Process Inventory
+                # 6. Process Inventory
                 
                 # Auto-create StockTransfer if cross-company so it appears in Inter-Company History
                 st_obj = None
@@ -453,8 +487,37 @@ class FCDispatchService:
                     )
                     db.add(st_obj)
                     db.flush()
+
+                # Pre-fetch destination products if cross-company
+                dest_pids_by_sku = {}
+                if is_cross_company:
+                    dest_pids_by_sku = {
+                        p.sku: p.id for p in db.query(Product).filter(
+                            Product.company_id == dest_warehouse.company_id,
+                            Product.sku.in_([it.sku for it in pos_items])
+                        ).all()
+                    }
+
+                # Pre-fetch central warehouse 39 inventory to split correctly between WH 39 and WH 2
+                wh_ids = [39, 2] if source_warehouse.id in (39, 2) else [source_warehouse.id]
+                wh39_avail_map = {}
+                if len(wh_ids) > 1:
+                    wh39_records = db.query(
+                        Inventory.product_id,
+                        Inventory.available_qty
+                    ).filter(
+                        Inventory.company_id == company_id,
+                        Inventory.warehouse_id == 39,
+                        Inventory.product_id.in_([it.product_id for it in pos_items])
+                    ).all()
+                    wh39_avail_map = {r.product_id: max(0, r.available_qty or 0) for r in wh39_records}
+
+                dispatch_items_to_add = []
+                st_items_to_add = []
+                batch_inventory_events = []
+
                 for it in pos_items:
-                    di = FCDispatchItem(
+                    dispatch_items_to_add.append(FCDispatchItem(
                         dispatch_id=dispatch.id,
                         product_id=it.product_id,
                         sku_snapshot=it.sku,
@@ -466,99 +529,96 @@ class FCDispatchService:
                         taxable_amount=it.taxable_amount,
                         tax_amount=it.cgst + it.sgst + it.igst,
                         total_amount=it.line_total
-                    )
-                    db.add(di)
+                    ))
                     
                     if st_obj:
-                        from app.models.schema import StockTransferItem
-                        db.add(StockTransferItem(
+                        dest_pid = dest_pids_by_sku.get(it.sku, it.product_id)
+                        st_items_to_add.append(StockTransferItem(
                             transfer_id=st_obj.id,
-                            product_id=db.query(Product).filter(Product.sku == it.sku, Product.company_id == dest_warehouse.company_id).first().id if is_cross_company else it.product_id,
+                            product_id=dest_pid,
                             requested_qty=it.quantity,
-                            dispatched_qty=it.quantity, approved_qty=it.quantity, received_qty=it.quantity,
+                            dispatched_qty=it.quantity,
+                            approved_qty=it.quantity,
+                            received_qty=it.quantity,
                             unit_price=it.selling_price
                         ))
 
                     # Deduct from Source
-                    wh_ids = [39, 2] if source_warehouse.id in (39, 2) else [source_warehouse.id]
                     if len(wh_ids) > 1:
-                        central_inv = db.query(Inventory).filter(
-                            Inventory.product_id == it.product_id,
-                            Inventory.warehouse_id == 39,
-                            Inventory.company_id == company_id
-                        ).first()
-                        central_avail = max(0, central_inv.available_qty if central_inv else 0)
+                        central_avail = wh39_avail_map.get(it.product_id, 0)
                         qty_from_39 = min(it.quantity, central_avail)
                         qty_from_2 = it.quantity - qty_from_39
                         if qty_from_39 > 0:
-                            InventoryEventEngine.process_event(
-                                db=db,
-                                company_id=company_id,
-                                product_sku=it.sku,
-                                warehouse_id=39,
-                                quantity=qty_from_39,
-                                event_type="TRANSFER_OUT",
-                                source="FC_DISPATCH_OUT",
-                                reference_id=dispatch_num,
-                                metadata_payload={"dispatch_id": dispatch.id}
-                            )
+                            batch_inventory_events.append({
+                                "company_id": company_id,
+                                "product_sku": it.sku,
+                                "warehouse_id": 39,
+                                "quantity": qty_from_39,
+                                "event_type": "TRANSFER_OUT",
+                                "source": "FC_DISPATCH_OUT",
+                                "reference_id": dispatch_num,
+                                "user_id": user_id,
+                                "metadata_payload": {"dispatch_id": dispatch.id}
+                            })
                         if qty_from_2 > 0:
-                            InventoryEventEngine.process_event(
-                                db=db,
-                                company_id=company_id,
-                                product_sku=it.sku,
-                                warehouse_id=2,
-                                quantity=qty_from_2,
-                                event_type="TRANSFER_OUT",
-                                source="FC_DISPATCH_OUT",
-                                reference_id=dispatch_num,
-                                metadata_payload={"dispatch_id": dispatch.id}
-                            )
+                            batch_inventory_events.append({
+                                "company_id": company_id,
+                                "product_sku": it.sku,
+                                "warehouse_id": 2,
+                                "quantity": qty_from_2,
+                                "event_type": "TRANSFER_OUT",
+                                "source": "FC_DISPATCH_OUT",
+                                "reference_id": dispatch_num,
+                                "user_id": user_id,
+                                "metadata_payload": {"dispatch_id": dispatch.id}
+                            })
                     else:
-                        InventoryEventEngine.process_event(
-                            db=db,
-                            company_id=company_id,
-                            product_sku=it.sku,
-                            warehouse_id=source_warehouse.id,
-                            quantity=it.quantity,
-                            event_type="TRANSFER_OUT",
-                            source="FC_DISPATCH_OUT",
-                            reference_id=dispatch_num,
-                            metadata_payload={"dispatch_id": dispatch.id}
-                        )
+                        batch_inventory_events.append({
+                            "company_id": company_id,
+                            "product_sku": it.sku,
+                            "warehouse_id": source_warehouse.id,
+                            "quantity": it.quantity,
+                            "event_type": "TRANSFER_OUT",
+                            "source": "FC_DISPATCH_OUT",
+                            "reference_id": dispatch_num,
+                            "user_id": user_id,
+                            "metadata_payload": {"dispatch_id": dispatch.id}
+                        })
                     
                     # Add to Dest FC
-                    InventoryEventEngine.process_event(
-                        db=db,
-                        company_id=dest_warehouse.company_id,
-                        product_sku=it.sku,
-                        warehouse_id=dest_warehouse.id,
-                        quantity=it.quantity,
-                        event_type="TRANSFER_IN",
-                        source="FC_DISPATCH_IN",
-                        reference_id=dispatch_num,
-                        metadata_payload={"dispatch_id": dispatch.id, "source_company_id": company_id}
-                    )
-                db.flush()
+                    batch_inventory_events.append({
+                        "company_id": dest_warehouse.company_id,
+                        "product_sku": it.sku,
+                        "warehouse_id": dest_warehouse.id,
+                        "quantity": it.quantity,
+                        "event_type": "TRANSFER_IN",
+                        "source": "FC_DISPATCH_IN",
+                        "reference_id": dispatch_num,
+                        "user_id": user_id,
+                        "metadata_payload": {"dispatch_id": dispatch.id, "source_company_id": company_id}
+                    })
+
+                db.add_all(dispatch_items_to_add)
+                if st_items_to_add:
+                    db.add_all(st_items_to_add)
+
+                # Process all inventory events in a single optimized batch
+                InventoryEventEngine.process_events_batch(db=db, events=batch_inventory_events)
                 FCDispatchService._log_timeline(db, dispatch.id, "Inventory Updated", "Success", user_id, "Stock transferred")
                 
-                # Update final status based on XML sync status
+                # Log XML / completion audit and timeline
                 if sale_obj.tally_sync_status in ["PENDING", "PROCESSING"]:
-                    dispatch.dispatch_status = "XML Pending"
                     FCDispatchService._log_timeline(db, dispatch.id, "XML Queued", "Pending", user_id)
                     FCDispatchService._log_audit(db, company_id, user_id, "XML_QUEUED", "FCDispatch", dispatch.id, f"Invoice {sale_id} queued for Tally")
                 elif sale_obj.tally_sync_status == "SKIPPED":
-                    dispatch.dispatch_status = "Completed"
                     FCDispatchService._log_timeline(db, dispatch.id, "XML Skipped", "Skipped", user_id, "Configuration Disabled")
                     FCDispatchService._log_audit(db, company_id, user_id, "XML_SKIPPED", "FCDispatch", dispatch.id, f"Invoice {sale_id} XML skipped")
                     FCDispatchService._log_timeline(db, dispatch.id, "Completed", "Success", user_id)
                     FCDispatchService._log_audit(db, company_id, user_id, "COMPLETE", "FCDispatch", dispatch.id, f"Dispatch {dispatch_num} Completed")
                 elif sale_obj.tally_sync_status == "FAILED":
-                    dispatch.dispatch_status = "Completed with Errors"
                     FCDispatchService._log_timeline(db, dispatch.id, "XML Queued", "Failed", user_id)
                     FCDispatchService._log_audit(db, company_id, user_id, "XML_FAILED", "FCDispatch", dispatch.id, f"Invoice {sale_id} XML failed")
                 else:
-                    dispatch.dispatch_status = "Completed"
                     FCDispatchService._log_timeline(db, dispatch.id, "Completed", "Success", user_id)
                     FCDispatchService._log_audit(db, company_id, user_id, "COMPLETE", "FCDispatch", dispatch.id, f"Dispatch {dispatch_num} Completed")
                 
@@ -576,9 +636,11 @@ class FCDispatchService:
             
             db.commit()
             
-            # Refresh all after commit
-            for d in dispatches:
-                db.refresh(d)
+            # Combine newly created dispatches with any existing ones (from partial retries)
+            if request.idempotency_key and existing_dispatches:
+                dispatches.extend(existing_dispatches)
+                
+            return dispatches
             
             # Combine newly created dispatches with any existing ones (from partial retries)
             if request.idempotency_key and existing_dispatches:

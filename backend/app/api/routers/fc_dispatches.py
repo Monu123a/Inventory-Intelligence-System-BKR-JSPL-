@@ -52,8 +52,15 @@ def get_dispatches(
     limit: int = 100
 ):
     try:
-        query = db.query(FCDispatch).filter(FCDispatch.company_id == company_id)
-        print(f"[COMPANY FILTER] FCDispatch, {company_id}")
+        query = (
+            db.query(FCDispatch)
+            .options(
+                joinedload(FCDispatch.warehouse).joinedload(Warehouse.hub),
+                joinedload(FCDispatch.invoice),
+                joinedload(FCDispatch.delivery_challan)
+            )
+            .filter(FCDispatch.company_id == company_id)
+        )
         
         if dispatch_type:
             query = query.filter(FCDispatch.dispatch_type == dispatch_type)

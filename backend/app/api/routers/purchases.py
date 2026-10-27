@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import exc
 from typing import List, Dict, Any, Optional
 
@@ -153,7 +153,10 @@ def list_purchases(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    purchases = db.query(Purchase).filter_by(company_id=company_id).order_by(Purchase.id.desc()).all()
+    purchases = db.query(Purchase).options(
+        joinedload(Purchase.vendor),
+        joinedload(Purchase.warehouse)
+    ).filter_by(company_id=company_id).order_by(Purchase.id.desc()).all()
     res = []
     for p in purchases:
         res.append({
@@ -179,7 +182,11 @@ def get_purchase(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    p = db.query(Purchase).filter_by(id=purchase_id, company_id=company_id).first()
+    p = db.query(Purchase).options(
+        joinedload(Purchase.vendor),
+        joinedload(Purchase.warehouse),
+        selectinload(Purchase.items)
+    ).filter_by(id=purchase_id, company_id=company_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Purchase not found")
         

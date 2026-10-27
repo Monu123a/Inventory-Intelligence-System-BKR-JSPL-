@@ -152,6 +152,8 @@ class PosCheckoutRequest(BaseModel):
     # Internal routing overrides (for cross-module calls)
     origin_warehouse_id: Optional[int] = None
     skip_inventory_update: bool = False
+    transaction_origin: Optional[str] = None
+    tally_sync_status: Optional[str] = None
 
     payment_method: str
     payment_reference: Optional[str] = None
@@ -296,7 +298,7 @@ def complete_sale(
             }
 
     if payload.origin_warehouse_id:
-        default_warehouse = db.query(Warehouse).filter(Warehouse.id == payload.origin_warehouse_id).first()
+        default_warehouse = db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == payload.origin_warehouse_id).first()
         if not default_warehouse:
             raise HTTPException(status_code=400, detail="Origin warehouse not found")
     else:
@@ -397,9 +399,7 @@ def complete_sale(
 
         # Company snapshot source (settings + selected warehouse)
         settings = db.query(CompanySettings).filter(CompanySettings.company_id == company_id).first()
-        wh = None
-        if payload.origin_warehouse_id:
-            wh = db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == payload.origin_warehouse_id).first()
+        wh = default_warehouse
 
         seller_name = (settings.legal_name if settings and settings.legal_name else (company.name if company else None))
         seller_gstin = (settings.gstin if settings else None)
@@ -475,7 +475,8 @@ def complete_sale(
             company_logo_url_snapshot=(settings.logo_url if settings else None),
             company_bank_details_snapshot=(settings.bank_details if settings else None),
 
-            tally_sync_status="NOT_APPLICABLE",  # updated below for B2B+enabled
+            tally_sync_status=payload.tally_sync_status or "NOT_APPLICABLE",
+            transaction_origin=payload.transaction_origin or "POS",
             total_taxable_amount=payload.total_taxable_amount,
             total_tax=payload.total_tax,
             grand_total=payload.grand_total,
@@ -499,8 +500,11 @@ def complete_sale(
             raise
 
         # 4. Create Sale Items and Deduct Inventory
+        prod_ids = [item.product_id for item in payload.items if item.product_id]
+        products_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(prod_ids), Product.company_id == company_id).all()} if prod_ids else {}
+
         for item in payload.items:
-            product = db.query(Product).filter(Product.id == item.product_id, Product.company_id == company_id).first()
+            product = products_map.get(item.product_id)
             final_hsn = item.hsn_sac or (product.hsn if product else None)
             sale_item = SaleItem(
                 sale_id=sale.id,
@@ -601,8 +605,6 @@ def complete_sale(
         )
         if commit:
             db.commit()
-        else:
-            db.flush()
         
         # Tally sync (B2B only, configurable) - runs AFTER sale is committed
         # Tally failures should NOT rollback the sale
@@ -666,7 +668,7 @@ def complete_sale(
         logger.info(f"Action: Sale | User: {user.id} | Company: {company_id} | Status: Success | SaleID: {sale.id} | Value: {sale.grand_total}")
         log_metric("sale_completed", 1, {"company_id": company_id})
 
-        receipt = _build_invoice_dto(sale, db)
+        receipt = _build_invoice_dto(sale, db, is_new=True)
         return {"message": "Sale completed successfully", "receipt": receipt, "tally_sync": tally_result}
         
     except HTTPException:
@@ -720,7 +722,8 @@ def get_sales_history(
         Sale,
         func.coalesce(sold_subq.c.total_sold, 0).label("total_sold"),
         func.coalesce(returned_subq.c.total_returned, 0).label("total_returned")
-    ).outerjoin(sold_subq, Sale.id == sold_subq.c.sale_id) \
+    ).options(joinedload(Sale.items)) \
+     .outerjoin(sold_subq, Sale.id == sold_subq.c.sale_id) \
      .outerjoin(returned_subq, Sale.id == returned_subq.c.sale_id) \
      .filter(Sale.company_id == company_id)
     
@@ -834,13 +837,13 @@ def get_sales_history(
     }
 
 
-def _build_invoice_dto(sale: Sale, db: Session = None) -> dict:
+def _build_invoice_dto(sale: Sale, db: Session = None, is_new: bool = False) -> dict:
     # Fetch returns data if db is provided
     returns_summary = []
     item_return_map = {}
     origin_wh_id = None
     
-    if db:
+    if db and not is_new:
         returns = db.query(SalesReturn).filter(SalesReturn.sale_id == sale.id, SalesReturn.status != "Cancelled").all()
         for r in returns:
             # sum up returned items

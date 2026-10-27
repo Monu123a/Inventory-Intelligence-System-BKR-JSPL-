@@ -17,6 +17,7 @@ class AuditLogService:
         event_type: str,
         message: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        flush: bool = False,
     ) -> AuditLog:
         entry = AuditLog(
             company_id=company_id,
@@ -27,5 +28,6 @@ class AuditLogService:
             metadata_payload=metadata or {},
         )
         db.add(entry)
-        db.flush()
+        if flush:
+            db.flush()
         return entry

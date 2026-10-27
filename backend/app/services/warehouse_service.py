@@ -6,15 +6,24 @@ from app.models.schema import WarehouseExternalMapping
 class WarehouseService:
     @staticmethod
     def get_all(db: Session, company_id: int):
-        return db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.company_id == company_id).all()
+        return db.query(Warehouse).options(
+            joinedload(Warehouse.hub),
+            joinedload(Warehouse.external_mappings)
+        ).filter(Warehouse.company_id == company_id).all()
 
     @staticmethod
     def get_all_across_companies(db: Session):
-        return db.query(Warehouse).options(joinedload(Warehouse.hub)).all()
+        return db.query(Warehouse).options(
+            joinedload(Warehouse.hub),
+            joinedload(Warehouse.external_mappings)
+        ).all()
 
     @staticmethod
     def get_by_id(db: Session, warehouse_id: int, company_id: int):
-        return db.query(Warehouse).options(joinedload(Warehouse.hub)).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
+        return db.query(Warehouse).options(
+            joinedload(Warehouse.hub),
+            joinedload(Warehouse.external_mappings)
+        ).filter(Warehouse.id == warehouse_id, Warehouse.company_id == company_id).first()
 
     @staticmethod
     def create(db: Session, company_id: int, data: dict):
