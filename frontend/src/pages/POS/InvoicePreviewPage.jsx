@@ -349,9 +349,35 @@ export default function InvoicePreviewPage() {
             </button>
           )}
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginRight: '15px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Bill Size: {printScale}%</span>
-            <input type="range" min="25" max="150" step="25" value={printScale} onChange={e => setPrintScale(e.target.value)} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '14px', background: '#f8fafc', padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Zoom:</span>
+            <button
+              onClick={() => setPrintScale(prev => Math.max(50, Number(prev) - 15))}
+              style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: '16px' }}
+              title="Zoom Out"
+            >
+              -
+            </button>
+            <span style={{ fontSize: '12px', fontWeight: '700', minWidth: '40px', textAlign: 'center' }}>{printScale}%</span>
+            <button 
+              onClick={() => setPrintScale(prev => Math.min(200, Number(prev) + 15))}
+              style={{ padding: '2px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', lineHeight: '16px' }}
+              title="Zoom In"
+            >
+              +
+            </button>
+            <button
+              onClick={() => setPrintScale(100)}
+              style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', background: printScale === 100 ? '#e2e8f0' : '#fff', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
+            >
+              100%
+            </button>
+            <button
+              onClick={() => setPrintScale(125)}
+              style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', background: printScale === 125 ? '#e2e8f0' : '#fff', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
+            >
+              125%
+            </button>
           </div>
           <button className={styles.actionButton} onClick={handlePrint}>
 
