@@ -196,6 +196,9 @@ class AmazonLiveAllocation(Base):
     reconciled_qty = Column(Integer, default=0)
     status = Column(Enum(AllocationStatus), default=AllocationStatus.PENDING)
     closed = Column(Boolean, default=False)
+    order_date = Column(DateTime, nullable=True, index=True)
+    invoice_number = Column(String, nullable=True, index=True)
+    invoice_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     

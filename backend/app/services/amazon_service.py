@@ -125,26 +125,27 @@ class AmazonService:
         existing_ids = {r[0] for r in existing_order_tuples if r[0]}
 
         # 3. Resolve warehouse mappings
-        # MFN Warehouse: strictly resolve to CENTRAL warehouse (e.g. VSHB for JSPL, BKR_CENTRAL for BKR)
-        mfn_wh = db.query(Warehouse).filter(
+        # For JSPL (company_id=3), MFN orders map to JSPL IN warehouse (code 'IN')
+        # For BKR (company_id=2), MFN orders map to BKR_CENTRAL
+        mfn_wh = db.query(Warehouse).join(
+            WarehouseExternalMapping, Warehouse.id == WarehouseExternalMapping.warehouse_id
+        ).filter(
             Warehouse.company_id == company_id,
-            Warehouse.warehouse_type == WarehouseType.CENTRAL,
+            WarehouseExternalMapping.amazon_network == AmazonNetworkType.MFN,
             Warehouse.status == "ACTIVE"
         ).first()
 
         if not mfn_wh:
             mfn_wh = db.query(Warehouse).filter(
                 Warehouse.company_id == company_id,
-                Warehouse.code.in_(("VSHB", "BKR_CENTRAL")),
+                Warehouse.code.in_(("IN", "BKR_CENTRAL", "VSHB")),
                 Warehouse.status == "ACTIVE"
             ).first()
 
         if not mfn_wh:
-            mfn_wh = db.query(Warehouse).join(
-                WarehouseExternalMapping, Warehouse.id == WarehouseExternalMapping.warehouse_id
-            ).filter(
+            mfn_wh = db.query(Warehouse).filter(
                 Warehouse.company_id == company_id,
-                WarehouseExternalMapping.amazon_network == AmazonNetworkType.MFN,
+                Warehouse.warehouse_type == WarehouseType.CENTRAL,
                 Warehouse.status == "ACTIVE"
             ).first()
 
@@ -189,11 +190,17 @@ class AmazonService:
                 amazon_status = order.get("status")
                 channel = order.get("fulfillment_channel", "MFN")
                 last_update_str = order.get("last_update_date")
+                purchase_date_str = order.get("purchase_date")
                 
                 try:
                     last_update = datetime.fromisoformat(last_update_str.replace("Z", "+00:00")).replace(tzinfo=None) if last_update_str else datetime.utcnow()
                 except Exception:
                     last_update = datetime.utcnow()
+
+                try:
+                    purchase_date = datetime.fromisoformat(purchase_date_str.replace("Z", "+00:00")).replace(tzinfo=None) if purchase_date_str else last_update
+                except Exception:
+                    purchase_date = last_update
 
                 if "max_order_date" not in counters or (last_update and last_update > counters["max_order_date"]):
                     counters["max_order_date"] = last_update
@@ -201,6 +208,14 @@ class AmazonService:
                 mapped_status = status_map.get(amazon_status, AllocationStatus.PENDING)
                 network = AmazonNetworkType.MFN if channel == "MFN" else AmazonNetworkType.AFN
                 target_warehouse_id = mfn_warehouse_id if network == AmazonNetworkType.MFN else afn_warehouse_id
+
+                wh_code = "IN" if network == AmazonNetworkType.MFN else "AMZ"
+                if target_warehouse_id:
+                    wh_obj = db.query(Warehouse.code).filter(Warehouse.id == target_warehouse_id).first()
+                    if wh_obj and wh_obj[0]:
+                        wh_code = wh_obj[0].upper()
+                order_suffix = order_id.replace("-", "")[-6:] if order_id else "000000"
+                invoice_number = f"{wh_code}-{order_suffix}"
 
                 # If this order was already known and had no items fetched
                 if order.get("is_known_order") and not order.get("items"):
@@ -285,6 +300,12 @@ class AmazonService:
                                 existing.status = mapped_status
                                 existing.allocated_qty = qty
                                 existing.updated_at = last_update
+                                if not existing.order_date:
+                                    existing.order_date = purchase_date
+                                if not existing.invoice_date:
+                                    existing.invoice_date = last_update
+                                if not existing.invoice_number:
+                                    existing.invoice_number = invoice_number
 
                                 if mapped_status in [AllocationStatus.CANCELLED, AllocationStatus.RETURNED, AllocationStatus.REFUNDED]:
                                     existing.closed = True
@@ -313,6 +334,10 @@ class AmazonService:
                                     allocated_qty=final_qty,
                                     status=mapped_status,
                                     closed=closed,
+                                    order_date=purchase_date,
+                                    invoice_date=last_update,
+                                    invoice_number=invoice_number,
+                                    created_at=purchase_date,
                                     updated_at=last_update
                                 )
                                 db.add(allocation)

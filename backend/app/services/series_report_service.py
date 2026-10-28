@@ -563,6 +563,12 @@ class SeriesReportService:
         is_amazon_target = series_clean in ("AMAZON", "AFN", "MFN") or bool(matched_wh)
         amazon_allocations = []
         if is_amazon_target:
+            alloc_date_col = func.coalesce(
+                AmazonLiveAllocation.order_date,
+                AmazonLiveAllocation.invoice_date,
+                AmazonLiveAllocation.updated_at,
+                AmazonLiveAllocation.created_at
+            )
             alloc_query = db.query(AmazonLiveAllocation)
             if company_id:
                 has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
@@ -572,8 +578,20 @@ class SeriesReportService:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
             elif series_clean == "MFN":
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
+            elif series_clean == "IN" or (matched_wh and matched_wh.code.upper() == "IN"):
+                wh_target_id = matched_wh.id if matched_wh else 38
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.warehouse_id == wh_target_id,
+                        and_(
+                            AmazonLiveAllocation.company_id == 3,
+                            AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
+                        ),
+                        AmazonLiveAllocation.invoice_number.ilike("IN-%")
+                    )
+                )
             elif matched_wh:
-                if matched_wh.code.upper() in ("VSHB", "BKR_CENTRAL") or (matched_wh.warehouse_type and matched_wh.warehouse_type.value == "CENTRAL"):
+                if matched_wh.code.upper() in ("BKR_CENTRAL",) or (matched_wh.warehouse_type and matched_wh.warehouse_type.value == "CENTRAL" and company_id == 2):
                     alloc_query = alloc_query.filter(
                         or_(
                             AmazonLiveAllocation.warehouse_id == matched_wh.id,
@@ -583,10 +601,10 @@ class SeriesReportService:
                 else:
                     alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
             if date_from:
-                alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(date_from, datetime.min.time()))
+                alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(date_from, datetime.min.time()))
             if date_to:
-                alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(date_to, datetime.max.time()))
-            amazon_allocations = alloc_query.order_by(AmazonLiveAllocation.created_at.asc(), AmazonLiveAllocation.id.asc()).all()
+                alloc_query = alloc_query.filter(alloc_date_col <= datetime.combine(date_to, datetime.max.time()))
+            amazon_allocations = alloc_query.order_by(alloc_date_col.asc(), AmazonLiveAllocation.id.asc()).all()
 
         d_from_str = date_from.strftime("%d/%m/%Y") if date_from else "01/10/2026"
         d_to_str = date_to.strftime("%d/%m/%Y") if date_to else datetime.utcnow().strftime("%d/%m/%Y")
@@ -886,9 +904,11 @@ class SeriesReportService:
                 net_amt = round(gross_amt + igst, 2)
                 cost_amt = round(pur_rate * qty, 2) if pur_rate > 0 else ""
 
-                alloc_dt = alloc.created_at.strftime("%d/%m/%Y") if alloc.created_at else datetime.utcnow().strftime("%d/%m/%Y")
+                bill_no = alloc.invoice_number or (f"IN-{alloc.id}" if (alloc.amazon_network_at_allocation and alloc.amazon_network_at_allocation.value == "MFN") or (wh and wh.code == "IN") else f"{wh.code if wh else 'AMZ'}-{alloc.id}")
+                actual_dt = alloc.invoice_date or alloc.order_date or alloc.updated_at or alloc.created_at
+                alloc_dt = actual_dt.strftime("%d/%m/%Y") if actual_dt else datetime.utcnow().strftime("%d/%m/%Y")
                 row = [
-                    sno, order_id, item_code, item_name, hsn_code, group_tax,
+                    sno, bill_no, item_code, item_name, hsn_code, group_tax,
                     alloc_dt, "",
                     state_name,
                     "Amazon Retail Customer", pack_size, qty, rate_unit, gross_amt,
@@ -1560,6 +1580,12 @@ class SeriesReportService:
         date_to = parse_date_param(date_to)
 
         wh_clean = (warehouse_code or "").strip().upper()
+        alloc_date_col = func.coalesce(
+            AmazonLiveAllocation.order_date,
+            AmazonLiveAllocation.invoice_date,
+            AmazonLiveAllocation.updated_at,
+            AmazonLiveAllocation.created_at
+        )
         alloc_query = db.query(AmazonLiveAllocation)
         if company_id:
             alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
@@ -1570,28 +1596,49 @@ class SeriesReportService:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
             elif wh_clean == "AFN":
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
+            elif wh_clean == "IN":
+                wh_target = db.query(Warehouse).filter(func.upper(Warehouse.code) == "IN")
+                if company_id:
+                    wh_target = wh_target.filter(Warehouse.company_id == company_id)
+                wh_in = wh_target.first()
+                wh_in_id = wh_in.id if wh_in else 38
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.warehouse_id == wh_in_id,
+                        and_(AmazonLiveAllocation.company_id == 3, AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN),
+                        AmazonLiveAllocation.invoice_number.ilike("IN-%")
+                    )
+                )
             else:
                 wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == wh_clean)
                 if company_id:
                     wh_q = wh_q.filter(Warehouse.company_id == company_id)
                 matched_wh = wh_q.first()
                 if matched_wh:
-                    if matched_wh.code.upper() in ("VSHB", "BKR_CENTRAL") or (matched_wh.warehouse_type and matched_wh.warehouse_type.value == "CENTRAL"):
+                    if matched_wh.code.upper() in ("BKR_CENTRAL",) or (matched_wh.warehouse_type and matched_wh.warehouse_type.value == "CENTRAL" and company_id == 2):
                         alloc_query = alloc_query.filter(
                             or_(
                                 AmazonLiveAllocation.warehouse_id == matched_wh.id,
                                 AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
                             )
                         )
+                    elif matched_wh.code.upper() == "IN":
+                        alloc_query = alloc_query.filter(
+                            or_(
+                                AmazonLiveAllocation.warehouse_id == matched_wh.id,
+                                and_(AmazonLiveAllocation.company_id == 3, AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN),
+                                AmazonLiveAllocation.invoice_number.ilike("IN-%")
+                            )
+                        )
                     else:
                         alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
 
         if date_from:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(date_from, datetime.min.time()))
+            alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(date_from, datetime.min.time()))
         if date_to:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(date_to, datetime.max.time()))
+            alloc_query = alloc_query.filter(alloc_date_col <= datetime.combine(date_to, datetime.max.time()))
 
-        allocations = alloc_query.order_by(AmazonLiveAllocation.created_at.asc(), AmazonLiveAllocation.id.asc()).all()
+        allocations = alloc_query.order_by(alloc_date_col.asc(), AmazonLiveAllocation.id.asc()).all()
 
         # Preload lookups
         prod_query = db.query(Product)
@@ -1646,14 +1693,16 @@ class SeriesReportService:
             if channel == "MFN" and (not hub or not hub.gstin):
                 seller_gstin = "04AEFPS6301F1ZU" if company_id == 2 else "04AAFCJ8215N1ZC"
 
-            # Invoice Number: sequential integer matching sample format (e.g. 273, 274, ...)
-            invoice_num = 273 + idx
+            # Invoice Number: Use actual Amazon Invoice Number or warehouse-suffixed number
+            invoice_num = alloc.invoice_number or (f"IN-{alloc.id}" if channel == "MFN" or (wh and wh.code == "IN") else f"{wh.code if wh else 'AMZ'}-{alloc.id}")
 
-            created_dt = alloc.created_at or datetime.utcnow()
-            updated_dt = alloc.updated_at or created_dt
-            inv_date_str = created_dt.strftime("%d/%m/%Y %H:%M")
-            order_date_str = created_dt.strftime("%d/%m/%Y %H:%M")
-            ship_date_str = updated_dt.strftime("%d/%m/%Y %H:%M")
+            inv_dt = alloc.invoice_date or alloc.updated_at or alloc.order_date or alloc.created_at
+            ord_dt = alloc.order_date or alloc.created_at or inv_dt
+            ship_dt = alloc.updated_at or inv_dt
+
+            inv_date_str = inv_dt.strftime("%d/%m/%Y %H:%M")
+            order_date_str = ord_dt.strftime("%d/%m/%Y %H:%M")
+            ship_date_str = ship_dt.strftime("%d/%m/%Y %H:%M")
 
             trans_type = "Refund" if alloc.status and alloc.status.value in ("CANCELLED", "RETURNED", "REFUNDED") else "Shipment"
             order_id = alloc.order_id or ""

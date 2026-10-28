@@ -56,20 +56,26 @@ def get_sales_report(
         matched_wh = wh_q.first()
 
     if s_clean in ("AFN", "MFN", "AMAZON") or bool(matched_wh):
+        alloc_date_col = func.coalesce(
+            AmazonLiveAllocation.order_date,
+            AmazonLiveAllocation.invoice_date,
+            AmazonLiveAllocation.updated_at,
+            AmazonLiveAllocation.created_at
+        )
         if is_sqlite:
             if group_by == "month":
-                period_col = func.strftime("%Y-%m", AmazonLiveAllocation.created_at).label("period")
+                period_col = func.strftime("%Y-%m", alloc_date_col).label("period")
             elif group_by == "week":
-                period_col = func.strftime("%Y-%W", AmazonLiveAllocation.created_at).label("period")
+                period_col = func.strftime("%Y-%W", alloc_date_col).label("period")
             else:
-                period_col = func.date(AmazonLiveAllocation.created_at).label("period")
+                period_col = func.date(alloc_date_col).label("period")
         else:
             if group_by == "month":
-                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM").label("period")
+                period_col = func.to_char(alloc_date_col, "YYYY-MM").label("period")
             elif group_by == "week":
-                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-WW").label("period")
+                period_col = func.to_char(alloc_date_col, "YYYY-WW").label("period")
             else:
-                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM-DD").label("period")
+                period_col = func.to_char(alloc_date_col, "YYYY-MM-DD").label("period")
 
         alloc_query = db.query(AmazonLiveAllocation)
         if company_id:
@@ -81,11 +87,23 @@ def get_sales_report(
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
-        elif matched_wh:
-            is_central = (matched_wh.code.upper() in ("VSHB", "BKR_CENTRAL")) or (
-                matched_wh.warehouse_type and (str(matched_wh.warehouse_type).upper() == "CENTRAL" or getattr(matched_wh.warehouse_type, "value", "") == "CENTRAL")
+        elif s_clean == "IN" or (matched_wh and matched_wh.code.upper() == "IN"):
+            wh_target_id = matched_wh.id if matched_wh else 38
+            alloc_query = alloc_query.filter(
+                or_(
+                    AmazonLiveAllocation.warehouse_id == wh_target_id,
+                    and_(
+                        AmazonLiveAllocation.company_id == 3,
+                        AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
+                    ),
+                    AmazonLiveAllocation.invoice_number.ilike("IN-%")
+                )
             )
-            if is_central:
+        elif matched_wh:
+            is_central_bkr = (matched_wh.code.upper() == "BKR_CENTRAL") or (
+                company_id == 2 and matched_wh.warehouse_type and (str(matched_wh.warehouse_type).upper() == "CENTRAL" or getattr(matched_wh.warehouse_type, "value", "") == "CENTRAL")
+            )
+            if is_central_bkr:
                 alloc_query = alloc_query.filter(
                     or_(
                         AmazonLiveAllocation.warehouse_id == matched_wh.id,
@@ -96,9 +114,9 @@ def get_sales_report(
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
 
         if parsed_date_from:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+            alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
         if parsed_date_to:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
+            alloc_query = alloc_query.filter(alloc_date_col <= datetime.combine(parsed_date_to, datetime.max.time()))
 
         if search:
             s_val = search if isinstance(search, str) else ""
@@ -107,7 +125,8 @@ def get_sales_report(
                 alloc_query = alloc_query.filter(
                     or_(
                         AmazonLiveAllocation.order_id.ilike(search_pattern),
-                        AmazonLiveAllocation.sku.ilike(search_pattern)
+                        AmazonLiveAllocation.sku.ilike(search_pattern),
+                        AmazonLiveAllocation.invoice_number.ilike(search_pattern)
                     )
                 )
 
@@ -748,21 +767,34 @@ def export_sales(
 
     is_sqlite = (db.bind.dialect.name == "sqlite") if db.bind else False
 
-    if s_clean in ("AFN", "MFN", "AMAZON"):
+    matched_wh = None
+    if s_clean and s_clean not in ("GST", "JGST", "BKR", "SERVICE", "SERV", "ALL", "AFN", "MFN", "AMAZON"):
+        wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == s_clean, Warehouse.status == "ACTIVE")
+        if company_id:
+            wh_q = wh_q.filter(Warehouse.company_id == company_id)
+        matched_wh = wh_q.first()
+
+    if s_clean in ("AFN", "MFN", "AMAZON") or bool(matched_wh):
+        alloc_date_col = func.coalesce(
+            AmazonLiveAllocation.order_date,
+            AmazonLiveAllocation.invoice_date,
+            AmazonLiveAllocation.updated_at,
+            AmazonLiveAllocation.created_at
+        )
         if is_sqlite:
             if group_by == "month":
-                period_col = func.strftime("%Y-%m", AmazonLiveAllocation.created_at).label("period")
+                period_col = func.strftime("%Y-%m", alloc_date_col).label("period")
             elif group_by == "week":
-                period_col = func.strftime("%Y-%W", AmazonLiveAllocation.created_at).label("period")
+                period_col = func.strftime("%Y-%W", alloc_date_col).label("period")
             else:
-                period_col = func.date(AmazonLiveAllocation.created_at).label("period")
+                period_col = func.date(alloc_date_col).label("period")
         else:
             if group_by == "month":
-                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM").label("period")
+                period_col = func.to_char(alloc_date_col, "YYYY-MM").label("period")
             elif group_by == "week":
-                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-WW").label("period")
+                period_col = func.to_char(alloc_date_col, "YYYY-WW").label("period")
             else:
-                period_col = func.to_char(AmazonLiveAllocation.created_at, "YYYY-MM-DD").label("period")
+                period_col = func.to_char(alloc_date_col, "YYYY-MM-DD").label("period")
 
         alloc_query = db.query(AmazonLiveAllocation)
         if company_id:
@@ -774,11 +806,36 @@ def export_sales(
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
+        elif s_clean == "IN" or (matched_wh and matched_wh.code.upper() == "IN"):
+            wh_target_id = matched_wh.id if matched_wh else 38
+            alloc_query = alloc_query.filter(
+                or_(
+                    AmazonLiveAllocation.warehouse_id == wh_target_id,
+                    and_(
+                        AmazonLiveAllocation.company_id == 3,
+                        AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
+                    ),
+                    AmazonLiveAllocation.invoice_number.ilike("IN-%")
+                )
+            )
+        elif matched_wh:
+            is_central_bkr = (matched_wh.code.upper() == "BKR_CENTRAL") or (
+                company_id == 2 and matched_wh.warehouse_type and (str(matched_wh.warehouse_type).upper() == "CENTRAL" or getattr(matched_wh.warehouse_type, "value", "") == "CENTRAL")
+            )
+            if is_central_bkr:
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.warehouse_id == matched_wh.id,
+                        AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
+                    )
+                )
+            else:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
 
         if parsed_date_from:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at >= datetime.combine(parsed_date_from, datetime.min.time()))
+            alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
         if parsed_date_to:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.created_at <= datetime.combine(parsed_date_to, datetime.max.time()))
+            alloc_query = alloc_query.filter(alloc_date_col <= datetime.combine(parsed_date_to, datetime.max.time()))
 
         if search:
             s_val = search if isinstance(search, str) else ""
@@ -787,7 +844,8 @@ def export_sales(
                 alloc_query = alloc_query.filter(
                     or_(
                         AmazonLiveAllocation.order_id.ilike(search_pattern),
-                        AmazonLiveAllocation.sku.ilike(search_pattern)
+                        AmazonLiveAllocation.sku.ilike(search_pattern),
+                        AmazonLiveAllocation.invoice_number.ilike(search_pattern)
                     )
                 )
 
