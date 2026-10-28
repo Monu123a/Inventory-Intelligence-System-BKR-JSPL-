@@ -167,11 +167,10 @@ class FCDispatchService:
                     src_skus = [p.sku for p in src_prods.values() if p and p.sku]
                     dest_prods = {p.sku: p for p in db.query(Product).filter(Product.company_id == dest_warehouse.company_id, Product.sku.in_(src_skus)).all()}
                     
-                    new_prods_created = False
+                    new_prods_to_create = []
                     for req_item in request.items:
                         src_prod = src_prods.get(req_item.product_id)
-                        if src_prod and src_prod.sku not in dest_prods:
-                            # Create product in destination company
+                        if src_prod and src_prod.sku not in dest_prods and src_prod.sku not in [x[0] for x in new_prods_to_create]:
                             new_prod = Product(
                                 company_id=dest_warehouse.company_id,
                                 sku=src_prod.sku,
@@ -189,27 +188,32 @@ class FCDispatchService:
                                 barcode=src_prod.barcode,
                                 unit=src_prod.unit
                             )
-                            db.add(new_prod)
-                            db.flush()
-                            dest_prods[src_prod.sku] = new_prod
-                            new_prods_created = True
-                            
-                            # Initialize 0 inventory for all active warehouses in dest company
-                            dest_warehouses = db.query(Warehouse).filter_by(company_id=dest_warehouse.company_id, status="ACTIVE").all()
+                            new_prods_to_create.append((src_prod.sku, new_prod))
+
+                    if new_prods_to_create:
+                        for _, np in new_prods_to_create:
+                            db.add(np)
+                        db.flush()
+
+                        dest_warehouses = db.query(Warehouse).filter_by(company_id=dest_warehouse.company_id, status="ACTIVE").all()
+                        new_inv_rows = []
+                        for sku, np in new_prods_to_create:
+                            dest_prods[sku] = np
                             for dw in dest_warehouses:
                                 inv = Inventory(
                                     company_id=dest_warehouse.company_id,
                                     warehouse_id=dw.id,
-                                    product_id=new_prod.id
+                                    product_id=np.id
                                 )
                                 inv._allow_mutation = True
                                 inv.current_qty = 0
                                 inv.available_qty = 0
                                 inv.reserved_qty = 0
                                 inv._allow_mutation = False
-                                db.add(inv)
-                    if new_prods_created:
-                        db.flush()
+                                new_inv_rows.append(inv)
+                        if new_inv_rows:
+                            db.add_all(new_inv_rows)
+                            db.flush()
 
                     # Audit log
                     AuditLogService.log(

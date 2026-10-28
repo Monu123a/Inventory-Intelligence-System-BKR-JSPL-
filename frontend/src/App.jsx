@@ -8,17 +8,20 @@ import LoadingOverlay from "./components/LoadingOverlay/LoadingOverlay";
 import OperatorApprovalModal from "./components/Admin/OperatorApprovalModal";
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 
-const Overview = lazy(() => import('./pages/Overview/Overview'));
-const Products = lazy(() => import('./pages/Products/Products'));
-const Inventory = lazy(() => import('./pages/Inventory/Inventory'));
+// Core primary pages loaded eagerly for instant, zero-lag navigation
+import Overview from './pages/Overview/Overview';
+import Products from './pages/Products/Products';
+import Inventory from './pages/Inventory/Inventory';
+import Reports from './pages/Reports/Reports';
+import POSPage from './pages/POS/POSPage';
+import PurchasesList from './pages/Purchases/PurchasesList';
+
 const AmazonReturns = lazy(() => import('./pages/Amazon/Returns'));
 const DefectiveInventory = lazy(() => import('./pages/Inventory/DefectiveInventory'));
 const InventoryHistory = lazy(() => import('./pages/InventoryHistory/InventoryHistory'));
-const Reports = lazy(() => import('./pages/Reports/Reports'));
 const DownloadCentre = lazy(() => import('./pages/DownloadCentre/DownloadCentre'));
 const Login = lazy(() => import('./pages/Login/Login'));
 const Settings = lazy(() => import('./pages/Settings/SettingsPage'));
-const POSPage = lazy(() => import('./pages/POS/POSPage'));
 const SalesHistoryPage = lazy(() => import('./pages/POS/SalesHistoryPage'));
 const InvoicePreviewPage = lazy(() => import('./pages/POS/InvoicePreviewPage'));
 const EditInvoicePage = lazy(() => import('./pages/POS/EditInvoicePage'));
@@ -74,7 +77,6 @@ const UserManualPage = lazy(() => import('./pages/Help/UserManualPage'));
 
 const CreatePurchase = lazy(() => import('./pages/Purchases/CreatePurchase'));
 const EditPurchase = lazy(() => import('./pages/Purchases/EditPurchase'));
-const PurchasesList = lazy(() => import('./pages/Purchases/PurchasesList'));
 const VendorsPage = lazy(() => import('./pages/Vendors/VendorsPage'));
 
 

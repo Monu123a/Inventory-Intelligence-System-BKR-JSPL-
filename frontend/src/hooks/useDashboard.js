@@ -9,7 +9,8 @@ export const useDashboardMetrics = () => {
   return useQuery({
     queryKey: ['dashboard', 'metrics', companyId],
     queryFn: () => dashboardService.getMetrics(),
-    refetchInterval: 60000, // 60s
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 };
 
@@ -18,7 +19,8 @@ export const useReturnMetrics = () => {
   return useQuery({
     queryKey: ['dashboard', 'returns', companyId],
     queryFn: () => reportsService.getReturnsMetrics(),
-    refetchInterval: 60000,
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 };
 
@@ -27,7 +29,8 @@ export const useDashboardActivity = () => {
   return useQuery({
     queryKey: ['dashboard', 'activity', companyId],
     queryFn: () => dashboardService.getActivity(),
-    refetchInterval: 30000, // 30s
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 };
 
@@ -36,7 +39,8 @@ export const useDashboardAlerts = () => {
   return useQuery({
     queryKey: ['dashboard', 'alerts', companyId],
     queryFn: () => dashboardService.getAlerts(),
-    refetchInterval: 15000, // 15s
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 };
 

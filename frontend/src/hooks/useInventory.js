@@ -39,10 +39,20 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
     return map;
   }, [warehouses]);
 
+  // Build high-performance O(1) product lookup map
+  const productMap = useMemo(() => {
+    const map = new Map();
+    products.forEach(p => {
+      if (p.sku) map.set(p.sku.toUpperCase(), p);
+    });
+    return map;
+  }, [products]);
+
   const processedData = useMemo(() => {
-    // Join Data
+    // Fast O(1) Data Join
     let joined = rawInventory.map(inv => {
-      const product = products.find(p => p.sku === inv.product?.sku) || {};
+      const sku = (inv.product?.sku || '').toUpperCase();
+      const product = (sku ? productMap.get(sku) : null) || {};
       const status = inv.available_qty < 0 ? 'Negative' : (inv.available_qty < (product.min_stock_level || 0) ? 'Low' : 'Healthy');
       return {
         ...inv,

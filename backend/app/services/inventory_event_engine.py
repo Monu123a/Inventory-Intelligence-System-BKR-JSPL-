@@ -344,6 +344,7 @@ class InventoryEventEngine:
         inv_map = {(inv.company_id, inv.warehouse_id, inv.product_id): inv for inv in inv_rows}
 
         # Ensure all required inventory rows exist
+        new_invs_added = False
         for ev in events_to_process:
             c_id = ev["company_id"]
             wh_id = ev["warehouse_id"]
@@ -362,6 +363,10 @@ class InventoryEventEngine:
                 new_inv._allow_mutation = False
                 db.add(new_inv)
                 inv_map[key] = new_inv
+                new_invs_added = True
+
+        if new_invs_added:
+            db.flush()
 
         # 4. In-memory state mutation & movement generation
         created_movements = []
