@@ -20,6 +20,7 @@ import styles from './DownloadCentre.module.css';
 const REPORTS = [
   { id: 'ACCOUNTANT_SALES', label: 'Accountant Sales (Series-Wise)' },
   { id: 'ACCOUNTANT_PURCHASES', label: 'Accountant Purchase Register' },
+  { id: 'ACCOUNTANT_INVENTORY', label: 'Closing Stock Register (21-Col)' },
   { id: 'ACCOUNTANT_AMAZON_RETURNS', label: 'Accountant Amazon Returns' },
   { id: 'ACCOUNTANT_SALES_RETURNS', label: 'Accountant POS Returns' },
   { id: 'LOW_STOCK', label: 'Low Stock' },
@@ -41,8 +42,15 @@ const REPORT_CATEGORIES = [
     id: 'purchases', 
     label: 'Purchase Register', 
     icon: FiShoppingBag,
-    title: 'Vendor Purchase Register (Accountant 47-Column Format)',
+    title: 'Vendor Purchase Register (Accountant 15-Column HSN Format)',
     desc: 'Comprehensive vendor purchase register with bill-wise GST split (CGST/SGST/IGST), unit costs, payment status, and bill subtotals.'
+  },
+  { 
+    id: 'inventory', 
+    label: 'Closing Stock Register', 
+    icon: FiLayers,
+    title: 'Closing Stock / Inventory Register (Accountant 21-Column Format)',
+    desc: 'Official 21-column inventory register with opening stock, purchases, sales, issues, and closing stock valuation at purchase rate.'
   },
   { 
     id: 'amazon_returns', 
@@ -96,6 +104,7 @@ const DownloadCentre = () => {
       return [
         { id: 'GST', label: 'GST Series (GST-)' },
         { id: 'JGST', label: 'JSPL GST Series (JGST-)' },
+        { id: 'IN', label: 'IN Series (IN-)' },
         { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
         { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },

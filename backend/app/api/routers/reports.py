@@ -115,7 +115,7 @@ def get_series_list(
 
 @router.get("/series-wise/export")
 def export_series_wise_sales_report(
-    report_type: str = Query("sales", description="Category: sales, purchases, amazon_returns, sales_returns"),
+    report_type: str = Query("sales", description="Category: sales, purchases, inventory, amazon_returns, sales_returns, amazon_mtr"),
     series: str = Query("GST", description="Series name: GST, AMAZON, BKR, JGST, ALL, or custom prefix"),
     vendor_id: Optional[int] = Query(None, description="Optional Vendor ID for purchase reports"),
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
@@ -180,21 +180,24 @@ def export_purchases_report(
 @router.get("/returns/export")
 def export_returns_report(
     return_source: str = Query("amazon", pattern="^(amazon|pos|sales)$"),
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     format: str = Query("csv", pattern="^(csv|excel)$"),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
     """Generates the official 47-column Returns Register."""
+    from app.utils.date_utils import parse_date_param
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
     try:
         if return_source == "amazon":
             content, filename, media_type, row_count = SeriesReportService.generate_amazon_returns_report(
-                db=db, company_id=company_id, date_from=date_from, date_to=date_to, file_format=format
+                db=db, company_id=company_id, date_from=parsed_date_from, date_to=parsed_date_to, file_format=format
             )
         else:
             content, filename, media_type, row_count = SeriesReportService.generate_sales_returns_report(
-                db=db, company_id=company_id, date_from=date_from, date_to=date_to, file_format=format
+                db=db, company_id=company_id, date_from=parsed_date_from, date_to=parsed_date_to, file_format=format
             )
         return Response(
             content=content,

@@ -64,10 +64,14 @@ export const ReportToolbar = ({
       });
 
       // Create blob link to download
+      const contentDisposition = response.headers?.['content-disposition'] || '';
+      const match = contentDisposition.match(/filename="?([^";]+)"?/);
+      const finalFileName = (match && match[1]) ? match[1].trim() : exportFileName;
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', exportFileName);
+      link.setAttribute('download', finalFileName);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);

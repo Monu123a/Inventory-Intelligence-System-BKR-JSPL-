@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, or_, and_, case, distinct
 from datetime import datetime, date
 from typing import Optional
@@ -89,7 +89,9 @@ def get_sales_report(
             if has_allocs:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
 
-        if s_clean == "AFN":
+        if s_clean in ("AMAZON", "ALL"):
+            pass  # Include both AFN and MFN
+        elif s_clean == "AFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
@@ -955,7 +957,9 @@ def export_sales(
             if has_allocs:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
 
-        if s_clean == "AFN":
+        if s_clean in ("AMAZON", "ALL"):
+            pass  # Include both AFN and MFN
+        elif s_clean == "AFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
@@ -1273,7 +1277,7 @@ def export_series_sales(
 @router.get("/inventory/export")
 def export_inventory(
     search: Optional[str] = Query(None),
-    format: str = Query("excel", pattern="^(excel|csv)$"),
+    format: str = Query("csv", pattern="^(excel|csv)$"),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
@@ -1315,13 +1319,29 @@ def export_dispatches(
     if search:
         query = query.filter(FCDispatch.dispatch_number.ilike(f"%{search.strip()}%"))
         
-    results = query.order_by(FCDispatch.created_at.desc()).all()
+    results = query.options(
+        joinedload(FCDispatch.warehouse),
+        joinedload(FCDispatch.invoice),
+        joinedload(FCDispatch.delivery_challan),
+        selectinload(FCDispatch.items)
+    ).order_by(FCDispatch.created_at.desc()).all()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Dispatch Number", "Status", "Date"])
+    writer.writerow(["Dispatch Number", "Status", "Warehouse", "Invoice Number", "Challan Number", "Total Items", "Total Value", "Date"])
     for d in results:
-        writer.writerow([d.dispatch_number, d.dispatch_status, d.created_at.isoformat() if d.created_at else ""])
+        total_items = sum(item.quantity for item in d.items) if d.items else 0
+        total_value = sum(item.total_amount for item in d.items) if d.items else 0.0
+        writer.writerow([
+            d.dispatch_number,
+            d.dispatch_status,
+            d.warehouse.name if d.warehouse else "",
+            d.invoice.invoice_number if d.invoice else "",
+            d.delivery_challan.challan_number if d.delivery_challan else "",
+            total_items,
+            round(total_value, 2),
+            d.created_at.strftime("%d/%m/%Y %H:%M") if d.created_at else ""
+        ])
     
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=dispatch_report.csv"})
 
@@ -1353,10 +1373,22 @@ def export_returns(
     writer = csv.writer(output)
 
     if fc_count > 0:
-        results = fc_query.order_by(FCReturn.created_at.desc()).all()
-        writer.writerow(["Return Number", "Status", "Date"])
+        results = fc_query.options(
+            joinedload(FCReturn.warehouse),
+            joinedload(FCReturn.dispatch),
+            selectinload(FCReturn.items)
+        ).order_by(FCReturn.created_at.desc()).all()
+        writer.writerow(["Return Number", "Status", "Warehouse", "Dispatch Number", "Total Returned Qty", "Date"])
         for r in results:
-            writer.writerow([r.return_number, r.status, r.created_at.isoformat() if r.created_at else ""])
+            total_returned_qty = sum(item.quantity for item in r.items) if r.items else 0
+            writer.writerow([
+                r.return_number,
+                r.status,
+                r.warehouse.name if r.warehouse else "",
+                r.dispatch.dispatch_number if r.dispatch else "",
+                total_returned_qty,
+                r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else ""
+            ])
     else:
         # Fall back to Amazon Returns
         amz_query = db.query(AmazonReturn)

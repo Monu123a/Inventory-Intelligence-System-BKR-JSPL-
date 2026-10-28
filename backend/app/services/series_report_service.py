@@ -625,7 +625,9 @@ class SeriesReportService:
                 has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
                 if has_allocs:
                     alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
-            if series_clean == "AFN":
+            if series_clean in ("AMAZON", "ALL"):
+                pass  # All Amazon allocations (both AFN and MFN)
+            elif series_clean == "AFN":
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
             elif series_clean == "MFN":
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
@@ -1546,7 +1548,11 @@ class SeriesReportService:
         title_str = f"AMAZON RETURNS REPORT FOR ACCOUNTANT From {d_from_str} to {d_to_str}"
 
         # Pre-cache products and state hubs in memory
-        prod_map = {prod.sku: prod for prod in db.query(Product).all()}
+        prod_query = db.query(Product)
+        if company_id:
+            prod_query = prod_query.filter(Product.company_id == company_id)
+        all_prods = prod_query.all()
+        prod_map = {p.sku.upper(): p for p in all_prods if p.sku}
         hub_map = {h.id: h for h in db.query(StateHub).all()}
 
         central_hub = None
@@ -1597,11 +1603,11 @@ class SeriesReportService:
             row = [
                 sno,                                       # 0: SNO.
                 bill_no,                                   # 1: BILL NO.
-                item_code,                                 # 2: ITEM CODE
-                item_name,                                 # 3: ITEM NAME
-                hsn_code,                                  # 4: hsn code
-                group_tax,                                 # 5: GROUP11.GRP1
-                bill_date,                                 # 6: BILL DATE
+                bill_date,                                 # 2: BILL DATE
+                item_code,                                 # 3: ITEM CODE
+                item_name,                                 # 4: ITEM NAME
+                hsn_code,                                  # 5: hsn code
+                group_tax,                                 # 6: GROUP11.GRP1
                 "",                                        # 7: GST NO.
                 return_state,                              # 8: GST STATE NAME
                 "Amazon Retail Customer",                  # 9: PARTY NAME
@@ -1630,7 +1636,7 @@ class SeriesReportService:
                 f"{pur_rate:.4f}" if pur_rate > 0 else "", # 38: RATE-1
                 "",                                        # 39: LOT PURCHASE RATE
                 "Amazon Return Logistics",                 # 40: TRANSPORT MODE
-                r.return_reason or "Amazon Customer Return", # 41: CREDIT NOTE DESC
+                ret_addr2,                                 # 41: CITY NAME
                 ret_addr1,                                 # 42: ADDRESS-1
                 ret_addr2, ret_addr3,                      # 43-44: ADDRESS-2, 3
                 hsn_code,                                  # 45: HSN CODE
@@ -1711,7 +1717,8 @@ class SeriesReportService:
             query = query.filter(func.coalesce(SalesReturn.return_date, SalesReturn.created_at) <= datetime.combine(date_to, datetime.max.time()))
 
         query = query.options(
-            selectinload(SalesReturn.items).selectinload(SalesReturnItem.product)
+            selectinload(SalesReturn.items).selectinload(SalesReturnItem.product),
+            selectinload(SalesReturn.sale)
         )
         returns = query.order_by(func.coalesce(SalesReturn.return_date, SalesReturn.created_at).asc(), SalesReturn.id.asc()).all()
 
@@ -1766,16 +1773,44 @@ class SeriesReportService:
                 net_amt = round(float(it.total_price or (gross_amt + cgst + sgst)), 2)
 
                 row = [
-                    sno, bill_no, item_code, item_name, hsn_code, group_tax,
-                    bill_date, "", "Chandigarh", party_name, pack_size,
-                    qty, rate_unit, gross_amt,
-                    sgst if sgst > 0 else "", cgst if cgst > 0 else "", "",
-                    "", "", "", tax_3, net_amt, "", gross_amt,
-                    net_amt, "", "CGST/SGST", "", " ", " ", " ",
-                    "", "", "", "", f"Sale #{ret.sale_id}" if ret.sale_id else " ",
-                    "Central Warehouse", f"{round(rate_unit, 2):g}", f"{rate_unit:.4f}",
-                    "", "", it.return_reason or ret.return_type or "Sales Return",
-                    "", "", "", hsn_code, "Other"
+                    sno,                                       # 0: SNO.
+                    bill_no,                                   # 1: BILL NO.
+                    bill_date,                                 # 2: BILL DATE
+                    item_code,                                 # 3: ITEM CODE
+                    item_name,                                 # 4: ITEM NAME
+                    hsn_code,                                  # 5: hsn code
+                    group_tax,                                 # 6: GROUP11.GRP1
+                    "",                                        # 7: GST NO.
+                    "Chandigarh",                              # 8: GST STATE NAME
+                    party_name,                                # 9: PARTY NAME
+                    pack_size,                                 # 10: PACK / SIZE
+                    qty,                                       # 11: SALE QUANTITY
+                    rate_unit,                                 # 12: RATE/UNIT
+                    gross_amt,                                 # 13: GROSS AMOUNT
+                    sgst if sgst > 0 else "",                  # 14: TOTAL SGST AMOUNT
+                    cgst if cgst > 0 else "",                  # 15: TOTAL CGST AMOUNT
+                    "",                                        # 16: TOTAL IGST AMOUNT
+                    "", "", "", tax_3,                         # 17-20: TD, CD, Freight, Tax-3%
+                    net_amt,                                   # 21: NET AMOUNT
+                    "",                                        # 22: CD VALUE
+                    gross_amt,                                 # 23: AMOUNT (USER DEFINED RATE)
+                    net_amt,                                   # 24: CREDIT
+                    "",                                        # 25: CASH
+                    "CGST/SGST",                               # 26: TAX REGION
+                    "",                                        # 27: SCHEME(RS.)
+                    " ", " ", " ",                             # 28-30: REMARKS
+                    "", "", "", "",                            # 31-34: mobile, email, adjust, disc
+                    f"Sale #{ret.sale_id}" if ret.sale_id else " ", # 35: ORDER NO.
+                    "Central Warehouse",                       # 36: GODOWN NAME
+                    f"{round(rate_unit, 2):g}",                # 37: PUR RATE
+                    f"{rate_unit:.4f}",                        # 38: RATE-1
+                    "",                                        # 39: LOT PURCHASE RATE
+                    "Counter Pickup",                          # 40: TRANSPORT MODE
+                    "Chandigarh",                              # 41: CITY NAME
+                    (ret.sale.customer_address if ret.sale and ret.sale.customer_address else "Plot no: 150, Industrial & Business Park-2"), # 42: ADDRESS-1
+                    "", "",                                    # 43-44: ADDRESS-2, 3
+                    hsn_code,                                  # 45: HSN CODE
+                    it.return_reason or ret.return_type or "Sales Return" # 46: HSN DESCRIPTION
                 ]
                 data_rows.append(row)
 
@@ -1923,7 +1958,9 @@ class SeriesReportService:
         prod_query = db.query(Product)
         if company_id:
             prod_query = prod_query.filter(Product.company_id == company_id)
-        prod_map = {p.sku.upper(): p for p in prod_query.all() if p.sku}
+        all_prods = prod_query.all()
+        prod_map_by_company = {(p.company_id, p.sku.upper()): p for p in all_prods if p.sku}
+        prod_map = {p.sku.upper(): p for p in all_prods if p.sku}
         wh_map = {w.id: w for w in db.query(Warehouse).all()}
         hub_map = {h.id: h for h in db.query(StateHub).all()}
         acc_code_map = get_account_code_map()
@@ -1964,7 +2001,7 @@ class SeriesReportService:
         for idx, alloc in enumerate(allocations):
             wh = wh_map.get(alloc.warehouse_id) if alloc.warehouse_id else None
             hub = hub_map.get(wh.hub_id) if wh and wh.hub_id else None
-            prod = prod_map.get((alloc.sku or "").upper())
+            prod = prod_map_by_company.get((alloc.company_id, (alloc.sku or "").upper())) or prod_map.get((alloc.sku or "").upper())
             channel = alloc.amazon_network_at_allocation.value if alloc.amazon_network_at_allocation else "MFN"
 
             # Seller GSTIN
@@ -2022,7 +2059,12 @@ class SeriesReportService:
 
             # Ship To Destination
             linked_sale = sale_map.get(order_id)
-            if linked_sale and (linked_sale.shipping_state or linked_sale.customer_state):
+            if alloc.state_name:
+                ship_to_state = alloc.state_name.strip().upper()
+                ship_to_city = "CITY"
+                ship_to_postal = 160002 if "CHANDIGARH" in ship_to_state else 380001
+                acc_code = acc_code_map.get(ship_to_state) or "4030"
+            elif linked_sale and (linked_sale.shipping_state or linked_sale.customer_state):
                 ship_to_state = (linked_sale.shipping_state or linked_sale.customer_state).strip().upper()
                 ship_to_city = (linked_sale.destination or linked_sale.shipping_address or linked_sale.customer_address or "CITY").strip().upper()
                 ship_to_postal = 380001
@@ -2038,9 +2080,15 @@ class SeriesReportService:
             gst_rate = float(prod.default_gst_rate or 18.0) if prod else 18.0
             pur_rate = float(prod.item_rate if prod and prod.item_rate else 0.0)
             selling_unit = round(pur_rate * 1.35, 2) if pur_rate > 0 else 500.0
-            invoice_amt = round(selling_unit * qty, 2)
-            tax_exclusive = round(invoice_amt / (1 + (gst_rate / 100.0)), 2)
-            total_tax = round(invoice_amt - tax_exclusive, 2)
+
+            if alloc.net_amount and float(alloc.net_amount) > 0:
+                invoice_amt = round(float(alloc.net_amount), 2)
+                tax_exclusive = round(float(alloc.gross_amount), 2) if alloc.gross_amount else round(invoice_amt / (1 + (gst_rate / 100.0)), 2)
+                total_tax = round(float(alloc.tax_amount), 2) if alloc.tax_amount else round(invoice_amt - tax_exclusive, 2)
+            else:
+                invoice_amt = round(selling_unit * qty, 2)
+                tax_exclusive = round(invoice_amt / (1 + (gst_rate / 100.0)), 2)
+                total_tax = round(invoice_amt - tax_exclusive, 2)
 
             # Product tax code
             if gst_rate <= 5:
@@ -2294,6 +2342,12 @@ class SeriesReportService:
                 warehouse_code=series,
                 date_from=date_from,
                 date_to=date_to,
+                file_format=file_format
+            )
+        elif rt in ("inventory", "stock", "closing_stock", "inventory_register"):
+            return SeriesReportService.generate_inventory_register(
+                db=db,
+                company_id=company_id,
                 file_format=file_format
             )
         else:
