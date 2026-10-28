@@ -345,6 +345,27 @@
 .tdLeft { text-align: left; white-space: normal; word-break: break-word; }
 .tdRight { text-align: right; }
 
+.tdItemName { 
+  text-align: left; 
+  white-space: normal; 
+  word-break: break-word; 
+  font-size: 13px !important; 
+  font-weight: 700 !important; 
+  color: #000000 !important; 
+}
+.tdQty { 
+  text-align: right; 
+  font-size: 12.5px !important; 
+  font-weight: 700 !important; 
+  color: #000000 !important; 
+}
+.tdRate { 
+  text-align: right; 
+  font-size: 12.5px !important; 
+  font-weight: 700 !important; 
+  color: #000000 !important; 
+}
+
 .fillerRow td {
   height: 18px;
   padding: 0;
@@ -597,5 +618,17 @@
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     page-break-after: avoid !important;
+  }
+
+  .tdItemName {
+    font-size: 12.5px !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
+  }
+
+  .tdQty, .tdRate {
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    color: #000000 !important;
   }
 }

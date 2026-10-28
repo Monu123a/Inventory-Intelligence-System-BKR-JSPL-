@@ -117,7 +117,7 @@ const POSPage = () => {
           rate: rate
         };
       });
-      setCart(prev => [...prev, ...newItems]);
+      setCart(prev => [...newItems, ...prev]);
       // clear state so it doesn't run again on reload
       window.history.replaceState({}, document.title)
     }
@@ -130,8 +130,8 @@ const POSPage = () => {
   const isJspl = (companyCode || '').toUpperCase() === 'JSPL';
 
   const validSeriesOptions = React.useMemo(() => {
-    const base = ['GST', 'AFN', 'MFN'];
-    if (!isBkr) base.push('JGST', 'SERVICE', 'SERV', 'JSPL');
+    const base = ['GST', 'JGST', 'AFN', 'MFN'];
+    if (!isBkr) base.push('SERVICE', 'SERV', 'JSPL');
     if (!isJspl) base.push('BKR');
     if (companyCode && !base.includes(companyCode)) base.push(companyCode);
     return base;
@@ -142,14 +142,14 @@ const POSPage = () => {
   const [invoicePrefix, setInvoicePrefix] = useState(() => {
     const init = savedState.invoicePrefix || companyCode || 'GST';
     if (isJspl && init === 'BKR') return 'GST';
-    if (isBkr && ['JGST', 'JSPL', 'SERVICE', 'SERV'].includes(init)) return 'GST';
+    if (isBkr && ['JSPL', 'SERVICE', 'SERV'].includes(init)) return 'GST';
     return init;
   });
 
   useEffect(() => {
     if (isJspl && invoicePrefix === 'BKR') {
       setInvoicePrefix('GST');
-    } else if (isBkr && ['JGST', 'JSPL', 'SERVICE', 'SERV'].includes(invoicePrefix)) {
+    } else if (isBkr && ['JSPL', 'SERVICE', 'SERV'].includes(invoicePrefix)) {
       setInvoicePrefix('GST');
     }
   }, [isJspl, isBkr, invoicePrefix]);
@@ -392,7 +392,7 @@ const POSPage = () => {
       line_total: taxable + gstAmount,
     };
 
-    setCart([...cart, newItem]);
+    setCart([newItem, ...cart]);
   };
 
   const removeFromCart = (index) => {
@@ -931,7 +931,7 @@ const POSPage = () => {
                     style={{ width: '110px' }}
                   >
                     <option value="GST">GST-</option>
-                    {!isBkr && <option value="JGST">JGST-</option>}
+                    <option value="JGST">{isBkr ? 'JGST- (BKR)' : 'JGST- (JSPL)'}</option>
                     <option value="AFN">AFN-</option>
                     <option value="MFN">MFN-</option>
                     {!isBkr && <option value="SERVICE">SERVICE-</option>}

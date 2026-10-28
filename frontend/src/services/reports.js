@@ -87,6 +87,22 @@ export const reportsService = {
     });
     return response;
   },
+  getSalesReturnsReport: async (params) => {
+    const response = await api.get('/api/business-reports/sales-returns', { params });
+    return normalizeResponse(response.data);
+  },
+  downloadSalesReturnsReport: async ({ dateFrom, dateTo, format = 'csv' }) => {
+    const params = {
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {}),
+      format
+    };
+    const response = await api.get('/api/business-reports/sales-returns/export', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
   getAmazonMtrWarehouses: async () => {
     const response = await api.get('/api/reports/amazon-mtr/warehouses');
     return normalizeResponse(response.data);

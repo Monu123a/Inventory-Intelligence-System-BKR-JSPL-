@@ -195,31 +195,33 @@ class SeriesReportService:
                 series_set.add(ref[:3].upper())
 
         if company_code == "JSPL" or company_id == 3:
-            # JSPL: GST, JGST, AFN, MFN, AMAZON, SERVICE, ALL. BKR series is strictly excluded.
+            # JSPL: GST, JGST, IN, SERVICE, ALL. BKR series is strictly excluded.
             options = [
                 {"id": "GST", "label": "GST Series (GST-)"},
                 {"id": "JGST", "label": "JSPL GST Series (JGST-)"},
-                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
-                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
-                {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
+                {"id": "IN", "label": "IN Series (JSPL IN / MFN)"},
                 {"id": "SERVICE", "label": "Service Series (SERVICE-)"},
-                {"id": "ALL", "label": "All Series Combined (Excl. Amazon)"}
+                {"id": "ALL", "label": "All Series Combined (GST, JGST, SERVICE)"},
+                {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
+                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
+                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"}
             ]
             for p in sorted(series_set):
-                if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "SERVICE", "SERV", "DELETED", "EDITED", "CANCELLED") and not p.startswith("BKR"):
+                if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "SERVICE", "SERV", "DELETED", "EDITED", "CANCELLED", "IN") and not p.startswith("BKR"):
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
         elif company_code == "BKR" or company_id == 2:
-            # BKR: GST, BKR, AFN, MFN, AMAZON, ALL. JGST and JSPL series are strictly excluded.
+            # BKR: GST, JGST (BKR Series), BKR Retail, ALL, Amazon.
             options = [
                 {"id": "GST", "label": "GST Series (GST- / BKR-GST-)"},
+                {"id": "JGST", "label": "BKR Series (JGST-)"},
                 {"id": "BKR", "label": "BKR Retail Series (BKR-)"},
-                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
-                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"},
+                {"id": "ALL", "label": "All Series Combined (GST & JGST Combined)"},
                 {"id": "AMAZON", "label": "Amazon All Series (AFN & MFN Combined)"},
-                {"id": "ALL", "label": "All Series Combined (Excl. Amazon)"}
+                {"id": "AFN", "label": "Amazon AFN Series (FBA Orders)"},
+                {"id": "MFN", "label": "Amazon MFN Series (Merchant Orders)"}
             ]
             for p in sorted(series_set):
-                if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED") and not p.startswith("JGST") and not p.startswith("JSPL"):
+                if p not in ("GST", "BKR", "JGST", "JSPL", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED") and not p.startswith("JSPL"):
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
         else:
             options = [
@@ -236,6 +238,7 @@ class SeriesReportService:
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
 
         # Add warehouse / FC series options for the company
+        # Row 48: In JSPL Chandigarh Warehouse, remote FC warehouses (BLR4, KWZ2, etc.) must NOT show
         wh_query = db.query(Warehouse).filter(Warehouse.status == "ACTIVE")
         if company_id:
             wh_query = wh_query.filter(Warehouse.company_id == company_id)
@@ -244,7 +247,10 @@ class SeriesReportService:
         existing_ids = {opt["id"] for opt in options}
         for w in warehouses:
             code = (w.code or "").strip().upper()
-            if code and code not in existing_ids and code not in ("DEFAULT", "TEST-WH-MFN", "AUTO_GODOWN"):
+            # Remote Amazon FCs should not be listed as local series in JSPL/BKR
+            if (company_code == "JSPL" or company_id == 3) and code not in ("VSHB", "IN", "CHANDIGARH", "CENTRAL"):
+                continue
+            if code and code not in existing_ids and code not in ("DEFAULT", "TEST-WH-MFN", "AUTO_GODOWN", "VSHB"):
                 options.append({"id": code, "label": f"{code} Series ({w.name})"})
 
         return options
@@ -480,21 +486,17 @@ class SeriesReportService:
                     )
                 )
         elif series_clean == "JGST":
-            # JGST is strictly company exclusive to JSPL (company_id = 3)
             # Strictly matches JGST% and explicitly excludes GST% (e.g. GST-129 to GST-137)
-            if company_id and company_id != 3:
-                sales_query = sales_query.filter(Sale.id == -1)
-            else:
-                sales_query = sales_query.filter(
-                    and_(
-                        or_(
-                            Sale.bill_number.ilike("JGST%"),
-                            Sale.invoice_number.ilike("JGST%")
-                        ),
-                        ~Sale.bill_number.ilike("GST%"),
-                        ~Sale.invoice_number.ilike("GST%")
-                    )
+            sales_query = sales_query.filter(
+                and_(
+                    or_(
+                        Sale.bill_number.ilike("JGST%"),
+                        Sale.invoice_number.ilike("JGST%")
+                    ),
+                    ~Sale.bill_number.ilike("GST%"),
+                    ~Sale.invoice_number.ilike("GST%")
                 )
+            )
         elif series_clean in ("SERVICE", "SERV"):
             sales_query = sales_query.filter(
                 or_(
@@ -528,11 +530,9 @@ class SeriesReportService:
                     )
                 )
             elif company_id == 2:
-                # BKR: strictly exclude JGST/JSPL series
+                # BKR: includes GST, JGST, and BKR series (Row 44: REPORT SHOWS SERIES OF GST & JGST IN ALL SERIES COMBINED IN BKR)
                 sales_query = sales_query.filter(
                     and_(
-                        ~Sale.bill_number.ilike("JGST%"),
-                        ~Sale.invoice_number.ilike("JGST%"),
                         ~Sale.bill_number.ilike("JSPL%"),
                         ~Sale.invoice_number.ilike("JSPL%")
                     )

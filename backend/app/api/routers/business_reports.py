@@ -9,7 +9,8 @@ from app.api.dependencies import get_current_user, get_current_company_id
 from app.models.schema import (
     User, Sale, SaleItem, Inventory, Product, Warehouse,
     FCDispatch, FCReturn, DamageClaim, DefectiveInventory,
-    StateHub, AmazonLiveAllocation, AmazonNetworkType, AmazonReturn
+    StateHub, AmazonLiveAllocation, AmazonNetworkType, AmazonReturn,
+    SalesReturn, SalesReturnItem
 )
 from app.utils.date_utils import parse_date_param
 
@@ -635,6 +636,128 @@ def get_fc_returns_report(
 
 
 # ---------------------------------------------------------------------------
+# 4b. GET /sales-returns - Paginated Sales Returns / Credit Notes Report
+# ---------------------------------------------------------------------------
+@router.get("/sales-returns")
+def get_sales_returns_report(
+    date_from: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    status: Optional[str] = Query(None, description="Return status filter (Draft, Completed, Cancelled)"),
+    search: Optional[str] = Query(None, description="Search by return number, bill number, customer name, SKU"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    company_id: int = Depends(get_current_company_id),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns paginated Sales Returns (Credit Notes) for BKR and JSPL with summary metrics.
+    """
+    from sqlalchemy.orm import selectinload
+    parsed_date_from = parse_date_param(date_from)
+    parsed_date_to = parse_date_param(date_to)
+
+    date_col = func.coalesce(SalesReturn.return_date, SalesReturn.created_at)
+    query = db.query(SalesReturn).filter(SalesReturn.company_id == company_id)
+
+    if status and status.upper() != "ALL":
+        query = query.filter(func.lower(SalesReturn.status) == status.lower())
+    if parsed_date_from:
+        query = query.filter(date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
+    if parsed_date_to:
+        query = query.filter(date_col <= datetime.combine(parsed_date_to, datetime.max.time()))
+
+    if search and search.strip():
+        s_pat = f"%{search.strip()}%"
+        query = query.outerjoin(Sale, SalesReturn.sale_id == Sale.id).outerjoin(SalesReturnItem, SalesReturn.id == SalesReturnItem.return_id).filter(
+            or_(
+                SalesReturn.return_number.ilike(s_pat),
+                SalesReturn.customer_name.ilike(s_pat),
+                Sale.bill_number.ilike(s_pat),
+                Sale.invoice_number.ilike(s_pat),
+                SalesReturnItem.sku_snapshot.ilike(s_pat),
+                SalesReturnItem.product_name_snapshot.ilike(s_pat)
+            )
+        ).distinct()
+
+    total_records = query.count()
+
+    # Aggregate summary metrics for filtered records
+    summary_query = query.with_entities(
+        func.count(distinct(SalesReturn.id)).label("total_returns"),
+        func.sum(SalesReturn.total_taxable_amount).label("total_taxable"),
+        func.sum(SalesReturn.total_tax).label("total_tax"),
+        func.sum(SalesReturn.grand_total).label("grand_total")
+    ).first()
+
+    # Fetch total items returned
+    ret_ids = [r[0] for r in query.with_entities(SalesReturn.id).all()]
+    total_qty = 0
+    if ret_ids:
+        total_qty_res = db.query(func.sum(SalesReturnItem.returned_quantity)).filter(
+            SalesReturnItem.return_id.in_(ret_ids)
+        ).scalar()
+        total_qty = int(total_qty_res or 0)
+
+    skip = (page - 1) * limit
+    returns = query.options(
+        selectinload(SalesReturn.items),
+        selectinload(SalesReturn.sale)
+    ).order_by(date_col.desc(), SalesReturn.id.desc()).offset(skip).limit(limit).all()
+
+    data = []
+    for r in returns:
+        r_dt = r.return_date or r.created_at
+        items_list = []
+        for it in (r.items or []):
+            items_list.append({
+                "id": it.id,
+                "sku": it.sku_snapshot,
+                "product_name": it.product_name_snapshot,
+                "hsn": it.hsn_snapshot,
+                "quantity": it.returned_quantity,
+                "unit_price": float(it.unit_price or 0.0),
+                "tax_rate": float(it.tax_rate or 0.0),
+                "tax_amount": float(it.tax_amount or 0.0),
+                "total_price": float(it.total_price or 0.0),
+                "reason": it.return_reason
+            })
+        data.append({
+            "id": r.id,
+            "return_number": r.return_number,
+            "return_date": r_dt.isoformat() if r_dt else None,
+            "sale_id": r.sale_id,
+            "bill_number": (r.sale.bill_number if r.sale else (r.sale.invoice_number if r.sale else None)),
+            "customer_name": r.customer_name or (r.sale.customer_name if r.sale else "Retail Customer"),
+            "total_taxable_amount": round(float(r.total_taxable_amount or 0.0), 2),
+            "total_tax": round(float(r.total_tax or 0.0), 2),
+            "grand_total": round(float(r.grand_total or 0.0), 2),
+            "status": r.status or "Completed",
+            "items_count": len(items_list),
+            "total_qty": sum(it["quantity"] for it in items_list),
+            "items": items_list,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        })
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total": total_records,
+        "total_records": total_records,
+        "total_pages": (total_records + limit - 1) // limit if total_records > 0 else 0,
+        "summary": {
+            "total_returns": int(summary_query[0] or 0) if summary_query else 0,
+            "total_qty": total_qty,
+            "total_taxable": round(float(summary_query[1] or 0.0), 2) if summary_query and summary_query[1] else 0.0,
+            "total_tax": round(float(summary_query[2] or 0.0), 2) if summary_query and summary_query[2] else 0.0,
+            "grand_total": round(float(summary_query[3] or 0.0), 2) if summary_query and summary_query[3] else 0.0,
+        },
+        "data": data,
+        "items": data
+    }
+
+
+# ---------------------------------------------------------------------------
 # 5. GET /defective - Paginated Damage Claims & Defective Inventory Reports
 # ---------------------------------------------------------------------------
 @router.get("/defective")
@@ -1226,6 +1349,40 @@ def export_returns(
             ])
     
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=returns_report.csv"})
+
+@router.get("/sales-returns/export")
+def export_sales_returns(
+    date_from: Optional[str] = Query(None, description="Start date filter"),
+    date_to: Optional[str] = Query(None, description="End date filter"),
+    format: str = Query("csv", pattern="^(csv|excel)$"),
+    company_id: int = Depends(get_current_company_id),
+    db: Session = Depends(get_db)
+):
+    from app.services.series_report_service import SeriesReportService
+    content, filename, media_type, row_count = SeriesReportService.generate_sales_returns_report(
+        db=db,
+        company_id=company_id,
+        date_from=date_from,
+        date_to=date_to,
+        file_format=format
+    )
+    if format.lower() == "excel":
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Row-Count": str(row_count)
+            }
+        )
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Row-Count": str(row_count)
+        }
+    )
 
 @router.get("/defective/export")
 def export_defective(

@@ -42,32 +42,30 @@ export const SalesReport = () => {
         { value: 'GST', label: 'GST Series (GST-)' },
         { value: 'JGST', label: 'JSPL Series (JGST-)' },
         { value: 'IN', label: 'IN Series (JSPL IN / MFN)' },
-        { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
-        { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
-        { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
-        { value: 'VSHB', label: 'VSHB Series (VSHB FC)' },
-        { value: 'KWZ2', label: 'KWZ2 Series (Karnataka FC)' },
-        { value: 'BLR4', label: 'BLR4 Series (Bangalore FC)' },
-        { value: 'BOM5', label: 'BOM5 Series (Mumbai FC)' },
         { value: 'SERVICE', label: 'Service Series (SERVICE-)' },
-        { value: 'ALL', label: 'All Series (Excl. Amazon)' }
+        { value: 'ALL', label: 'All Series (GST, JGST, SERVICE)' },
+        { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
+        { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { value: 'AFN', label: 'Amazon AFN (FBA Orders)' }
       ];
     }
     if (isBkr) {
       return [
         { value: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
-        { value: 'BKR', label: 'BKR Series (BKR-)' },
-        { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
-        { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { value: 'JGST', label: 'BKR Series (JGST-)' },
+        { value: 'BKR', label: 'BKR Retail Series (BKR-)' },
+        { value: 'ALL', label: 'All Series (GST & JGST Combined)' },
         { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
-        { value: 'ALL', label: 'All Series (Excl. Amazon)' }
+        { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+        { value: 'AFN', label: 'Amazon AFN (FBA Orders)' }
       ];
     }
     return [
       { value: 'GST', label: 'GST Series (GST-)' },
-      { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
-      { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+      { value: 'JGST', label: 'JGST Series (JGST-)' },
       { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
+      { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
+      { value: 'AFN', label: 'Amazon AFN (FBA Orders)' },
       { value: 'ALL', label: 'All Series (Excl. Amazon)' }
     ];
   }, [detectedSeriesData, isJspl, isBkr]);
@@ -82,7 +80,7 @@ export const SalesReport = () => {
   useEffect(() => {
     if (isJspl && selectedSeries === 'BKR') {
       setSelectedSeries('GST');
-    } else if (isBkr && (selectedSeries === 'JGST' || selectedSeries === 'SERVICE')) {
+    } else if (isBkr && selectedSeries === 'SERVICE') {
       setSelectedSeries('GST');
     }
   }, [isJspl, isBkr, selectedSeries]);
@@ -261,30 +259,26 @@ export const SalesReport = () => {
           { id: 'GST', label: 'GST Series' },
           { id: 'JGST', label: 'JSPL (JGST)' },
           { id: 'IN', label: 'IN Series (MFN)' },
+          { id: 'SERVICE', label: 'Service Series' },
+          { id: 'ALL', label: 'All Series (GST/JGST/SERV)' },
           { id: 'AMAZON', label: 'Amazon All' },
           { id: 'MFN', label: 'MFN' },
-          { id: 'AFN', label: 'AFN' },
-          { id: 'VSHB', label: 'VSHB FC' },
-          { id: 'BLR4', label: 'BLR4 FC' },
-          { id: 'KWZ2', label: 'KWZ2 FC' },
-          { id: 'BLR8', label: 'BLR8 FC' },
-          { id: 'LKO1', label: 'LKO1 FC' },
-          { id: 'ALL', label: 'All Series (Excl. Amz)' }
+          { id: 'AFN', label: 'AFN' }
         ] : isBkr ? [
           { id: 'GST', label: 'GST Series' },
+          { id: 'JGST', label: 'BKR (JGST)' },
           { id: 'BKR', label: 'BKR Retail' },
+          { id: 'ALL', label: 'All Series (GST & JGST)' },
           { id: 'AMAZON', label: 'Amazon All' },
           { id: 'MFN', label: 'MFN' },
-          { id: 'AFN', label: 'AFN' },
-          { id: 'ALL', label: 'All Series (Excl. Amz)' }
+          { id: 'AFN', label: 'AFN' }
         ] : [
           { id: 'GST', label: 'GST Series' },
+          { id: 'JGST', label: 'JGST Series' },
           { id: 'AMAZON', label: 'Amazon All' },
           { id: 'MFN', label: 'MFN' },
           { id: 'AFN', label: 'AFN' },
-          { id: 'VSHB', label: 'VSHB' },
-          { id: 'BLR4', label: 'BLR4' },
-          { id: 'KWZ2', label: 'KWZ2' }
+          { id: 'ALL', label: 'All Series' }
         ]).map((pill) => (
           <button
             key={pill.id}

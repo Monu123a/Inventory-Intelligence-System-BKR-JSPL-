@@ -69,7 +69,7 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
             return (
               <tr key={item.id || index} className={styles.itemRow}>
                 <td className={styles.tdCenter}>{index + 1}</td>
-                <td className={styles.tdLeft}>
+                <td className={styles.tdItemName}>
                   {(() => {
                     const sku = item.sku || item.product_sku || '';
                     const name = item.product_name || item.name || item.description || '';
@@ -81,8 +81,8 @@ const InvoiceItems = ({ items = [], isInterState = false }) => {
                 </td>
                 <td className={styles.tdLeft}>{item.pack_grade || (item.sku === 'SERVICE CHARGE' || item.hsn_sac === '9987' ? 'SERV' : '')}</td>
                 <td className={styles.tdCenter}>{item.hsn_sac || item.hsn || ''}</td>
-                <td className={styles.tdRight}>{qty.toFixed(2)}</td>
-                <td className={styles.tdRight}>{formatNum(rate)}</td>
+                <td className={styles.tdQty}>{qty.toFixed(2)}</td>
+                <td className={styles.tdRate}>{formatNum(rate)}</td>
                 <td className={styles.tdRight}>{cdDisplay}</td>
                 <td className={styles.tdCenter}>{taxLabel}</td>
                 {isInterState ? (

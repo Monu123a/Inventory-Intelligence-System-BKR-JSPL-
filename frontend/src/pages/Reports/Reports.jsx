@@ -8,6 +8,7 @@ import styles from './Reports.module.css';
 
 // Import the new modular views
 import { SalesReport } from './views/SalesReport';
+import { SalesReturnReport } from './views/SalesReturnReport';
 import { InventoryReport } from './views/InventoryReport';
 import { DispatchReport } from './views/DispatchReport';
 import { FCReturnReport } from './views/FCReturnReport';
@@ -18,6 +19,7 @@ const Reports = () => {
 
   const tabs = [
     { id: 'sales', label: 'Sales Report' },
+    { id: 'sales-returns', label: 'Sales Returns' },
     { id: 'inventory', label: 'Inventory Status' },
     { id: 'dispatches', label: 'Dispatch Report' },
     { id: 'returns', label: 'Amazon Returns' },
@@ -87,6 +89,7 @@ const Reports = () => {
         {/* View Container */}
         <div className={styles.reportContainer}>
           {activeTab === 'sales' && <SalesReport />}
+          {activeTab === 'sales-returns' && <SalesReturnReport />}
           {activeTab === 'inventory' && <InventoryReport />}
           {activeTab === 'dispatches' && <DispatchReport />}
           {activeTab === 'returns' && <FCReturnReport />}
