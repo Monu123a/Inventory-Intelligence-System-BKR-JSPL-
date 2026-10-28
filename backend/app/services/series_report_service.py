@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy import or_, and_, func
 
 from app.models.schema import (
-    Sale, SaleItem, Product, Warehouse, Company,
-    AmazonLiveAllocation, AmazonNetworkType, ReportHistory,
+    Sale, SaleItem, Product, Warehouse, Company, Inventory,
+    AmazonLiveAllocation, AmazonNetworkType, AllocationStatus, ReportHistory,
     Purchase, PurchaseItem, Vendor,
     SalesReturn, SalesReturnItem, AmazonReturn,
     FCReturn, FCReturnItem, InventoryMovement, StateHub
@@ -23,11 +23,11 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 REPORT_COLUMNS = [
     "SNO.",
     "BILL NO.",
+    "BILL DATE",
     "ITEM CODE",
     "ITEM NAME",
     "hsn code",
     "GROUP11.GRP1",
-    "BILL DATE",
     "GST NO.",
     "GST STATE NAME",
     "PARTY NAME",
@@ -62,12 +62,54 @@ REPORT_COLUMNS = [
     "RATE-1",
     "LOT PURCHASE RATE",
     "TRANSPORT MODE",
-    "CREDIT NOTE DESC",
+    "CITY NAME",
     "ADDRESS-1",
     "ADDRESS-2",
     "ADDRESS-3",
     "HSN CODE",
     "HSN DESCRIPTION"
+]
+
+PURCHASE_REPORT_COLUMNS = [
+    "SNO.",
+    "BILL NO.",
+    "BILL DATE",
+    "PARTY NAME",
+    "COMPANY NAME",
+    "ITEM CODE",
+    "ITEM NAME",
+    "PACK / SIZE",
+    "TOTAL QUANTITY",
+    "GROSS AMOUNT",
+    "NET AMOUNT",
+    "TAX REGION",
+    "TAX-1(%)",
+    "HSN CODE",
+    "HSN DESCRIPTION"
+]
+
+INVENTORY_REGISTER_COLUMNS = [
+    "SNO.",
+    "COMPANY NAME",
+    "ITEM CODE",
+    "ITEM NAME",
+    "PACK/SIZE",
+    "CLOSING STOCK",
+    "OPENING STOCK-1",
+    "PURCHASE-1",
+    "PUR FREE QTY",
+    "PUR.RETURN-1",
+    "RECEIPTS-1",
+    "SALE-1",
+    "SALE FREE QTY",
+    "SALE RETURN-1",
+    "SR FREE QTY",
+    "NET SALE-1",
+    "NET SALE VALUE-1",
+    "ISSUES-1",
+    "GROUP9",
+    "GST TAX",
+    "CLOSING VALUE(PUR RATE)"
 ]
 
 STATE_CODE_MAP = {
@@ -557,20 +599,29 @@ class SeriesReportService:
             Warehouse.status == "ACTIVE"
         )
         if company_id:
-            matched_warehouse_query = matched_warehouse_query.filter(Warehouse.company_id == company_id)
-        matched_wh = matched_warehouse_query.first()
+            matched_wh = matched_warehouse_query.filter(Warehouse.company_id == company_id).first()
+            if not matched_wh:
+                matched_wh = db.query(Warehouse).filter(
+                    func.upper(Warehouse.code) == series_clean,
+                    Warehouse.status == "ACTIVE"
+                ).first()
+        else:
+            matched_wh = matched_warehouse_query.first()
 
-        is_amazon_target = series_clean in ("AMAZON", "AFN", "MFN") or bool(matched_wh)
+        is_amazon_target = series_clean in ("AMAZON", "AFN", "MFN", "IN") or bool(matched_wh)
         amazon_allocations = []
         if is_amazon_target:
             alloc_date_col = func.coalesce(
-                AmazonLiveAllocation.order_date,
                 AmazonLiveAllocation.invoice_date,
+                AmazonLiveAllocation.order_date,
                 AmazonLiveAllocation.updated_at,
                 AmazonLiveAllocation.created_at
             )
-            alloc_query = db.query(AmazonLiveAllocation)
-            if company_id:
+            alloc_query = db.query(AmazonLiveAllocation).filter(
+                AmazonLiveAllocation.allocated_qty > 0,
+                AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+            )
+            if company_id and series_clean not in ("IN",):
                 has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
                 if has_allocs:
                     alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
@@ -579,14 +630,9 @@ class SeriesReportService:
             elif series_clean == "MFN":
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
             elif series_clean == "IN" or (matched_wh and matched_wh.code.upper() == "IN"):
-                wh_target_id = matched_wh.id if matched_wh else 38
                 alloc_query = alloc_query.filter(
                     or_(
-                        AmazonLiveAllocation.warehouse_id == wh_target_id,
-                        and_(
-                            AmazonLiveAllocation.company_id == 3,
-                            AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
-                        ),
+                        AmazonLiveAllocation.warehouse_id == 38,
                         AmazonLiveAllocation.invoice_number.ilike("IN-%")
                     )
                 )
@@ -600,6 +646,14 @@ class SeriesReportService:
                     )
                 else:
                     alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
+            else:
+                # Strict isolation: if series code is given but warehouse not found by ID, filter by invoice_number prefix
+                alloc_query = alloc_query.filter(
+                    or_(
+                        AmazonLiveAllocation.invoice_number.ilike(f"{series_clean}-%"),
+                        AmazonLiveAllocation.warehouse_id == -1
+                    )
+                )
             if date_from:
                 alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(date_from, datetime.min.time()))
             if date_to:
@@ -726,11 +780,11 @@ class SeriesReportService:
                 row = [
                     sno,                                       # 0: SNO.
                     bill_no,                                   # 1: BILL NO.
-                    item_code,                                 # 2: ITEM CODE
-                    item_name,                                 # 3: ITEM NAME
-                    hsn_code,                                  # 4: hsn code
-                    group_tax,                                 # 5: GROUP11.GRP1
-                    bill_date,                                 # 6: BILL DATE
+                    bill_date,                                 # 2: BILL DATE
+                    item_code,                                 # 3: ITEM CODE
+                    item_name,                                 # 4: ITEM NAME
+                    hsn_code,                                  # 5: hsn code
+                    group_tax,                                 # 6: GROUP11.GRP1
                     gst_no,                                    # 7: GST NO.
                     gst_state,                                 # 8: GST STATE NAME
                     party_name,                                # 9: PARTY NAME
@@ -765,7 +819,7 @@ class SeriesReportService:
                     rate_1_str,                                # 38: RATE-1
                     "",                                        # 39: LOT PURCHASE RATE
                     sale.dispatch_through or "",               # 40: TRANSPORT MODE
-                    "",                                        # 41: CREDIT NOTE DESC
+                    addr2 or " ",                              # 41: CITY NAME
                     addr1,                                     # 42: ADDRESS-1
                     addr2,                                     # 43: ADDRESS-2
                     addr3,                                     # 44: ADDRESS-3
@@ -819,17 +873,20 @@ class SeriesReportService:
             grand_cash += bill_cash
 
         # Process Amazon allocations
-        if (series_clean in ("AMAZON", "AFN", "MFN") or matched_wh) and amazon_allocations:
+        if (series_clean in ("AMAZON", "AFN", "MFN", "IN") or matched_wh) and amazon_allocations:
             prod_query = db.query(Product)
-            if company_id:
+            if company_id and series_clean not in ("IN",):
                 prod_query = prod_query.filter(Product.company_id == company_id)
-            prod_map = {p.sku.upper(): p for p in prod_query.all()}
+            all_prods = prod_query.all()
+            prod_map_by_company = {(p.company_id, p.sku.upper()): p for p in all_prods}
+            prod_map_sku = {p.sku.upper(): p for p in all_prods}
             wh_map = {w.id: w for w in db.query(Warehouse).all()}
             hub_map = {h.id: h for h in db.query(StateHub).all()}
 
             for alloc in amazon_allocations:
                 sno += 1
-                prod = prod_map.get((alloc.sku or "").upper())
+                alloc_sku = (alloc.sku or "").upper()
+                prod = prod_map_by_company.get((alloc.company_id, alloc_sku)) or prod_map_sku.get(alloc_sku)
                 wh = wh_map.get(alloc.warehouse_id) if alloc.warehouse_id else None
                 hub = hub_map.get(wh.hub_id) if (wh and wh.hub_id) else None
                 
@@ -887,7 +944,7 @@ class SeriesReportService:
                 order_id = alloc.order_id
                 item_code = alloc.sku
                 item_name = prod.name if prod else alloc.sku
-                hsn_code = prod.hsn if prod else ""
+                hsn_code = alloc.hsn_code or (prod.hsn if prod else "") or ""
                 pack_size = prod.unit if prod else ""
                 qty = alloc.allocated_qty or 1
                 
@@ -895,30 +952,44 @@ class SeriesReportService:
                 group_tax = f"GST {int(gst_rate) if gst_rate.is_integer() else gst_rate}%"
                 
                 pur_rate = float(prod.item_rate if prod and prod.item_rate else 0.0)
-                selling_price = pur_rate * 1.35 if pur_rate > 0 else 500.0
-                rate_unit = round(selling_price / (1 + (gst_rate / 100.0)), 2)
-                gross_amt = round(rate_unit * qty, 2)
-                
-                igst = round(gross_amt * (gst_rate / 100.0), 2)
-                tax_3 = int(gst_rate) if gst_rate.is_integer() else gst_rate
-                net_amt = round(gross_amt + igst, 2)
+                pur_rate_str = f"{round(pur_rate, 2):g}" if pur_rate > 0 else ""
+                rate_1_str = f"{pur_rate:.4f}" if pur_rate > 0 else ""
+
+                if alloc.gross_amount is not None and alloc.net_amount is not None:
+                    gross_amt = float(alloc.gross_amount)
+                    net_amt = float(alloc.net_amount)
+                    igst = float(alloc.tax_amount or round(net_amt - gross_amt, 2))
+                    rate_unit = round(gross_amt / qty, 2)
+                    tax_3 = int(gst_rate) if gst_rate.is_integer() else gst_rate
+                else:
+                    selling_price = pur_rate * 1.35 if pur_rate > 0 else 500.0
+                    rate_unit = round(selling_price / (1 + (gst_rate / 100.0)), 2)
+                    gross_amt = round(rate_unit * qty, 2)
+                    igst = round(gross_amt * (gst_rate / 100.0), 2)
+                    tax_3 = int(gst_rate) if gst_rate.is_integer() else gst_rate
+                    net_amt = round(gross_amt + igst, 2)
+
                 cost_amt = round(pur_rate * qty, 2) if pur_rate > 0 else ""
 
                 bill_no = alloc.invoice_number or (f"IN-{alloc.id}" if (alloc.amazon_network_at_allocation and alloc.amazon_network_at_allocation.value == "MFN") or (wh and wh.code == "IN") else f"{wh.code if wh else 'AMZ'}-{alloc.id}")
                 actual_dt = alloc.invoice_date or alloc.order_date or alloc.updated_at or alloc.created_at
                 alloc_dt = actual_dt.strftime("%d/%m/%Y") if actual_dt else datetime.utcnow().strftime("%d/%m/%Y")
+
+                state_name = alloc.state_name or state_name
+                party_name = alloc.party_name or f"AMAZON SELLER PORTAL CUSTOMER ({state_name[:3].upper()})"
+
                 row = [
-                    sno, bill_no, item_code, item_name, hsn_code, group_tax,
-                    alloc_dt, "",
+                    sno, bill_no, alloc_dt, item_code, item_name, hsn_code, group_tax,
+                    "",
                     state_name,
-                    "Amazon Retail Customer", pack_size, qty, rate_unit, gross_amt,
+                    party_name, pack_size, qty, rate_unit, gross_amt,
                     "", "", igst if igst > 0 else "",
                     "", "", "", tax_3, net_amt, "", cost_amt, "",
                     net_amt, "IGST", "", " ", f"AMZ-SYNC-{alloc.amazon_line_item_id or ''}", " ",
                     "", "", "", "", order_id, godown_name,
-                    f"{round(pur_rate, 2):g}" if pur_rate > 0 else "",
-                    f"{pur_rate:.4f}" if pur_rate > 0 else "",
-                    "", "Amazon Logistics", "", addr_1, addr_2, addr_3,
+                    pur_rate_str,
+                    rate_1_str,
+                    "", "Amazon Logistics", " ", addr_1, addr_2, addr_3,
                     hsn_code, hsn_desc
                 ]
                 data_rows.append(row)
@@ -987,6 +1058,233 @@ class SeriesReportService:
         )
 
     @staticmethod
+    def _export_hsn_purchase_dataset(
+        db: Session,
+        company_id: Optional[int],
+        data_rows: List[List[Any]],
+        title_str: str,
+        filename_base: str,
+        sheet_title: str,
+        report_type_label: str,
+        file_format: str = "csv"
+    ) -> Tuple[Union[str, bytes], str, str, int]:
+        if file_format.lower() == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([""] * 15)
+            writer.writerow([title_str] * 15)
+            writer.writerow(PURCHASE_REPORT_COLUMNS)
+            for r in data_rows:
+                writer.writerow(r)
+            content = output.getvalue()
+            filename = f"{filename_base}.csv"
+            media_type = "text/csv"
+            filepath = os.path.join(REPORTS_DIR, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            if company_id:
+                rep_hist = ReportHistory(
+                    company_id=company_id,
+                    report_type=report_type_label,
+                    file_path=filepath,
+                    download_link=f"/api/reports/download/{filename}"
+                )
+                db.add(rep_hist)
+                db.commit()
+            return content, filename, media_type, len(data_rows)
+        else:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = sheet_title[:31]
+
+            ws.append([""] * 15)
+            ws.append([title_str] * 15)
+            title_cell = ws.cell(row=2, column=1)
+            title_cell.font = Font(name="Calibri", size=11, bold=True, color="1E293B")
+            title_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+            for c in range(1, 16):
+                ws.cell(row=2, column=c).fill = title_fill
+
+            ws.append(PURCHASE_REPORT_COLUMNS)
+            header_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")
+            header_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+            for c in range(1, 16):
+                cell = ws.cell(row=3, column=c)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            thin_border = Border(
+                left=Side(style='thin', color='E2E8F0'),
+                right=Side(style='thin', color='E2E8F0'),
+                top=Side(style='thin', color='E2E8F0'),
+                bottom=Side(style='thin', color='E2E8F0')
+            )
+            grand_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+
+            col_widths = {c: len(str(PURCHASE_REPORT_COLUMNS[c-1])) for c in range(1, 16)}
+            current_row_idx = 4
+            for r in data_rows:
+                ws.append(r)
+                is_grand = (r[0] == "" and r[8] != "")
+
+                for c_idx in range(1, 16):
+                    cell = ws.cell(row=current_row_idx, column=c_idx)
+                    cell.border = thin_border
+                    if is_grand:
+                        cell.font = Font(name="Calibri", size=10, bold=True, color="92400E")
+                        cell.fill = grand_fill
+                    else:
+                        cell.font = Font(name="Calibri", size=10, color="334155")
+
+                    if c_idx in (9, 10, 11, 13):
+                        cell.alignment = Alignment(horizontal="right")
+
+                    val_len = len(str(r[c_idx-1] or ''))
+                    if val_len > col_widths[c_idx]:
+                        col_widths[c_idx] = val_len
+
+                current_row_idx += 1
+
+            for c_idx, max_len in col_widths.items():
+                col_letter = get_column_letter(c_idx)
+                ws.column_dimensions[col_letter].width = min(max(max_len + 3, 10), 45)
+
+            stream = io.BytesIO()
+            wb.save(stream)
+            excel_bytes = stream.getvalue()
+
+            filename = f"{filename_base}.xlsx"
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filepath = os.path.join(REPORTS_DIR, filename)
+            with open(filepath, "wb") as f:
+                f.write(excel_bytes)
+
+            if company_id:
+                rep_hist = ReportHistory(
+                    company_id=company_id,
+                    report_type=report_type_label,
+                    file_path=filepath,
+                    download_link=f"/api/reports/download/{filename}"
+                )
+                db.add(rep_hist)
+                db.commit()
+
+            return excel_bytes, filename, media_type, len(data_rows)
+
+    @staticmethod
+    def _export_inventory_register_dataset(
+        db: Session,
+        company_id: Optional[int],
+        data_rows: List[List[Any]],
+        filename_base: str,
+        sheet_title: str,
+        report_type_label: str,
+        file_format: str = "excel"
+    ) -> Tuple[Union[str, bytes], str, str, int]:
+        if file_format.lower() == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(INVENTORY_REGISTER_COLUMNS)
+            for r in data_rows:
+                writer.writerow(r)
+            content = output.getvalue()
+            filename = f"{filename_base}.csv"
+            media_type = "text/csv"
+            filepath = os.path.join(REPORTS_DIR, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            if company_id:
+                rep_hist = ReportHistory(
+                    company_id=company_id,
+                    report_type=report_type_label,
+                    file_path=filepath,
+                    download_link=f"/api/reports/download/{filename}"
+                )
+                db.add(rep_hist)
+                db.commit()
+            return content, filename, media_type, len(data_rows)
+        else:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = sheet_title[:31]
+
+            ws.append(INVENTORY_REGISTER_COLUMNS)
+            header_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")
+            header_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+            for c in range(1, 22):
+                cell = ws.cell(row=1, column=c)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            thin_border = Border(
+                left=Side(style='thin', color='E2E8F0'),
+                right=Side(style='thin', color='E2E8F0'),
+                top=Side(style='thin', color='E2E8F0'),
+                bottom=Side(style='thin', color='E2E8F0')
+            )
+            grand_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+
+            col_widths = {c: len(str(INVENTORY_REGISTER_COLUMNS[c-1])) for c in range(1, 22)}
+            current_row_idx = 2
+            for r in data_rows:
+                ws.append(r)
+                is_grand = (r[1] == "GRAND TOTALS")
+
+                for c_idx in range(1, 22):
+                    cell = ws.cell(row=current_row_idx, column=c_idx)
+                    cell.border = thin_border
+                    if is_grand:
+                        cell.font = Font(name="Calibri", size=10, bold=True, color="92400E")
+                        cell.fill = grand_fill
+                    else:
+                        cell.font = Font(name="Calibri", size=10, color="334155")
+
+                    if c_idx in (6, 7, 8, 12, 16, 17, 21):
+                        cell.alignment = Alignment(horizontal="right")
+
+                    val_len = len(str(r[c_idx-1] or ''))
+                    if val_len > col_widths[c_idx]:
+                        col_widths[c_idx] = val_len
+
+                current_row_idx += 1
+
+            for c_idx, max_len in col_widths.items():
+                col_letter = get_column_letter(c_idx)
+                ws.column_dimensions[col_letter].width = min(max(max_len + 3, 10), 45)
+
+            stream = io.BytesIO()
+            wb.save(stream)
+            excel_bytes = stream.getvalue()
+
+            filename = f"{filename_base}.xlsx"
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filepath = os.path.join(REPORTS_DIR, filename)
+            with open(filepath, "wb") as f:
+                f.write(excel_bytes)
+
+            if company_id:
+                rep_hist = ReportHistory(
+                    company_id=company_id,
+                    report_type=report_type_label,
+                    file_path=filepath,
+                    download_link=f"/api/reports/download/{filename}"
+                )
+                db.add(rep_hist)
+                db.commit()
+
+            return excel_bytes, filename, media_type, len(data_rows)
+
+    @staticmethod
     def generate_purchase_report(
         db: Session,
         company_id: Optional[int] = None,
@@ -996,8 +1294,7 @@ class SeriesReportService:
         file_format: str = "csv"
     ) -> Tuple[Union[str, bytes], str, str, int]:
         """
-        Generates the Official Accountant Purchase Register in the exact 47-column format.
-        Includes Bill No. Wise Totals and Grand Totals.
+        Generates the Official 15-Column HSN WISE PURCHASE REPORT matching media_1793182489464_8bbd9f4d.xlsx.
         """
         date_from = parse_date_param(date_from)
         date_to = parse_date_param(date_to)
@@ -1017,30 +1314,17 @@ class SeriesReportService:
         )
         purchases = query.order_by(func.coalesce(Purchase.date, Purchase.created_at).asc(), Purchase.id.asc()).all()
 
-        # Pre-cache products, warehouses, and inventory movements in memory for O(1) instant lookups
         prod_map = {prod.sku.upper(): prod for prod in db.query(Product).all()}
-        wh_map = {w.id: w for w in db.query(Warehouse).all()}
-        mov_query = db.query(InventoryMovement).filter(InventoryMovement.source == "PURCHASE")
-        if company_id:
-            mov_query = mov_query.filter(InventoryMovement.company_id == company_id)
-        movements = mov_query.all()
-        mov_map = {m.reference_id: m for m in movements if m.reference_id}
 
         d_from_str = date_from.strftime("%d/%m/%Y") if date_from else "01/10/2026"
         d_to_str = date_to.strftime("%d/%m/%Y") if date_to else datetime.utcnow().strftime("%d/%m/%Y")
-        title_str = f"PURCHASE REGISTER FOR ACCOUNTANT From {d_from_str} to {d_to_str}"
+        title_str = f"HSN WISE PURCHASE REPORT From {d_from_str} to {d_to_str}"
 
         data_rows: List[List[Any]] = []
         sno = 0
         grand_qty = 0
         grand_gross = 0.0
-        grand_sgst = 0.0
-        grand_cgst = 0.0
-        grand_igst = 0.0
         grand_net = 0.0
-        grand_cost = 0.0
-        grand_credit = 0.0
-        grand_cash = 0.0
 
         for p in purchases:
             items = p.items or []
@@ -1055,196 +1339,182 @@ class SeriesReportService:
             gst_no = vendor.gst_number if vendor and vendor.gst_number else ""
             gst_state = deduce_state_from_gstin(gst_no, "Chandigarh")
 
-            addr_parts = [part.strip() for part in (vendor.address or "").replace("\r", "\n").split("\n") if part.strip()] if vendor else []
-            addr1 = addr_parts[0] if len(addr_parts) > 0 else ""
-            addr2 = addr_parts[1] if len(addr_parts) > 1 else ""
-            addr3 = addr_parts[2] if len(addr_parts) > 2 else gst_state
-
-            # Find warehouse name
-            mov = mov_map.get(bill_no)
-            wh = wh_map.get(mov.warehouse_id) if mov else None
-            godown_name = wh.name if wh else "Central Warehouse"
-
-            bill_qty = 0
-            bill_gross = 0.0
-            bill_sgst = 0.0
-            bill_cgst = 0.0
-            bill_igst = 0.0
-            bill_net = 0.0
-            bill_cost = 0.0
-            bill_credit = 0.0
-            bill_cash = 0.0
-
             for it in items:
                 sno += 1
-                prod = prod_map.get(it.product_sku)
+                prod = prod_map.get(it.product_sku.upper()) if it.product_sku else None
                 item_code = it.product_sku
                 item_name = it.description or (prod.name if prod else it.product_sku)
                 hsn_code = it.hsn or (prod.hsn if prod else "") or ""
-                pack_size = prod.unit if prod else "PCS"
+                pack_size = prod.unit if prod else (getattr(it, "unit", "") or "PCS")
                 qty = float(it.qty or 0)
                 rate_unit = float(it.unit_cost or 0)
                 gross_amt = round(qty * rate_unit, 2)
-                gst_rate = float(it.gst_pct or 0)
+                gst_rate = float(it.gst_pct or (prod.default_gst_rate if prod else 18.0) or 0)
 
-                group_tax = "GST TAXFREE" if gst_rate == 0 else f"GST {int(gst_rate) if gst_rate.is_integer() else gst_rate}%"
-
-                # Tax calculation (Interstate vs Intrastate)
                 is_interstate = (gst_no and not gst_no.startswith("04")) or (gst_state.lower() != "chandigarh")
-                if is_interstate and gst_rate > 0:
-                    tax_region = "IGST"
-                    igst = round(gross_amt * (gst_rate / 100.0), 2)
-                    cgst = 0.0
-                    sgst = 0.0
-                    tax_3 = int(gst_rate) if gst_rate.is_integer() else gst_rate
-                elif gst_rate > 0:
-                    tax_region = "CGST/SGST"
-                    half_rate = gst_rate / 2.0
-                    cgst = round(gross_amt * (half_rate / 100.0), 2)
-                    sgst = round(gross_amt * (half_rate / 100.0), 2)
-                    igst = 0.0
-                    tax_3 = int(half_rate) if half_rate.is_integer() else half_rate
-                else:
-                    tax_region = "CGST/SGST"
-                    igst = 0.0
-                    cgst = 0.0
-                    sgst = 0.0
-                    tax_3 = ""
+                tax_region = "IGST" if is_interstate else "CGST/SGST"
 
-                net_amt = round(float(it.line_total or (gross_amt + igst + cgst + sgst)), 2)
-
-                is_credit = (p.payment_status != "PAID")
-                credit_col = net_amt if is_credit else ""
-                cash_col = net_amt if not is_credit else ""
-                hsn_desc = (prod.category if prod and prod.category else "Other") or "Other"
+                tax_amount = round(gross_amt * (gst_rate / 100.0), 2)
+                net_amt = round(float(it.line_total or (gross_amt + tax_amount)), 2)
+                company_name = (prod.brand if (prod and getattr(prod, 'brand', None)) else "GENERAL") or "GENERAL"
+                hsn_desc = prod.category if prod and prod.category else "Other"
 
                 row = [
                     sno,                                       # 0: SNO.
                     bill_no,                                   # 1: BILL NO.
-                    item_code,                                 # 2: ITEM CODE
-                    item_name,                                 # 3: ITEM NAME
-                    hsn_code,                                  # 4: hsn code
-                    group_tax,                                 # 5: GROUP11.GRP1
-                    bill_date,                                 # 6: BILL DATE
-                    gst_no,                                    # 7: GST NO.
-                    gst_state,                                 # 8: GST STATE NAME
-                    party_name,                                # 9: PARTY NAME
-                    pack_size,                                 # 10: PACK / SIZE
-                    qty,                                       # 11: SALE QUANTITY (Purchased Qty)
-                    rate_unit,                                 # 12: RATE/UNIT
-                    gross_amt,                                 # 13: GROSS AMOUNT
-                    sgst if sgst > 0 else "",                  # 14: TOTAL SGST AMOUNT
-                    cgst if cgst > 0 else "",                  # 15: TOTAL CGST AMOUNT
-                    igst if igst > 0 else "",                  # 16: TOTAL IGST AMOUNT
-                    "",                                        # 17: TD(%)
-                    "",                                        # 18: CD(%)
-                    "",                                        # 19: FREIGHT
-                    tax_3,                                     # 20: TAX-3(%)
-                    net_amt,                                   # 21: NET AMOUNT
-                    "",                                        # 22: CD VALUE
-                    gross_amt,                                 # 23: AMOUNT (USER DEFINED RATE)
-                    credit_col,                                # 24: CREDIT
-                    cash_col,                                  # 25: CASH
-                    tax_region,                                # 26: TAX REGION
-                    "",                                        # 27: SCHEME(RS.)
-                    p.payment_terms or " ",                    # 28: REMARKS-3
-                    p.notes or " ",                            # 29: REMARKS-1
-                    p.eway_bill or " ",                        # 30: REMARKS-2
-                    vendor.phone if vendor and vendor.phone else "", # 31: RCU MOBILE NO.
-                    "",                                        # 32: RCU EMAIL ID
-                    "",                                        # 33: ADJUST/UNIT
-                    "",                                        # 34: RCU DISCOUNT CARD NO.
-                    bill_no,                                   # 35: ORDER NO.
-                    godown_name,                               # 36: GODOWN NAME
-                    f"{round(rate_unit, 2):g}" if rate_unit > 0 else "", # 37: PUR RATE
-                    f"{rate_unit:.4f}" if rate_unit > 0 else "",         # 38: RATE-1
-                    "",                                        # 39: LOT PURCHASE RATE
-                    p.vehicle_number or "",                    # 40: TRANSPORT MODE
-                    "",                                        # 41: CREDIT NOTE DESC
-                    addr1,                                     # 42: ADDRESS-1
-                    addr2,                                     # 43: ADDRESS-2
-                    addr3,                                     # 44: ADDRESS-3
-                    hsn_code,                                  # 45: HSN CODE
-                    hsn_desc                                   # 46: HSN DESCRIPTION
+                    bill_date,                                 # 2: BILL DATE
+                    party_name,                                # 3: PARTY NAME
+                    company_name,                              # 4: COMPANY NAME
+                    item_code,                                 # 5: ITEM CODE
+                    item_name,                                 # 6: ITEM NAME
+                    pack_size,                                 # 7: PACK / SIZE
+                    qty,                                       # 8: TOTAL QUANTITY
+                    gross_amt,                                 # 9: GROSS AMOUNT
+                    net_amt,                                   # 10: NET AMOUNT
+                    tax_region,                                # 11: TAX REGION
+                    gst_rate,                                  # 12: TAX-1(%)
+                    hsn_code,                                  # 13: HSN CODE
+                    hsn_desc                                   # 14: HSN DESCRIPTION
                 ]
                 data_rows.append(row)
 
-                bill_qty += qty
-                bill_gross += gross_amt
-                bill_sgst += sgst
-                bill_cgst += cgst
-                bill_igst += igst
-                bill_net += net_amt
-                bill_cost += gross_amt
-                if is_credit:
-                    bill_credit += net_amt
-                else:
-                    bill_cash += net_amt
+                grand_qty += qty
+                grand_gross += gross_amt
+                grand_net += net_amt
 
-            subtotal_row = [
-                "",                                            # 0: SNO.
-                "BILL NO. WISE TOTALS",                        # 1: BILL NO.
-                "", "", "", "", "", "", "", "", "",            # 2-10: (empty)
-                bill_qty,                                      # 11: SALE QUANTITY
-                "",                                            # 12: RATE/UNIT
-                round(bill_gross, 2),                          # 13: GROSS AMOUNT
-                round(bill_sgst, 2) if bill_sgst > 0 else "",  # 14: TOTAL SGST AMOUNT
-                round(bill_cgst, 2) if bill_cgst > 0 else "",  # 15: TOTAL CGST AMOUNT
-                round(bill_igst, 2) if bill_igst > 0 else "",  # 16: TOTAL IGST AMOUNT
-                "", "", "", "",                                # 17-20: (empty)
-                round(bill_net, 2),                            # 21: NET AMOUNT
-                "",                                            # 22: CD VALUE
-                round(bill_cost, 2) if bill_cost > 0 else "",  # 23: AMOUNT (USER DEFINED RATE)
-                round(bill_credit, 2) if bill_credit > 0 else "",# 24: CREDIT
-                round(bill_cash, 2) if bill_cash > 0 else "",  # 25: CASH
-                "", "", "", "", "", "", "", "", "", "",        # 26-35: (empty)
-                "", "", "", "", "", "", "", "", "", "", ""     # 36-46: (empty)
+        if sno > 0:
+            grand_total_row = [
+                "", "", "", "", "", "", "", "",
+                grand_qty,
+                round(grand_gross, 2),
+                round(grand_net, 2),
+                "", "", "", ""
             ]
-            data_rows.append(subtotal_row)
-
-            grand_qty += bill_qty
-            grand_gross += bill_gross
-            grand_sgst += bill_sgst
-            grand_cgst += bill_cgst
-            grand_igst += bill_igst
-            grand_net += bill_net
-            grand_cost += bill_cost
-            grand_credit += bill_credit
-            grand_cash += bill_cash
-
-        # Grand Totals Row
-        grand_total_row = [
-            "",                                                # 0: SNO.
-            "GRAND TOTALS",                                    # 1: BILL NO.
-            "", "", "", "", "", "", "", "", "",                # 2-10: (empty)
-            grand_qty,                                         # 11: SALE QUANTITY
-            "",                                                # 12: RATE/UNIT
-            round(grand_gross, 2),                             # 13: GROSS AMOUNT
-            round(grand_sgst, 2) if grand_sgst > 0 else "",    # 14: TOTAL SGST AMOUNT
-            round(grand_cgst, 2) if grand_cgst > 0 else "",    # 15: TOTAL CGST AMOUNT
-            round(grand_igst, 2) if grand_igst > 0 else "",    # 16: TOTAL IGST AMOUNT
-            "", "", "", "",                                    # 17-20: (empty)
-            round(grand_net, 2),                               # 21: NET AMOUNT
-            "",                                                # 22: CD VALUE
-            round(grand_cost, 2) if grand_cost > 0 else "",    # 23: AMOUNT (USER DEFINED RATE)
-            round(grand_credit, 2) if grand_credit > 0 else "",# 24: CREDIT
-            round(grand_cash, 2) if grand_cash > 0 else "",    # 25: CASH
-            "", "", "", "", "", "", "", "", "", "",            # 26-35: (empty)
-            "", "", "", "", "", "", "", "", "", "", ""         # 36-46: (empty)
-        ]
-        data_rows.append(grand_total_row)
+            data_rows.append(grand_total_row)
 
         timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        filename_base = f"Accountant_Purchases_{timestamp_str}"
+        filename_base = f"HSN_Wise_Purchases_{timestamp_str}"
 
-        return SeriesReportService._export_dataset(
+        return SeriesReportService._export_hsn_purchase_dataset(
             db=db,
             company_id=company_id,
             data_rows=data_rows,
             title_str=title_str,
             filename_base=filename_base,
-            sheet_title="Purchase_Register",
-            report_type_label="Accountant Purchases",
+            sheet_title="Report",
+            report_type_label="HSN Wise Purchase Report",
+            file_format=file_format
+        )
+
+    @staticmethod
+    def generate_inventory_register(
+        db: Session,
+        company_id: Optional[int] = None,
+        search: Optional[str] = None,
+        date_from: Optional[Union[date, str]] = None,
+        date_to: Optional[Union[date, str]] = None,
+        file_format: str = "excel"
+    ) -> Tuple[Union[str, bytes], str, str, int]:
+        """
+        Generates the 21-Column Closing Stock / Inventory Register matching media_1793182489464_3f43db89.xlsx.
+        """
+        date_from = parse_date_param(date_from)
+        date_to = parse_date_param(date_to)
+
+        prod_query = db.query(Product)
+        if company_id:
+            prod_query = prod_query.filter(Product.company_id == company_id)
+        if search and isinstance(search, str) and search.strip():
+            s_val = search.strip()
+            prod_query = prod_query.filter(
+                or_(
+                    Product.sku.ilike(f"%{s_val}%"),
+                    Product.name.ilike(f"%{s_val}%")
+                )
+            )
+
+        products = prod_query.order_by(Product.sku.asc()).all()
+        prod_ids = [p.id for p in products]
+
+        inv_sums = dict(
+            db.query(Inventory.product_id, func.sum(Inventory.current_qty))
+            .filter(Inventory.product_id.in_(prod_ids) if prod_ids else False)
+            .group_by(Inventory.product_id)
+            .all()
+        )
+
+        data_rows: List[List[Any]] = []
+        sno = 0
+        grand_closing_stock = 0.0
+        grand_opening_stock = 0.0
+        grand_closing_val = 0.0
+
+        for p in products:
+            sno += 1
+            company_name = getattr(p, "brand", None) or "(NIL)"
+            sku = p.sku
+            name = p.name
+            pack_size = p.unit or ""
+            closing_stock = float(inv_sums.get(p.id, 0) or 0)
+            opening_stock = closing_stock
+            hsn = p.hsn or ""
+            gst_rate = float(p.default_gst_rate or 18.0)
+            gst_tax = f"GST {int(gst_rate) if gst_rate.is_integer() else gst_rate}%"
+            pur_rate = float(p.item_rate or 0.0)
+            closing_val = round(closing_stock * pur_rate, 2)
+
+            row = [
+                sno,                                           # 0: SNO.
+                company_name,                                  # 1: COMPANY NAME
+                sku,                                           # 2: ITEM CODE
+                name,                                          # 3: ITEM NAME
+                pack_size,                                     # 4: PACK/SIZE
+                closing_stock,                                 # 5: CLOSING STOCK
+                opening_stock,                                 # 6: OPENING STOCK-1
+                "",                                            # 7: PURCHASE-1
+                "",                                            # 8: PUR FREE QTY
+                "",                                            # 9: PUR.RETURN-1
+                "",                                            # 10: RECEIPTS-1
+                "",                                            # 11: SALE-1
+                "",                                            # 12: SALE FREE QTY
+                "",                                            # 13: SALE RETURN-1
+                "",                                            # 14: SR FREE QTY
+                "",                                            # 15: NET SALE-1
+                "",                                            # 16: NET SALE VALUE-1
+                "",                                            # 17: ISSUES-1
+                hsn,                                           # 18: GROUP9
+                gst_tax,                                       # 19: GST TAX
+                closing_val                                    # 20: CLOSING VALUE(PUR RATE)
+            ]
+            data_rows.append(row)
+
+            grand_closing_stock += closing_stock
+            grand_opening_stock += opening_stock
+            grand_closing_val += closing_val
+
+        if sno > 0:
+            grand_row = [
+                "",                                            # 0: SNO.
+                "GRAND TOTALS",                                # 1: COMPANY NAME
+                "", "", "",                                    # 2-4: (empty)
+                grand_closing_stock,                           # 5: CLOSING STOCK
+                grand_opening_stock,                           # 6: OPENING STOCK-1
+                "", "", "", "", "", "", "", "", "", "", "",    # 7-17: (empty)
+                "", "",                                        # 18-19: (empty)
+                round(grand_closing_val, 2)                    # 20: CLOSING VALUE(PUR RATE)
+            ]
+            data_rows.append(grand_row)
+
+        timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename_base = f"Inventory_Register_{timestamp_str}"
+
+        return SeriesReportService._export_inventory_register_dataset(
+            db=db,
+            company_id=company_id,
+            data_rows=data_rows,
+            filename_base=filename_base,
+            sheet_title="Report",
+            report_type_label="Closing Stock Register",
             file_format=file_format
         )
 
@@ -1586,9 +1856,14 @@ class SeriesReportService:
             AmazonLiveAllocation.updated_at,
             AmazonLiveAllocation.created_at
         )
-        alloc_query = db.query(AmazonLiveAllocation)
-        if company_id:
-            alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
+        alloc_query = db.query(AmazonLiveAllocation).filter(
+            AmazonLiveAllocation.allocated_qty > 0,
+            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+        )
+        if company_id and wh_clean not in ("IN",):
+            has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
+            if has_allocs:
+                alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
 
         matched_wh = None
         if wh_clean and wh_clean not in ("ALL", "AMAZON"):
@@ -1597,23 +1872,20 @@ class SeriesReportService:
             elif wh_clean == "AFN":
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.AFN)
             elif wh_clean == "IN":
-                wh_target = db.query(Warehouse).filter(func.upper(Warehouse.code) == "IN")
-                if company_id:
-                    wh_target = wh_target.filter(Warehouse.company_id == company_id)
-                wh_in = wh_target.first()
-                wh_in_id = wh_in.id if wh_in else 38
                 alloc_query = alloc_query.filter(
                     or_(
-                        AmazonLiveAllocation.warehouse_id == wh_in_id,
-                        and_(AmazonLiveAllocation.company_id == 3, AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN),
+                        AmazonLiveAllocation.warehouse_id == 38,
                         AmazonLiveAllocation.invoice_number.ilike("IN-%")
                     )
                 )
             else:
-                wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == wh_clean)
+                wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == wh_clean, Warehouse.status == "ACTIVE")
                 if company_id:
-                    wh_q = wh_q.filter(Warehouse.company_id == company_id)
-                matched_wh = wh_q.first()
+                    wh_cand = wh_q.filter(Warehouse.company_id == company_id).first()
+                    matched_wh = wh_cand if wh_cand else wh_q.first()
+                else:
+                    matched_wh = wh_q.first()
+
                 if matched_wh:
                     if matched_wh.code.upper() in ("BKR_CENTRAL",) or (matched_wh.warehouse_type and matched_wh.warehouse_type.value == "CENTRAL" and company_id == 2):
                         alloc_query = alloc_query.filter(
@@ -1626,12 +1898,19 @@ class SeriesReportService:
                         alloc_query = alloc_query.filter(
                             or_(
                                 AmazonLiveAllocation.warehouse_id == matched_wh.id,
-                                and_(AmazonLiveAllocation.company_id == 3, AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN),
                                 AmazonLiveAllocation.invoice_number.ilike("IN-%")
                             )
                         )
                     else:
                         alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
+                else:
+                    # Strict isolation: if a specific warehouse code was requested but not found, filter by invoice_number prefix
+                    alloc_query = alloc_query.filter(
+                        or_(
+                            AmazonLiveAllocation.invoice_number.ilike(f"{wh_clean}-%"),
+                            AmazonLiveAllocation.warehouse_id == -1
+                        )
+                    )
 
         if date_from:
             alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(date_from, datetime.min.time()))

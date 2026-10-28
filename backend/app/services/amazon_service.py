@@ -205,6 +205,18 @@ class AmazonService:
                 if "max_order_date" not in counters or (last_update and last_update > counters["max_order_date"]):
                     counters["max_order_date"] = last_update
 
+                # Extract actual invoice number & date if present in amazon order payload
+                raw_inv_no = order.get("invoice_number") or order.get("InvoiceNumber") or order.get("invoice_id")
+                raw_inv_date = order.get("invoice_date") or order.get("InvoiceDate")
+                inv_date = None
+                if raw_inv_date:
+                    try:
+                        inv_date = datetime.fromisoformat(str(raw_inv_date).replace("Z", "+00:00")).replace(tzinfo=None)
+                    except Exception:
+                        inv_date = None
+                if not inv_date:
+                    inv_date = purchase_date  # Use order/purchase date, NOT sync timestamp!
+
                 mapped_status = status_map.get(amazon_status, AllocationStatus.PENDING)
                 network = AmazonNetworkType.MFN if channel == "MFN" else AmazonNetworkType.AFN
                 target_warehouse_id = mfn_warehouse_id if network == AmazonNetworkType.MFN else afn_warehouse_id
@@ -215,7 +227,7 @@ class AmazonService:
                     if wh_obj and wh_obj[0]:
                         wh_code = wh_obj[0].upper()
                 order_suffix = order_id.replace("-", "")[-6:] if order_id else "000000"
-                invoice_number = f"{wh_code}-{order_suffix}"
+                invoice_number = str(raw_inv_no).strip() if raw_inv_no else f"{wh_code}-{order_suffix}"
 
                 # If this order was already known and had no items fetched
                 if order.get("is_known_order") and not order.get("items"):
@@ -302,9 +314,9 @@ class AmazonService:
                                 existing.updated_at = last_update
                                 if not existing.order_date:
                                     existing.order_date = purchase_date
-                                if not existing.invoice_date:
-                                    existing.invoice_date = last_update
-                                if not existing.invoice_number:
+                                if not existing.invoice_date or existing.invoice_date == existing.updated_at:
+                                    existing.invoice_date = inv_date
+                                if not existing.invoice_number or (raw_inv_no and existing.invoice_number != str(raw_inv_no).strip()):
                                     existing.invoice_number = invoice_number
 
                                 if mapped_status in [AllocationStatus.CANCELLED, AllocationStatus.RETURNED, AllocationStatus.REFUNDED]:
@@ -335,7 +347,7 @@ class AmazonService:
                                     status=mapped_status,
                                     closed=closed,
                                     order_date=purchase_date,
-                                    invoice_date=last_update,
+                                    invoice_date=inv_date,
                                     invoice_number=invoice_number,
                                     created_at=purchase_date,
                                     updated_at=last_update

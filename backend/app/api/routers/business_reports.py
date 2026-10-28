@@ -9,7 +9,7 @@ from app.api.dependencies import get_current_user, get_current_company_id
 from app.models.schema import (
     User, Sale, SaleItem, Inventory, Product, Warehouse,
     FCDispatch, FCReturn, DamageClaim, DefectiveInventory,
-    StateHub, AmazonLiveAllocation, AmazonNetworkType, AmazonReturn,
+    StateHub, AmazonLiveAllocation, AmazonNetworkType, AllocationStatus, AmazonReturn,
     SalesReturn, SalesReturnItem
 )
 from app.utils.date_utils import parse_date_param
@@ -53,13 +53,15 @@ def get_sales_report(
     if s_clean and s_clean not in ("GST", "JGST", "BKR", "SERVICE", "SERV", "ALL", "AFN", "MFN", "AMAZON"):
         wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == s_clean, Warehouse.status == "ACTIVE")
         if company_id:
-            wh_q = wh_q.filter(Warehouse.company_id == company_id)
-        matched_wh = wh_q.first()
+            wh_cand = wh_q.filter(Warehouse.company_id == company_id).first()
+            matched_wh = wh_cand if wh_cand else wh_q.first()
+        else:
+            matched_wh = wh_q.first()
 
-    if s_clean in ("AFN", "MFN", "AMAZON") or bool(matched_wh):
+    if s_clean in ("AFN", "MFN", "AMAZON", "IN") or bool(matched_wh):
         alloc_date_col = func.coalesce(
-            AmazonLiveAllocation.order_date,
             AmazonLiveAllocation.invoice_date,
+            AmazonLiveAllocation.order_date,
             AmazonLiveAllocation.updated_at,
             AmazonLiveAllocation.created_at
         )
@@ -78,8 +80,11 @@ def get_sales_report(
             else:
                 period_col = func.to_char(alloc_date_col, "YYYY-MM-DD").label("period")
 
-        alloc_query = db.query(AmazonLiveAllocation)
-        if company_id:
+        alloc_query = db.query(AmazonLiveAllocation).filter(
+            AmazonLiveAllocation.allocated_qty > 0,
+            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+        )
+        if company_id and s_clean not in ("IN",):
             has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
             if has_allocs:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
@@ -89,14 +94,9 @@ def get_sales_report(
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
         elif s_clean == "IN" or (matched_wh and matched_wh.code.upper() == "IN"):
-            wh_target_id = matched_wh.id if matched_wh else 38
             alloc_query = alloc_query.filter(
                 or_(
-                    AmazonLiveAllocation.warehouse_id == wh_target_id,
-                    and_(
-                        AmazonLiveAllocation.company_id == 3,
-                        AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
-                    ),
+                    AmazonLiveAllocation.warehouse_id == 38,
                     AmazonLiveAllocation.invoice_number.ilike("IN-%")
                 )
             )
@@ -113,6 +113,13 @@ def get_sales_report(
                 )
             else:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
+        else:
+            alloc_query = alloc_query.filter(
+                or_(
+                    AmazonLiveAllocation.invoice_number.ilike(f"{s_clean}-%"),
+                    AmazonLiveAllocation.warehouse_id == -1
+                )
+            )
 
         if parsed_date_from:
             alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
@@ -133,17 +140,33 @@ def get_sales_report(
 
         # Revenue and GST calculation matching accountant standard
         selling_price_expr = case(
+            (AmazonLiveAllocation.net_amount > 0, AmazonLiveAllocation.net_amount),
             (Product.item_rate > 0, Product.item_rate * 1.35),
             else_=500.0
         )
         tax_rate_expr = func.coalesce(Product.default_gst_rate, 18.0)
-        gross_expr = (selling_price_expr / (1.0 + tax_rate_expr / 100.0)) * AmazonLiveAllocation.allocated_qty
-        revenue_expr = selling_price_expr * AmazonLiveAllocation.allocated_qty
-        tax_expr = revenue_expr - gross_expr
+        gross_expr = case(
+            (AmazonLiveAllocation.gross_amount > 0, AmazonLiveAllocation.gross_amount),
+            else_=(selling_price_expr / (1.0 + tax_rate_expr / 100.0)) * AmazonLiveAllocation.allocated_qty
+        )
+        revenue_expr = selling_price_expr * case(
+            (AmazonLiveAllocation.net_amount > 0, 1),
+            else_=AmazonLiveAllocation.allocated_qty
+        )
+        tax_expr = case(
+            (AmazonLiveAllocation.tax_amount > 0, AmazonLiveAllocation.tax_amount),
+            else_=revenue_expr - gross_expr
+        )
 
         agg_query = alloc_query.outerjoin(
             Product,
-            Product.sku == AmazonLiveAllocation.sku
+            and_(
+                Product.sku == AmazonLiveAllocation.sku,
+                or_(
+                    AmazonLiveAllocation.company_id == None,
+                    Product.company_id == AmazonLiveAllocation.company_id
+                )
+            )
         ).with_entities(
             period_col,
             func.count(distinct(AmazonLiveAllocation.order_id)).label("total_orders"),
@@ -213,14 +236,16 @@ def get_sales_report(
     if status:
         sale_base = sale_base.filter(Sale.status == status)
     if search:
-        search_pattern = f"%{search.strip()}%"
-        sale_base = sale_base.filter(
-            or_(
-                Sale.bill_number.ilike(search_pattern),
-                Sale.invoice_number.ilike(search_pattern),
-                Sale.customer_name.ilike(search_pattern)
+        s_val = search if isinstance(search, str) else ""
+        if s_val.strip():
+            search_pattern = f"%{s_val.strip()}%"
+            sale_base = sale_base.filter(
+                or_(
+                    Sale.bill_number.ilike(search_pattern),
+                    Sale.invoice_number.ilike(search_pattern),
+                    Sale.customer_name.ilike(search_pattern)
+                )
             )
-        )
     if s_clean:
         if s_clean == "GST":
             sale_base = sale_base.filter(
@@ -894,13 +919,15 @@ def export_sales(
     if s_clean and s_clean not in ("GST", "JGST", "BKR", "SERVICE", "SERV", "ALL", "AFN", "MFN", "AMAZON"):
         wh_q = db.query(Warehouse).filter(func.upper(Warehouse.code) == s_clean, Warehouse.status == "ACTIVE")
         if company_id:
-            wh_q = wh_q.filter(Warehouse.company_id == company_id)
-        matched_wh = wh_q.first()
+            wh_cand = wh_q.filter(Warehouse.company_id == company_id).first()
+            matched_wh = wh_cand if wh_cand else wh_q.first()
+        else:
+            matched_wh = wh_q.first()
 
-    if s_clean in ("AFN", "MFN", "AMAZON") or bool(matched_wh):
+    if s_clean in ("AFN", "MFN", "AMAZON", "IN") or bool(matched_wh):
         alloc_date_col = func.coalesce(
-            AmazonLiveAllocation.order_date,
             AmazonLiveAllocation.invoice_date,
+            AmazonLiveAllocation.order_date,
             AmazonLiveAllocation.updated_at,
             AmazonLiveAllocation.created_at
         )
@@ -919,8 +946,11 @@ def export_sales(
             else:
                 period_col = func.to_char(alloc_date_col, "YYYY-MM-DD").label("period")
 
-        alloc_query = db.query(AmazonLiveAllocation)
-        if company_id:
+        alloc_query = db.query(AmazonLiveAllocation).filter(
+            AmazonLiveAllocation.allocated_qty > 0,
+            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+        )
+        if company_id and s_clean not in ("IN",):
             has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
             if has_allocs:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.company_id == company_id)
@@ -930,14 +960,9 @@ def export_sales(
         elif s_clean == "MFN":
             alloc_query = alloc_query.filter(AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN)
         elif s_clean == "IN" or (matched_wh and matched_wh.code.upper() == "IN"):
-            wh_target_id = matched_wh.id if matched_wh else 38
             alloc_query = alloc_query.filter(
                 or_(
-                    AmazonLiveAllocation.warehouse_id == wh_target_id,
-                    and_(
-                        AmazonLiveAllocation.company_id == 3,
-                        AmazonLiveAllocation.amazon_network_at_allocation == AmazonNetworkType.MFN
-                    ),
+                    AmazonLiveAllocation.warehouse_id == 38,
                     AmazonLiveAllocation.invoice_number.ilike("IN-%")
                 )
             )
@@ -954,6 +979,13 @@ def export_sales(
                 )
             else:
                 alloc_query = alloc_query.filter(AmazonLiveAllocation.warehouse_id == matched_wh.id)
+        else:
+            alloc_query = alloc_query.filter(
+                or_(
+                    AmazonLiveAllocation.invoice_number.ilike(f"{s_clean}-%"),
+                    AmazonLiveAllocation.warehouse_id == -1
+                )
+            )
 
         if parsed_date_from:
             alloc_query = alloc_query.filter(alloc_date_col >= datetime.combine(parsed_date_from, datetime.min.time()))
@@ -973,17 +1005,33 @@ def export_sales(
                 )
 
         selling_price_expr = case(
+            (AmazonLiveAllocation.net_amount > 0, AmazonLiveAllocation.net_amount),
             (Product.item_rate > 0, Product.item_rate * 1.35),
             else_=500.0
         )
         tax_rate_expr = func.coalesce(Product.default_gst_rate, 18.0)
-        gross_expr = (selling_price_expr / (1.0 + tax_rate_expr / 100.0)) * AmazonLiveAllocation.allocated_qty
-        revenue_expr = selling_price_expr * AmazonLiveAllocation.allocated_qty
-        tax_expr = revenue_expr - gross_expr
+        gross_expr = case(
+            (AmazonLiveAllocation.gross_amount > 0, AmazonLiveAllocation.gross_amount),
+            else_=(selling_price_expr / (1.0 + tax_rate_expr / 100.0)) * AmazonLiveAllocation.allocated_qty
+        )
+        revenue_expr = selling_price_expr * case(
+            (AmazonLiveAllocation.net_amount > 0, 1),
+            else_=AmazonLiveAllocation.allocated_qty
+        )
+        tax_expr = case(
+            (AmazonLiveAllocation.tax_amount > 0, AmazonLiveAllocation.tax_amount),
+            else_=revenue_expr - gross_expr
+        )
 
         agg_query = alloc_query.outerjoin(
             Product,
-            Product.sku == AmazonLiveAllocation.sku
+            and_(
+                Product.sku == AmazonLiveAllocation.sku,
+                or_(
+                    AmazonLiveAllocation.company_id == None,
+                    Product.company_id == AmazonLiveAllocation.company_id
+                )
+            )
         ).with_entities(
             period_col,
             func.count(distinct(AmazonLiveAllocation.order_id)).label("total_orders"),
@@ -1225,24 +1273,25 @@ def export_series_sales(
 @router.get("/inventory/export")
 def export_inventory(
     search: Optional[str] = Query(None),
+    format: str = Query("excel", pattern="^(excel|csv)$"),
     company_id: int = Depends(get_current_company_id),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Inventory, Product, Warehouse).join(Product, Inventory.product_id == Product.id).join(Warehouse, Inventory.warehouse_id == Warehouse.id).filter(Inventory.company_id == company_id)
-    if search:
-        search_pattern = f"%{search.strip()}%"
-        query = query.filter(
-            or_(Product.name.ilike(search_pattern), Product.sku.ilike(search_pattern), Warehouse.name.ilike(search_pattern))
-        )
-    results = query.all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Product SKU", "Product Name", "Warehouse", "Available Qty", "Current Qty", "Reserved Qty"])
-    for inv, prod, wh in results:
-        writer.writerow([prod.sku, prod.name, wh.name, inv.available_qty, inv.current_qty, inv.reserved_qty])
-    
-    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=inventory_report.csv"})
+    from app.services.series_report_service import SeriesReportService
+    content, filename, media_type, row_count = SeriesReportService.generate_inventory_register(
+        db=db,
+        company_id=company_id,
+        search=search,
+        file_format=format
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Row-Count": str(row_count)
+        }
+    )
 
 @router.get("/dispatches/export")
 def export_dispatches(

@@ -199,6 +199,12 @@ class AmazonLiveAllocation(Base):
     order_date = Column(DateTime, nullable=True, index=True)
     invoice_number = Column(String, nullable=True, index=True)
     invoice_date = Column(DateTime, nullable=True)
+    gross_amount = Column(Numeric(12, 2), nullable=True)
+    tax_amount = Column(Numeric(12, 2), nullable=True)
+    net_amount = Column(Numeric(12, 2), nullable=True)
+    party_name = Column(String(255), nullable=True)
+    state_name = Column(String(100), nullable=True)
+    hsn_code = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     
