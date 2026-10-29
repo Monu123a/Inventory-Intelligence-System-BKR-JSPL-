@@ -205,6 +205,8 @@ class AmazonLiveAllocation(Base):
     party_name = Column(String(255), nullable=True)
     state_name = Column(String(100), nullable=True)
     hsn_code = Column(String(50), nullable=True)
+    customer_gstin = Column(String(50), nullable=True)
+    shipment_date = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     
