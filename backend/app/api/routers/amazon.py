@@ -10,7 +10,7 @@ from app.models.db import get_db
 from app.api.dependencies import get_current_company_id, get_current_user
 from app.models.schema import (
     AmazonLiveAllocation, AmazonSyncLog, AmazonDLQ, User, 
-    Warehouse, WarehouseExternalMapping, AmazonNetworkType, Inventory
+    Warehouse, WarehouseExternalMapping, AmazonNetworkType, Inventory, Product
 )
 from app.services.amazon_service import AmazonService
 from app.services.amazon_client import get_amazon_client
@@ -22,30 +22,58 @@ router = APIRouter(prefix="/amazon", tags=["amazon"])
 
 @router.get("/live-inventory")
 def get_live_inventory(company_id: int = Depends(get_current_company_id), db: Session = Depends(get_db)):
+    # Subquery to aggregate available physical/available stock per SKU in this company
+    stock_subquery = db.query(
+        Product.sku,
+        func.coalesce(func.sum(Inventory.available_qty), 0).label("available_stock")
+    ).join(
+        Inventory, (Product.id == Inventory.product_id) & (Product.company_id == Inventory.company_id)
+    ).filter(
+        Product.company_id == company_id
+    ).group_by(Product.sku).subquery()
+
     # Group by SKU and Amazon Network
     allocations = db.query(
         AmazonLiveAllocation.sku,
         AmazonLiveAllocation.amazon_network_at_allocation,
         func.sum(AmazonLiveAllocation.allocated_qty).label("total_allocated"),
         func.sum(AmazonLiveAllocation.reconciled_qty).label("total_reconciled"),
-        func.count(AmazonLiveAllocation.id).label("active_orders")
+        func.count(AmazonLiveAllocation.id).label("active_orders"),
+        func.coalesce(stock_subquery.c.available_stock, 0).label("available_stock")
+    ).outerjoin(
+        stock_subquery, AmazonLiveAllocation.sku == stock_subquery.c.sku
     ).filter(
         AmazonLiveAllocation.company_id == company_id,
         AmazonLiveAllocation.closed == False
     ).group_by(
         AmazonLiveAllocation.sku,
-        AmazonLiveAllocation.amazon_network_at_allocation
+        AmazonLiveAllocation.amazon_network_at_allocation,
+        stock_subquery.c.available_stock
+    ).order_by(
+        stock_subquery.c.available_stock.asc()
     ).all()
     
     result = []
     for a in allocations:
+        stock = int(a.available_stock or 0)
+        pending = (a.total_allocated or 0) - (a.total_reconciled or 0)
+        
+        if stock < 0:
+            stock_status = "DEFICIT"
+        elif stock == 0:
+            stock_status = "OUT_OF_STOCK"
+        else:
+            stock_status = "IN_STOCK"
+
         result.append({
             "sku": a.sku,
             "network": a.amazon_network_at_allocation.value if a.amazon_network_at_allocation else "UNMAPPED",
             "allocated_qty": a.total_allocated or 0,
             "reconciled_qty": a.total_reconciled or 0,
-            "pending_qty": (a.total_allocated or 0) - (a.total_reconciled or 0),
-            "active_orders": a.active_orders or 0
+            "pending_qty": pending,
+            "active_orders": a.active_orders or 0,
+            "available_stock": stock,
+            "stock_status": stock_status
         })
     return result
 

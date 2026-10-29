@@ -33,6 +33,7 @@ const AmazonLiveInventory = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [networkFilter, setNetworkFilter] = useState('ALL');
+  const [stockFilter, setStockFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState('allocations');
   const [backfillMode, setBackfillMode] = useState(false);
   const [reportDaysBack, setReportDaysBack] = useState(7);
@@ -182,13 +183,25 @@ const AmazonLiveInventory = () => {
 
   // Filter allocations
   const allocations = Array.isArray(rawAllocations) ? rawAllocations : [];
+  
+  const deficitCount = useMemo(() => allocations.filter(a => (a.available_stock || 0) < 0).length, [allocations]);
+  const outOfStockCount = useMemo(() => allocations.filter(a => (a.available_stock || 0) === 0).length, [allocations]);
+  const inStockCount = useMemo(() => allocations.filter(a => (a.available_stock || 0) > 0).length, [allocations]);
+  const unsuppliedCount = deficitCount + outOfStockCount;
+
   const filteredAllocations = useMemo(() => {
     return allocations.filter((item) => {
       const matchesSearch = !searchTerm || item.sku.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesNetwork = networkFilter === 'ALL' || item.network === networkFilter;
-      return matchesSearch && matchesNetwork;
+      const stock = item.available_stock ?? 0;
+      let matchesStock = true;
+      if (stockFilter === 'UNSUPPLIED') matchesStock = stock <= 0;
+      else if (stockFilter === 'DEFICIT') matchesStock = stock < 0;
+      else if (stockFilter === 'OUT_OF_STOCK') matchesStock = stock === 0;
+      else if (stockFilter === 'IN_STOCK') matchesStock = stock > 0;
+      return matchesSearch && matchesNetwork && matchesStock;
     });
-  }, [allocations, searchTerm, networkFilter]);
+  }, [allocations, searchTerm, networkFilter, stockFilter]);
 
   // Calculate totals
   const totalSoftReserved = useMemo(() => {
@@ -271,6 +284,65 @@ const AmazonLiveInventory = () => {
       key: 'pending_qty', 
       label: 'Soft Reserved (Active)', 
       render: (val) => <span className={styles.softReservedNumber}>{val}</span>
+    },
+    { 
+      key: 'available_stock', 
+      label: 'Warehouse Stock', 
+      render: (val) => {
+        const stock = typeof val === 'number' ? val : 0;
+        if (stock < 0) {
+          return (
+            <span style={{ 
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#fee2e2', 
+              color: '#b91c1c', 
+              fontWeight: 700, 
+              padding: '3px 8px', 
+              borderRadius: '6px',
+              fontSize: '0.82rem',
+              border: '1px solid #fca5a5'
+            }}>
+              🔴 {stock} (Deficit)
+            </span>
+          );
+        }
+        if (stock === 0) {
+          return (
+            <span style={{ 
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#fef3c7', 
+              color: '#b45309', 
+              fontWeight: 600, 
+              padding: '3px 8px', 
+              borderRadius: '6px',
+              fontSize: '0.82rem',
+              border: '1px solid #fcd34d'
+            }}>
+              ⚠️ 0 (Out of Stock)
+            </span>
+          );
+        }
+        return (
+          <span style={{ 
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: '#dcfce7', 
+            color: '#15803d', 
+            fontWeight: 600, 
+            padding: '3px 8px', 
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            border: '1px solid #bbf7d0'
+          }}>
+            🟢 {stock} In Stock
+          </span>
+        );
+      }
     },
     { 
       key: 'active_orders', 
@@ -556,7 +628,7 @@ const AmazonLiveInventory = () => {
             >
               <FiBox />
               <span>Live Soft Allocations</span>
-              <span className={styles.tabCountPill}>{filteredAllocations.length}</span>
+              <span className={styles.tabCountPill}>{allocations.length}</span>
             </button>
 
             <button
@@ -581,6 +653,88 @@ const AmazonLiveInventory = () => {
           {/* TAB 1: ALLOCATIONS */}
           {activeTab === 'allocations' && (
             <div>
+              {/* Stock Status Filter Pills */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-neutral-700)' }}>
+                  Stock Health:
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => { setStockFilter('ALL'); setAllocationsPage(1); }}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    border: '1px solid',
+                    borderColor: stockFilter === 'ALL' ? '#334155' : '#cbd5e1',
+                    backgroundColor: stockFilter === 'ALL' ? '#1e293b' : '#ffffff',
+                    color: stockFilter === 'ALL' ? '#ffffff' : '#475569',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  All Orders ({allocations.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setStockFilter('UNSUPPLIED'); setAllocationsPage(1); }}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    border: '1px solid',
+                    borderColor: stockFilter === 'UNSUPPLIED' ? '#dc2626' : '#fecaca',
+                    backgroundColor: stockFilter === 'UNSUPPLIED' ? '#dc2626' : '#fef2f2',
+                    color: stockFilter === 'UNSUPPLIED' ? '#ffffff' : '#b91c1c',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  ⚠️ Sold But Out of Stock ({unsuppliedCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setStockFilter('DEFICIT'); setAllocationsPage(1); }}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    border: '1px solid',
+                    borderColor: stockFilter === 'DEFICIT' ? '#b91c1c' : '#fca5a5',
+                    backgroundColor: stockFilter === 'DEFICIT' ? '#b91c1c' : '#ffffff',
+                    color: stockFilter === 'DEFICIT' ? '#ffffff' : '#dc2626',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  🔴 In Deficit ({deficitCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setStockFilter('IN_STOCK'); setAllocationsPage(1); }}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    border: '1px solid',
+                    borderColor: stockFilter === 'IN_STOCK' ? '#16a34a' : '#bbf7d0',
+                    backgroundColor: stockFilter === 'IN_STOCK' ? '#16a34a' : '#f0fdf4',
+                    color: stockFilter === 'IN_STOCK' ? '#ffffff' : '#15803d',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  🟢 In Stock ({inStockCount})
+                </button>
+              </div>
               {/* Filter & Search Toolbar */}
               <div className={styles.toolbar}>
                 <div className={styles.searchWrapper}>
