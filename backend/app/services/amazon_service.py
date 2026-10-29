@@ -226,8 +226,35 @@ class AmazonService:
                     wh_obj = db.query(Warehouse.code).filter(Warehouse.id == target_warehouse_id).first()
                     if wh_obj and wh_obj[0]:
                         wh_code = wh_obj[0].upper()
-                order_suffix = order_id.replace("-", "")[-6:] if order_id else "000000"
-                invoice_number = str(raw_inv_no).strip() if raw_inv_no else f"{wh_code}-{order_suffix}"
+                # Resolve clean sequential invoice number (e.g. IN-518, IN-633, BLR4-742)
+                existing_inv = db.query(AmazonLiveAllocation.invoice_number).filter(
+                    AmazonLiveAllocation.order_id == order_id,
+                    AmazonLiveAllocation.invoice_number.isnot(None),
+                    AmazonLiveAllocation.invoice_number != ""
+                ).first()
+
+                if existing_inv and existing_inv[0]:
+                    invoice_number = existing_inv[0]
+                elif raw_inv_no:
+                    invoice_number = str(raw_inv_no).strip()
+                elif "batch_order_inv" in counters and order_id in counters["batch_order_inv"]:
+                    invoice_number = counters["batch_order_inv"][order_id]
+                else:
+                    try:
+                        from sqlalchemy import text
+                        max_num_res = db.execute(
+                            text("SELECT max(CAST(SUBSTRING(invoice_number FROM '^[A-Z0-9]+-([0-9]{1,4})$') AS INTEGER)) FROM amazon_live_allocations WHERE invoice_number ~ ('^' || :wh || '-[0-9]{1,4}$');"),
+                            {"wh": wh_code}
+                        ).scalar()
+                        next_num = (max_num_res or 0) + 1
+                        invoice_number = f"{wh_code}-{next_num}"
+                    except Exception:
+                        order_suffix = order_id.replace("-", "")[-6:] if order_id else "000000"
+                        invoice_number = f"{wh_code}-{order_suffix}"
+                    
+                    if "batch_order_inv" not in counters:
+                        counters["batch_order_inv"] = {}
+                    counters["batch_order_inv"][order_id] = invoice_number
 
                 # If this order was already known and had no items fetched
                 if order.get("is_known_order") and not order.get("items"):
