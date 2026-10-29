@@ -218,6 +218,7 @@ def get_amazon_mtr_warehouses(
 ):
     """Returns warehouses and FCs available for filtering the Amazon MTR report."""
     from app.models.schema import Warehouse, StateHub, AmazonLiveAllocation
+    from sqlalchemy import func
     whs = db.query(Warehouse).filter(
         Warehouse.company_id == company_id,
         Warehouse.status == "ACTIVE"

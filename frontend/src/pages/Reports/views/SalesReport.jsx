@@ -42,6 +42,14 @@ export const SalesReport = () => {
         { value: 'GST', label: 'GST Series (GST-)' },
         { value: 'JGST', label: 'JSPL Series (JGST-)' },
         { value: 'IN', label: 'IN Series (JSPL IN / MFN)' },
+        { value: 'VSHB', label: 'VSHB Series (JSPL Central / VSHB)' },
+        { value: 'KWZ2', label: 'KWZ2 Series (JSPL KWZ2 FC)' },
+        { value: 'BLR4', label: 'BLR4 Series (JSPL BLR4 FC)' },
+        { value: 'BLR8', label: 'BLR8 Series (JSPL BLR8 FC)' },
+        { value: 'BOM5', label: 'BOM5 Series (JSPL BOM5 FC)' },
+        { value: 'PNQ3', label: 'PNQ3 Series (JSPL PNQ3 FC)' },
+        { value: 'LKO1', label: 'LKO1 Series (JSPL LKO1 FC)' },
+        { value: 'AMD2', label: 'AMD2 Series (JSPL AMD2 FC)' },
         { value: 'SERVICE', label: 'Service Series (SERVICE-)' },
         { value: 'ALL', label: 'All Series (GST, JGST, SERVICE)' },
         { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
@@ -54,6 +62,8 @@ export const SalesReport = () => {
         { value: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
         { value: 'JGST', label: 'BKR Series (JGST-)' },
         { value: 'BKR', label: 'BKR Retail Series (BKR-)' },
+        { value: 'KARNATAKA', label: 'Karnataka Series' },
+        { value: 'BKR_CENTRAL', label: 'Central Series' },
         { value: 'ALL', label: 'All Series (GST & JGST Combined)' },
         { value: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
         { value: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
@@ -256,22 +266,28 @@ export const SalesReport = () => {
       <div style={{ display: 'flex', gap: '8px', padding: '0 16px 10px 16px', overflowX: 'auto', alignItems: 'center' }}>
         <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>Quick Select:</span>
         {(isJspl ? [
-          { id: 'GST', label: 'GST Series' },
+          { id: 'GST', label: 'GST' },
           { id: 'JGST', label: 'JSPL (JGST)' },
-          { id: 'IN', label: 'IN Series (MFN)' },
-          { id: 'SERVICE', label: 'Service Series' },
-          { id: 'ALL', label: 'All Series (GST/JGST/SERV)' },
+          { id: 'IN', label: 'IN (MFN)' },
+          { id: 'VSHB', label: 'VSHB (Central)' },
+          { id: 'KWZ2', label: 'KWZ2' },
+          { id: 'BLR4', label: 'BLR4' },
+          { id: 'BLR8', label: 'BLR8' },
           { id: 'AMAZON', label: 'Amazon All' },
           { id: 'MFN', label: 'MFN' },
-          { id: 'AFN', label: 'AFN' }
+          { id: 'AFN', label: 'AFN' },
+          { id: 'SERVICE', label: 'Service' },
+          { id: 'ALL', label: 'All Series' }
         ] : isBkr ? [
           { id: 'GST', label: 'GST Series' },
           { id: 'JGST', label: 'BKR (JGST)' },
           { id: 'BKR', label: 'BKR Retail' },
-          { id: 'ALL', label: 'All Series (GST & JGST)' },
+          { id: 'KARNATAKA', label: 'Karnataka' },
+          { id: 'BKR_CENTRAL', label: 'Central' },
           { id: 'AMAZON', label: 'Amazon All' },
           { id: 'MFN', label: 'MFN' },
-          { id: 'AFN', label: 'AFN' }
+          { id: 'AFN', label: 'AFN' },
+          { id: 'ALL', label: 'All Series' }
         ] : [
           { id: 'GST', label: 'GST Series' },
           { id: 'JGST', label: 'JGST Series' },

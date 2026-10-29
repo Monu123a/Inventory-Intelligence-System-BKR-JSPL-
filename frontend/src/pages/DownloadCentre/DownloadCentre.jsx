@@ -98,13 +98,43 @@ const DownloadCentre = () => {
   const [dateTo, setDateTo] = useState('2027-03-31');
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState(null);
+  const [detectedSeriesList, setDetectedSeriesList] = useState([]);
+
+  useEffect(() => {
+    reportsService.getSeriesList().then(res => {
+      const list = res?.data || (Array.isArray(res) ? res : []);
+      if (list && list.length > 0) {
+        setDetectedSeriesList(list);
+      }
+    }).catch(err => console.error('Failed to load detected series:', err));
+  }, [companyId]);
 
   const seriesPresets = React.useMemo(() => {
+    if (detectedSeriesList && detectedSeriesList.length > 0) {
+      const mapped = detectedSeriesList.map(s => ({
+        id: s.id || s.value,
+        label: s.label || s.name || s.id
+      }));
+      if (!mapped.some(p => p.id === 'CUSTOM')) {
+        mapped.push({ id: 'CUSTOM', label: 'Custom Series...' });
+      }
+      return mapped;
+    }
     if (isJspl) {
       return [
         { id: 'GST', label: 'GST Series (GST-)' },
         { id: 'JGST', label: 'JSPL GST Series (JGST-)' },
         { id: 'IN', label: 'IN Series (IN-)' },
+        { id: 'VSHB', label: 'VSHB Series (JSPL Central / VSHB)' },
+        { id: 'KWZ2', label: 'KWZ2 Series (JSPL KWZ2 FC)' },
+        { id: 'BLR4', label: 'BLR4 Series (JSPL BLR4 FC)' },
+        { id: 'BLR8', label: 'BLR8 Series (JSPL BLR8 FC)' },
+        { id: 'BOM5', label: 'BOM5 Series (JSPL BOM5 FC)' },
+        { id: 'PNQ3', label: 'PNQ3 Series (JSPL PNQ3 FC)' },
+        { id: 'CCX2', label: 'CCX2 Series (JSPL CCX2 FC)' },
+        { id: 'CJB1', label: 'CJB1 Series (JSPL CJB1 FC)' },
+        { id: 'LKO1', label: 'LKO1 Series (JSPL LKO1 FC)' },
+        { id: 'AMD2', label: 'AMD2 Series (JSPL AMD2 FC)' },
         { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
         { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
@@ -117,6 +147,8 @@ const DownloadCentre = () => {
       return [
         { id: 'GST', label: 'GST Series (GST- / BKR-GST-)' },
         { id: 'BKR', label: 'BKR Retail Series (BKR-)' },
+        { id: 'KARNATAKA', label: 'Karnataka Series' },
+        { id: 'BKR_CENTRAL', label: 'Central Series' },
         { id: 'AFN', label: 'Amazon AFN (FBA Orders)' },
         { id: 'MFN', label: 'Amazon MFN (Merchant Orders)' },
         { id: 'AMAZON', label: 'Amazon All (AFN & MFN)' },
@@ -132,7 +164,7 @@ const DownloadCentre = () => {
       { id: 'ALL', label: 'All Series (Excl. Amazon)' },
       { id: 'CUSTOM', label: 'Custom Series...' }
     ];
-  }, [isJspl, isBkr]);
+  }, [detectedSeriesList, isJspl, isBkr]);
 
   useEffect(() => {
     if (isJspl && selectedSeries === 'BKR') {

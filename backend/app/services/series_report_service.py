@@ -279,8 +279,7 @@ class SeriesReportService:
                 if p not in ("GST", "BKR", "JGST", "AFN", "MFN", "AMAZON", "DELETED", "EDITED", "CANCELLED"):
                     options.append({"id": p, "label": f"{p} Series ({p}-*)"})
 
-        # Add warehouse / FC series options for the company
-        # Row 48: In JSPL Chandigarh Warehouse, remote FC warehouses (BLR4, KWZ2, etc.) must NOT show
+        # Add warehouse / FC series options for the company (VSHB, KWZ2, BLR4, etc.)
         wh_query = db.query(Warehouse).filter(Warehouse.status == "ACTIVE")
         if company_id:
             wh_query = wh_query.filter(Warehouse.company_id == company_id)
@@ -289,11 +288,28 @@ class SeriesReportService:
         existing_ids = {opt["id"] for opt in options}
         for w in warehouses:
             code = (w.code or "").strip().upper()
-            # Remote Amazon FCs should not be listed as local series in JSPL/BKR
-            if (company_code == "JSPL" or company_id == 3) and code not in ("VSHB", "IN", "CHANDIGARH", "CENTRAL"):
+            if not code or code in ("DEFAULT", "TEST-WH-MFN", "AUTO_GODOWN"):
                 continue
-            if code and code not in existing_ids and code not in ("DEFAULT", "TEST-WH-MFN", "AUTO_GODOWN", "VSHB"):
-                options.append({"id": code, "label": f"{code} Series ({w.name})"})
+            if code not in existing_ids:
+                if code == "VSHB":
+                    lbl = "VSHB Series (JSPL Central / VSHB)" if (company_id == 3 or company_code == "JSPL") else f"VSHB Series ({w.name})"
+                else:
+                    lbl = f"{code} Series ({w.name})"
+                options.append({"id": code, "label": lbl})
+                existing_ids.add(code)
+
+        # Also detect any active invoice series prefixes present in AmazonLiveAllocation
+        alloc_prefixes = (
+            db.query(func.distinct(func.substring(AmazonLiveAllocation.invoice_number, r'^([A-Z0-9]+)-')))
+            .filter(AmazonLiveAllocation.company_id == company_id if company_id else True)
+            .filter(AmazonLiveAllocation.invoice_number.isnot(None))
+            .all()
+        )
+        for row in alloc_prefixes:
+            p = (row[0] or "").strip().upper()
+            if p and p not in existing_ids and p not in ("DEFAULT", "TEST", "AMZ"):
+                options.append({"id": p, "label": f"{p} Series (Amazon FC {p})"})
+                existing_ids.add(p)
 
         return options
 
