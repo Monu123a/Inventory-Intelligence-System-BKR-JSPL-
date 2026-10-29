@@ -1,10 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db, get_current_company_id
-from app.models.schema import User, StockTransfer, StockTransferItem
+from app.models.schema import (
+    User, StockTransfer, StockTransferItem, Product, Sale, SaleItem, 
+    DocumentTypeEnum, CompanySettings, Company
+)
 from app.services.stock_transfer_service import StockTransferService
 from app.services.transfer_number_service import TransferNumberService
+from app.services.document_number_service import DocumentNumberService
+from app.services.invoice_number_service import _get_fiscal_year_string
 from app.services.metrics_service import log_metric
+from datetime import datetime
 import logging
 from sqlalchemy import func
 
@@ -19,6 +25,7 @@ class TransferItemRequest(BaseModel):
     product_id: int
     requested_qty: int
     unit_price: Optional[float] = 0.0
+    product_sku: Optional[str] = None
 
 class CreateTransferRequest(BaseModel):
     source_company_id: Optional[int] = None
@@ -28,6 +35,8 @@ class CreateTransferRequest(BaseModel):
     source_warehouse_id: Optional[int] = None
     destination_warehouse_id: Optional[int] = None
     idempotency_key: Optional[str] = None
+    auto_generate_bill: Optional[bool] = False
+    invoice_prefix: Optional[str] = "GST"
     items: List[TransferItemRequest]
 
 import os
@@ -86,17 +95,181 @@ def create_transfer(req: CreateTransferRequest, db: Session = Depends(get_db), c
         )
 
     for it in req.items:
-        if not it.unit_price:
-            prod = db.query(Product).filter(Product.id == it.product_id).first()
-            if prod:
-                it.unit_price = prod.item_rate
+        # Cross-company SKU resolution: Ensure product belongs to src_comp
+        source_prod = None
+        if it.product_id:
+            p = db.query(Product).filter(Product.id == it.product_id).first()
+            if p:
+                if p.company_id == src_comp:
+                    source_prod = p
+                else:
+                    source_prod = db.query(Product).filter(Product.sku == p.sku, Product.company_id == src_comp).first()
+        if not source_prod and it.product_sku:
+            source_prod = db.query(Product).filter(Product.sku == it.product_sku, Product.company_id == src_comp).first()
+
+        prod_id = source_prod.id if source_prod else it.product_id
+        rate = it.unit_price or (source_prod.item_rate if source_prod else 0.0) or 0.0
+
         ti = StockTransferItem(
             transfer_id=transfer.id,
-            product_id=it.product_id,
+            product_id=prod_id,
             requested_qty=it.requested_qty,
-            unit_price=it.unit_price
+            unit_price=rate
         )
         db.add(ti)
+    db.flush()
+
+    # Automatically generate B2B Inter-Company Bill if requested (e.g. urgent replenishment)
+    if req.auto_generate_bill and is_cross_company:
+        src_settings = db.query(CompanySettings).filter(CompanySettings.company_id == src_comp).first()
+        dest_settings = db.query(CompanySettings).filter(CompanySettings.company_id == dest_comp).first()
+        src_company = db.query(Company).filter(Company.id == src_comp).first()
+        dest_company = db.query(Company).filter(Company.id == dest_comp).first()
+
+        seller_name = src_settings.legal_name if src_settings and src_settings.legal_name else (src_company.name if src_company else "B K RAMAN AND CO")
+        seller_gstin = src_settings.gstin if src_settings else "04AEFPS6301F1ZU"
+        seller_address = src_settings.address if src_settings else "Chandigarh"
+        seller_state = src_settings.state if src_settings else "Chandigarh"
+        seller_state_code = src_settings.state_code if src_settings else "04"
+
+        buyer_name = dest_settings.legal_name if dest_settings and dest_settings.legal_name else (dest_company.name if dest_company else "Jagan Shopsmart Private Limited")
+        buyer_gstin = dest_settings.gstin if dest_settings else "04AAFCJ8215N1ZC"
+        buyer_address = dest_settings.address if dest_settings else "Plot no: 150, Industrial & Business Park-2, Chandigarh"
+        buyer_state = dest_settings.state if dest_settings else "Chandigarh"
+        buyer_state_code = dest_settings.state_code if dest_settings else "04"
+        buyer_phone = dest_settings.phone if dest_settings else None
+
+        fy = _get_fiscal_year_string(datetime.today().date())
+        invoice_pref = (req.invoice_prefix or "GST").strip().upper()
+        invoice_number = DocumentNumberService.generate_number(
+            db=db,
+            company_id=src_comp,
+            document_type=DocumentTypeEnum.SALE,
+            fiscal_year=fy,
+            prefix_override=invoice_pref
+        )
+
+        is_intra_state = (seller_state_code == buyer_state_code)
+        subtotal = 0.0
+        total_cgst = 0.0
+        total_sgst = 0.0
+        total_igst = 0.0
+        sale_items_data = []
+
+        for ti in transfer.items:
+            prod = db.query(Product).filter(Product.id == ti.product_id).first()
+            rate = float(ti.unit_price or (prod.item_rate if prod else 0) or 100.0)
+            qty = int(ti.requested_qty)
+            line_taxable = round(rate * qty, 2)
+            gst_rate = float(prod.default_gst_rate if prod and prod.default_gst_rate else 18.0)
+
+            subtotal += line_taxable
+            if is_intra_state:
+                half_tax = round(line_taxable * (gst_rate / 200.0), 2)
+                cgst = half_tax
+                sgst = half_tax
+                igst = 0.0
+                total_cgst += cgst
+                total_sgst += sgst
+            else:
+                cgst = 0.0
+                sgst = 0.0
+                igst = round(line_taxable * (gst_rate / 100.0), 2)
+                total_igst += igst
+
+            line_total = round(line_taxable + cgst + sgst + igst, 2)
+            sale_items_data.append({
+                "product_id": ti.product_id,
+                "sku": prod.sku if prod else "",
+                "product_name": prod.name if prod else "",
+                "quantity": qty,
+                "selling_price": rate,
+                "gst_rate": gst_rate,
+                "taxable_amount": line_taxable,
+                "cgst": cgst,
+                "sgst": sgst,
+                "igst": igst,
+                "line_total": line_total,
+                "hsn_sac": prod.hsn if prod else None,
+                "unit": prod.unit if prod else "PCS"
+            })
+
+        total_tax = round(total_cgst + total_sgst + total_igst, 2)
+        grand_total = round(subtotal + total_tax, 2)
+
+        sale = Sale(
+            bill_number=invoice_number,
+            company_id=src_comp,
+            customer_name=buyer_name,
+            customer_gstin=buyer_gstin,
+            customer_address=buyer_address,
+            customer_state=buyer_state,
+            customer_state_code=buyer_state_code,
+            customer_phone=buyer_phone,
+            created_at=datetime.utcnow(),
+            sale_date=datetime.utcnow(),
+            invoice_number=invoice_number,
+            invoice_type="B2B",
+            transaction_origin="INTER_COMPANY_TRANSFER",
+            total_taxable_amount=subtotal,
+            total_tax=total_tax,
+            grand_total=grand_total,
+            payment_method="TRANSFER",
+            payment_terms="Immediate Inter-Company",
+            status="Completed",
+            company_name_snapshot=seller_name,
+            company_gstin_snapshot=seller_gstin,
+            company_address_snapshot=seller_address,
+            company_state_snapshot=seller_state,
+            company_state_code_snapshot=seller_state_code,
+            company_email_snapshot=(src_settings.email if src_settings else None),
+            company_phone_snapshot=(src_settings.phone if src_settings else None),
+            company_logo_url_snapshot=(src_settings.logo_url if src_settings else None),
+            company_bank_details_snapshot=(src_settings.bank_details if src_settings else None)
+        )
+        db.add(sale)
+        db.flush()
+
+        for sid in sale_items_data:
+            s_item = SaleItem(
+                sale_id=sale.id,
+                product_id=sid["product_id"],
+                sku=sid["sku"],
+                product_name=sid["product_name"],
+                quantity=sid["quantity"],
+                selling_price=sid["selling_price"],
+                gst_rate=sid["gst_rate"],
+                taxable_amount=sid["taxable_amount"],
+                cgst=sid["cgst"],
+                sgst=sid["sgst"],
+                igst=sid["igst"],
+                line_total=sid["line_total"],
+                hsn_sac=sid["hsn_sac"],
+                unit=sid["unit"]
+            )
+            db.add(s_item)
+        db.flush()
+
+        # Complete the transfer with the generated sale
+        StockTransferService.complete_transfer_locked(
+            db=db,
+            transfer=transfer,
+            invoice_id=sale.id,
+            user_id=current_user.id,
+            allow_negative_stock=True
+        )
+        db.commit()
+
+        return {
+            "status": "success",
+            "transfer_id": transfer.id,
+            "transfer_number": transfer.transfer_number,
+            "invoice_id": sale.id,
+            "invoice_number": sale.invoice_number,
+            "grand_total": sale.grand_total,
+            "message": f"Replenishment transfer created and B2B Bill {sale.invoice_number} generated successfully!"
+        }
+
     db.commit()
     return {"status": "success", "transfer_id": transfer.id}
 

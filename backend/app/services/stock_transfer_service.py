@@ -20,7 +20,7 @@ class StockTransferService:
         return transfer
 
     @staticmethod
-    def complete_transfer_locked(db: Session, transfer: StockTransfer, invoice_id: int, user_id: int):
+    def complete_transfer_locked(db: Session, transfer: StockTransfer, invoice_id: int, user_id: int, allow_negative_stock: bool = True):
         if transfer.status not in ("Pending", "Approved"):
             raise ValueError("Transfer cannot be completed. It might already be processed.")
             
@@ -92,23 +92,21 @@ class StockTransferService:
             
             print(f"[TRANSFER CHECK] Requested: {requested_qty}, Available: {total_available}")
             
-            if total_available < requested_qty:
+            if total_available < requested_qty and not allow_negative_stock:
                 raise ValueError(
                     f"Insufficient stock for {product.sku}: {total_available} available, {requested_qty} requested"
                 )
                 
             remaining_deduct = requested_qty
             actual_deducted = 0
-            
 
             for src_inv in source_invs:
                 if remaining_deduct <= 0:
                     break
                 available_in_this = src_inv.current_qty - (src_inv.reserved_qty or 0)
-                deduct_from_this = min(remaining_deduct, available_in_this)
-                if deduct_from_this <= 0:
+                if available_in_this <= 0:
                     continue
-                    
+                deduct_from_this = min(remaining_deduct, available_in_this)
                 InventoryEventEngine.process_event(
                     db=db,
                     company_id=transfer.from_company_id,
@@ -119,10 +117,38 @@ class StockTransferService:
                     source="Transfer Out",
                     reference_id=transfer.transfer_number,
                     user_id=user_id,
-                    metadata_payload={"destination_company_id": transfer.to_company_id}
+                    metadata_payload={"destination_company_id": transfer.to_company_id},
+                    allow_negative=allow_negative_stock
                 )
                 actual_deducted += deduct_from_this
                 remaining_deduct -= deduct_from_this
+
+            # If remaining deficit and allow_negative_stock is True, deduct remaining from primary source warehouse
+            if remaining_deduct > 0 and allow_negative_stock:
+                target_wh_id = transfer.source_warehouse_id
+                if not target_wh_id and source_invs:
+                    target_wh_id = source_invs[0].warehouse_id
+                if not target_wh_id:
+                    from app.api.routers.pos import _resolve_default_warehouse
+                    sw = _resolve_default_warehouse(db, transfer.from_company_id)
+                    target_wh_id = sw.id if sw else None
+                
+                if target_wh_id:
+                    InventoryEventEngine.process_event(
+                        db=db,
+                        company_id=transfer.from_company_id,
+                        product_sku=product.sku,
+                        warehouse_id=target_wh_id,
+                        quantity=remaining_deduct,
+                        event_type="TRANSFER_OUT",
+                        source="Transfer Out",
+                        reference_id=transfer.transfer_number,
+                        user_id=user_id,
+                        metadata_payload={"destination_company_id": transfer.to_company_id},
+                        allow_negative=True
+                    )
+                    actual_deducted += remaining_deduct
+                    remaining_deduct = 0
 
             # ===== ADD to DESTINATION (JSPL) =====
             if actual_deducted > 0:

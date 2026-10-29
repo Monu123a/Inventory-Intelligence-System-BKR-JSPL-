@@ -152,15 +152,24 @@ const BKRInvoiceGenerator = () => {
     setGenerating(true);
     try {
       // 1. Post to /api/pos/sale
+      const subtotalVal = dummyInvoice?.totals?.total_taxable_amount || 0;
+      const taxVal = dummyInvoice?.totals?.total_tax || 0;
+      const totalVal = dummyInvoice?.totals?.grand_total || (subtotalVal + taxVal);
+
       const salePayload = {
-        customer_name: 'JSPL',
-        customer_phone: '0000000000',
-        customer_gstin: '29ABCDE1234F2Z5',
+        customer_name: 'Jagan Shopsmart Private Limited',
+        customer_phone: '9216407929',
+        customer_gstin: '04AAFCJ8215N1ZC',
+        customer_address: 'Plot no: 150, Industrial & Business Park-2, Chandigarh (UT)- 160002',
+        customer_state: 'Chandigarh',
+        customer_state_code: '04',
         invoice_type: 'B2B',
+        invoice_prefix: 'GST',
         payment_method: 'TRANSFER',
-        total_taxable_amount: dummyInvoice.subtotal,
-        total_tax: dummyInvoice.cgst + dummyInvoice.sgst,
-        grand_total: dummyInvoice.totalAmount,
+        total_taxable_amount: subtotalVal,
+        total_tax: taxVal,
+        grand_total: totalVal,
+        skip_inventory_update: true,
         items: items.filter(item => item.approvedQty > 0).map(item => {
           const lineTotal = item.approvedQty * item.rate;
           const lineGst = (lineTotal * item.gstRate) / 100;

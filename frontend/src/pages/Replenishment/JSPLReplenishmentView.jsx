@@ -21,7 +21,22 @@ const JSPLReplenishmentView = () => {
   const [sourceWarehouseId, setSourceWarehouseId] = useState('');
   const [destWarehouseId, setDestWarehouseId] = useState('');
   const [confirmText, setConfirmText] = useState('');
+  const [autoGenerateBill, setAutoGenerateBill] = useState(true);
+  const [completedInvoice, setCompletedInvoice] = useState(null);
   const isCrossCompanyEnabled = import.meta.env.VITE_CROSS_COMPANY_TRANSFERS === 'true';
+
+  useEffect(() => {
+    if (warehouses.length > 0) {
+      if (!sourceWarehouseId) {
+        const bkrWh = warehouses.find(w => w.company_id === 2);
+        if (bkrWh) setSourceWarehouseId(bkrWh.id.toString());
+      }
+      if (!destWarehouseId) {
+        const jsplWh = warehouses.find(w => w.company_id === (companyId || 3)) || warehouses.find(w => w.company_id === 3);
+        if (jsplWh) setDestWarehouseId(jsplWh.id.toString());
+      }
+    }
+  }, [warehouses, companyId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,17 +100,18 @@ const JSPLReplenishmentView = () => {
         .filter(r => selectedItems.has(r.id))
         .map(r => ({ product_id: r.id, requested_qty: r.requiredQty, sku: r.sku }));
 
-      // JSPL (1) is requesting goods FROM BKR (2) TO JSPL (1)
-            const destWh = warehouses.find(w => w.id === parseInt(destWarehouseId));
+      const destWh = warehouses.find(w => w.id === parseInt(destWarehouseId));
       const sourceWh = warehouses.find(w => w.id === parseInt(sourceWarehouseId));
       
       const payload = {
         source_company_id: sourceWh ? sourceWh.company_id : 2, 
-        destination_company_id: destWh ? destWh.company_id : 1,
+        destination_company_id: destWh ? destWh.company_id : (companyId || 3),
         from_company_id: sourceWh ? sourceWh.company_id : 2, 
-        to_company_id: destWh ? destWh.company_id : 1,
+        to_company_id: destWh ? destWh.company_id : (companyId || 3),
         source_warehouse_id: sourceWarehouseId ? parseInt(sourceWarehouseId) : null,
         destination_warehouse_id: destWarehouseId ? parseInt(destWarehouseId) : null,
+        auto_generate_bill: autoGenerateBill,
+        invoice_prefix: 'GST',
         items: itemsToApprove.map(i => ({ product_id: i.product_id, requested_qty: i.requested_qty, product_sku: i.sku }))
       };
 
@@ -103,18 +119,32 @@ const JSPLReplenishmentView = () => {
 
       if (response.status !== 200 && response.status !== 201) throw new Error('Failed to create transfer');
 
-      addNotification({ type: 'success', title: 'Success', message: 'Replenishment request sent to BKR successfully' });
+      if (response.data?.invoice_number) {
+        setCompletedInvoice({
+          id: response.data.invoice_id,
+          invoiceNumber: response.data.invoice_number,
+          grandTotal: response.data.grand_total,
+          itemCount: itemsToApprove.length
+        });
+        addNotification({ 
+          type: 'success', 
+          title: 'Replenishment & Bill Generated', 
+          message: `Official B2B Bill ${response.data.invoice_number} generated for ${itemsToApprove.length} items.` 
+        });
+      } else {
+        addNotification({ type: 'success', title: 'Success', message: 'Replenishment request sent to BKR successfully' });
+      }
       
       const newTransfer = {
         items: itemsToApprove.map(i => ({ sku: i.sku, requested_qty: i.requested_qty })),
-        status: 'Pending'
+        status: response.data?.invoice_number ? 'Completed' : 'Pending'
       };
       setActiveTransfers([...activeTransfers, newTransfer]);
       setSelectedItems(new Set());
       
       // Refetch recommendations
       const recRes = await api.get('/api/replenishment/recommendations');
-      setRecommendations(recRes.data);
+      setRecommendations(recRes.data || []);
     } catch (error) {
       addNotification({ type: 'error', title: 'Error', message: error.message || 'Failed to approve replenishment' });
     } finally {
@@ -170,6 +200,23 @@ const JSPLReplenishmentView = () => {
               </select>
             </div>
             
+            <div style={{ marginBottom: '1.25rem', padding: '0.85rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
+                <input 
+                  type="checkbox" 
+                  checked={autoGenerateBill} 
+                  onChange={e => setAutoGenerateBill(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 600, color: '#166534', fontSize: '0.9rem' }}>
+                  Generate B2B Tax Invoice & Dispatch immediately (GST Series)
+                </span>
+              </label>
+              <p style={{ margin: '4px 0 0 26px', fontSize: '0.8rem', color: '#15803d' }}>
+                Automatically generates official B2B bill from BKR to JSPL, deducts from BKR stock, and adds stock to JSPL in one click.
+              </p>
+            </div>
+
             {sourceWarehouseId && destWarehouseId && warehouses.find(w=>w.id===parseInt(sourceWarehouseId))?.company_id !== warehouses.find(w=>w.id===parseInt(destWarehouseId))?.company_id && (
               <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#fee2e2', borderRadius: '4px' }}>
                 <h3 style={{ color: '#dc2626', margin: '0 0 0.5rem 0' }}>Warning: Cross-Company Transfer</h3>
@@ -190,6 +237,76 @@ const JSPLReplenishmentView = () => {
                 style={{ padding: '0.5rem 1rem', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px' }}
               >
                 Submit Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUCCESS MODAL FOR GENERATED BILL */}
+      {completedInvoice && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '480px', width: '90%', textAlign: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontSize: '28px', fontWeight: 'bold' }}>
+              ✓
+            </div>
+            <h2 style={{ margin: '0 0 0.5rem 0', color: '#111827', fontSize: '1.4rem' }}>
+              Replenishment Bill Generated!
+            </h2>
+            <p style={{ color: '#4b5563', fontSize: '0.95rem', margin: '0 0 1.5rem 0' }}>
+              Urgent items have been replenished and the official B2B Tax Invoice has been generated in BKR.
+            </p>
+
+            <div style={{ backgroundColor: '#f3f4f6', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>Invoice Number:</span>
+                <span style={{ fontWeight: 700, color: '#111827', fontSize: '1rem' }}>{completedInvoice.invoiceNumber}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>Series:</span>
+                <span style={{ fontWeight: 600, color: '#2563eb', fontSize: '0.875rem' }}>BKR Inter-Company (GST)</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>Total Amount:</span>
+                <span style={{ fontWeight: 700, color: '#059669', fontSize: '1rem' }}>
+                  ₹{Number(completedInvoice.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                onClick={() => setCompletedInvoice(null)}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  backgroundColor: '#ffffff',
+                  color: '#374151',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+              >
+                Done
+              </button>
+              <button
+                onClick={() => {
+                  window.open(`/sales/${completedInvoice.id}/invoice`, '_blank');
+                }}
+                style={{
+                  padding: '0.6rem 1.5rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                🖨️ View & Print Bill
               </button>
             </div>
           </div>
