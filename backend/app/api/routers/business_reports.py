@@ -81,8 +81,12 @@ def get_sales_report(
                 period_col = func.to_char(alloc_date_col, "YYYY-MM-DD").label("period")
 
         alloc_query = db.query(AmazonLiveAllocation).filter(
-            AmazonLiveAllocation.allocated_qty > 0,
-            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+            or_(
+                AmazonLiveAllocation.allocated_qty > 0,
+                AmazonLiveAllocation.reconciled_qty > 0,
+                AmazonLiveAllocation.status.in_([AllocationStatus.SHIPPED, AllocationStatus.UNSHIPPED, AllocationStatus.PENDING, AllocationStatus.RETURNED])
+            ),
+            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED])
         )
         if company_id and s_clean not in ("IN",):
             has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
@@ -949,8 +953,12 @@ def export_sales(
                 period_col = func.to_char(alloc_date_col, "YYYY-MM-DD").label("period")
 
         alloc_query = db.query(AmazonLiveAllocation).filter(
-            AmazonLiveAllocation.allocated_qty > 0,
-            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+            or_(
+                AmazonLiveAllocation.allocated_qty > 0,
+                AmazonLiveAllocation.reconciled_qty > 0,
+                AmazonLiveAllocation.status.in_([AllocationStatus.SHIPPED, AllocationStatus.UNSHIPPED, AllocationStatus.PENDING, AllocationStatus.RETURNED])
+            ),
+            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED])
         )
         if company_id and s_clean not in ("IN",):
             has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()

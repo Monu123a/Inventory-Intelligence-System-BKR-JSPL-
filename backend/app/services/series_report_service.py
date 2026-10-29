@@ -618,8 +618,12 @@ class SeriesReportService:
                 AmazonLiveAllocation.created_at
             )
             alloc_query = db.query(AmazonLiveAllocation).filter(
-                AmazonLiveAllocation.allocated_qty > 0,
-                AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+                or_(
+                    AmazonLiveAllocation.allocated_qty > 0,
+                    AmazonLiveAllocation.reconciled_qty > 0,
+                    AmazonLiveAllocation.status.in_([AllocationStatus.SHIPPED, AllocationStatus.UNSHIPPED, AllocationStatus.PENDING, AllocationStatus.RETURNED])
+                ),
+                AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED])
             )
             if company_id and series_clean not in ("IN",):
                 has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
@@ -948,7 +952,7 @@ class SeriesReportService:
                 item_name = prod.name if prod else alloc.sku
                 hsn_code = alloc.hsn_code or (prod.hsn if prod else "") or ""
                 pack_size = prod.unit if prod else ""
-                qty = alloc.allocated_qty or 1
+                qty = alloc.allocated_qty or alloc.reconciled_qty or 1
                 
                 gst_rate = float(prod.default_gst_rate or 18.0) if prod else 18.0
                 group_tax = f"GST {int(gst_rate) if gst_rate.is_integer() else gst_rate}%"
@@ -1892,8 +1896,12 @@ class SeriesReportService:
             AmazonLiveAllocation.created_at
         )
         alloc_query = db.query(AmazonLiveAllocation).filter(
-            AmazonLiveAllocation.allocated_qty > 0,
-            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED, AllocationStatus.REFUNDED])
+            or_(
+                AmazonLiveAllocation.allocated_qty > 0,
+                AmazonLiveAllocation.reconciled_qty > 0,
+                AmazonLiveAllocation.status.in_([AllocationStatus.SHIPPED, AllocationStatus.UNSHIPPED, AllocationStatus.PENDING, AllocationStatus.RETURNED])
+            ),
+            AmazonLiveAllocation.status.notin_([AllocationStatus.CANCELLED])
         )
         if company_id and wh_clean not in ("IN",):
             has_allocs = db.query(AmazonLiveAllocation.id).filter(AmazonLiveAllocation.company_id == company_id).first()
@@ -2024,7 +2032,7 @@ class SeriesReportService:
             order_id = alloc.order_id or ""
             shipment_id = f"A{alloc.id:09d}{wh.code if wh else 'IN'}"
             shipment_item_id = int(alloc.amazon_line_item_id) if (alloc.amazon_line_item_id and alloc.amazon_line_item_id.isdigit()) else (575786880000 + alloc.id)
-            qty = alloc.allocated_qty or 1
+            qty = alloc.allocated_qty or alloc.reconciled_qty or 1
             item_desc = prod.name if prod and prod.name else (alloc.sku or "")
             asin = getattr(prod, "asin", None) or "B0DYNNSY96"
             hsn = getattr(prod, "hsn", None) or "8424"
