@@ -1,9 +1,10 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import PageContainer from '../../components/layout/PageContainer';
 import { Card } from '../../components/Card/Card';
 import Button from '../../components/forms/Button';
 import { SearchBar } from '../../components/forms/SearchBar';
 import { DataTable } from '../../components/DataTable/DataTable';
+import useCompanyStore from '../../stores/useCompanyStore';
 import { 
   FiRefreshCw, 
   FiCloudLightning, 
@@ -23,11 +24,12 @@ import toast from 'react-hot-toast';
 import { amazonService } from '../../services/amazonService';
 import styles from './Amazon.module.css';
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 
 const AmazonLiveInventory = () => {
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
+  const { companyId } = useCompanyStore();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [networkFilter, setNetworkFilter] = useState('ALL');
@@ -35,11 +37,18 @@ const AmazonLiveInventory = () => {
   const [backfillMode, setBackfillMode] = useState(false);
   const [reportDaysBack, setReportDaysBack] = useState(7);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Pagination states
   const [allocationsPage, setAllocationsPage] = useState(1);
   const [fcPage, setFcPage] = useState(1);
   const [dlqPage, setDlqPage] = useState(1);
+
+  // Memoized search handler to prevent resetting pagination on render
+  const handleSearch = useCallback((val) => {
+    setSearchTerm(val);
+    setAllocationsPage(1);
+  }, []);
 
   // 1. Fetch Sync Telemetry & Health Status
   const { 
@@ -47,7 +56,7 @@ const AmazonLiveInventory = () => {
     isLoading: loadingStatus,
     refetch: refetchStatus 
   } = useQuery({
-    queryKey: ['amazon', 'sync-status'],
+    queryKey: ['amazon', 'sync-status', companyId],
     queryFn: amazonService.getSyncStatus,
     refetchInterval: (query) => {
       return query?.state?.data?.status === 'IN_PROGRESS' ? 3000 : 30000;
@@ -63,7 +72,7 @@ const AmazonLiveInventory = () => {
     error: allocationsError,
     refetch: refetchAllocations
   } = useQuery({
-    queryKey: ['amazon', 'live-inventory'],
+    queryKey: ['amazon', 'live-inventory', companyId],
     queryFn: amazonService.getLiveInventory,
     refetchInterval: isSyncInProgress ? 3000 : false,
   });
@@ -74,7 +83,7 @@ const AmazonLiveInventory = () => {
     isLoading: loadingDlq,
     refetch: refetchDlq
   } = useQuery({
-    queryKey: ['amazon', 'dlq'],
+    queryKey: ['amazon', 'dlq', companyId],
     queryFn: () => amazonService.getDlqRecords(100),
     refetchInterval: isSyncInProgress ? 5000 : false,
   });
@@ -85,7 +94,7 @@ const AmazonLiveInventory = () => {
     isLoading: loadingFcSummary,
     refetch: refetchFcSummary
   } = useQuery({
-    queryKey: ['amazon', 'fc-summary'],
+    queryKey: ['amazon', 'fc-summary', companyId],
     queryFn: amazonService.getFcInventorySummary,
   });
 
@@ -188,19 +197,29 @@ const AmazonLiveInventory = () => {
 
   // Paginated allocations
   const paginatedAllocations = useMemo(() => {
-    const start = (allocationsPage - 1) * PAGE_SIZE;
-    return filteredAllocations.slice(start, start + PAGE_SIZE);
-  }, [filteredAllocations, allocationsPage]);
+    const start = (allocationsPage - 1) * pageSize;
+    return filteredAllocations.slice(start, start + pageSize);
+  }, [filteredAllocations, allocationsPage, pageSize]);
 
-  const totalAllocationPages = Math.ceil(filteredAllocations.length / PAGE_SIZE) || 1;
+  const totalAllocationPages = Math.ceil(filteredAllocations.length / pageSize) || 1;
+
+  // Paginated FC Summaries
+  const safeFcSummaries = Array.isArray(fcSummaries) ? fcSummaries : [];
+  const paginatedFc = useMemo(() => {
+    const start = (fcPage - 1) * pageSize;
+    return safeFcSummaries.slice(start, start + pageSize);
+  }, [safeFcSummaries, fcPage, pageSize]);
+
+  const totalFcPages = Math.ceil(safeFcSummaries.length / pageSize) || 1;
 
   // Paginated DLQ
+  const safeDlqRecords = Array.isArray(dlqRecords) ? dlqRecords : [];
   const paginatedDlq = useMemo(() => {
-    const start = (dlqPage - 1) * PAGE_SIZE;
-    return dlqRecords.slice(start, start + PAGE_SIZE);
-  }, [dlqRecords, dlqPage]);
+    const start = (dlqPage - 1) * pageSize;
+    return safeDlqRecords.slice(start, start + pageSize);
+  }, [safeDlqRecords, dlqPage, pageSize]);
 
-  const totalDlqPages = Math.ceil(dlqRecords.length / PAGE_SIZE) || 1;
+  const totalDlqPages = Math.ceil(safeDlqRecords.length / pageSize) || 1;
 
   const formatDateTime = (isoStr) => {
     if (!isoStr) return 'Never';
@@ -568,10 +587,7 @@ const AmazonLiveInventory = () => {
                   <SearchBar
                     placeholder="Search SKU (e.g. LG0831)..."
                     value={searchTerm}
-                    onSearch={(val) => {
-                      setSearchTerm(val);
-                      setAllocationsPage(1);
-                    }}
+                    onSearch={handleSearch}
                   />
                 </div>
 
@@ -593,8 +609,23 @@ const AmazonLiveInventory = () => {
                     <option value="AFN">AFN (Amazon FCs)</option>
                   </select>
 
+                  <span className={styles.filterLabel}>Rows:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setAllocationsPage(1);
+                    }}
+                    className={styles.filterSelect}
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+
                   <span className={styles.chipCount}>
-                    Showing {paginatedAllocations.length} of {filteredAllocations.length} SKUs
+                    Showing {filteredAllocations.length === 0 ? 0 : (allocationsPage - 1) * pageSize + 1} - {Math.min(allocationsPage * pageSize, filteredAllocations.length)} of {filteredAllocations.length} SKUs (Page {allocationsPage} of {totalAllocationPages})
                   </span>
                 </div>
               </div>
@@ -713,9 +744,14 @@ const AmazonLiveInventory = () => {
 
               <DataTable
                 columns={fcColumns}
-                data={fcSummaries}
+                data={paginatedFc}
                 isLoading={loadingFcSummary}
                 emptyMessage="No Amazon FC warehouses mapped yet."
+                pagination={{
+                  currentPage: fcPage,
+                  totalPages: totalFcPages,
+                  onPageChange: (newPage) => setFcPage(newPage)
+                }}
               />
             </div>
           )}

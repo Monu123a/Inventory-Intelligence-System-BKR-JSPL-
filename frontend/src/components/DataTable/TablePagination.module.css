@@ -2,33 +2,57 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--spacing-4);
-  padding: var(--spacing-3) var(--spacing-4);
-  background-color: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  gap: var(--spacing-3, 0.75rem);
+  padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
+  background-color: var(--color-surface, #f8fafc);
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  flex-wrap: wrap;
 }
 
-.info {
-  font-size: var(--font-size-sm);
-  color: var(--color-neutral-600);
+.pageNumberGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ellipsis {
+  padding: 0 4px;
+  color: var(--color-neutral-500, #64748b);
+  font-size: var(--font-size-sm, 0.875rem);
 }
 
 .pageBtn {
-  padding: var(--spacing-2) var(--spacing-3);
-  font-size: var(--font-size-sm);
-  background-color: var(--color-neutral-100);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-neutral-700);
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--spacing-2, 0.5rem);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #ffffff;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-md, 6px);
+  color: var(--color-neutral-700, #334155);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
-.pageBtn:hover:not(:disabled) {
-  background-color: var(--color-neutral-200);
+.pageBtn:hover:not(:disabled):not(.activePageBtn) {
+  background-color: var(--color-neutral-100, #f1f5f9);
+  border-color: var(--color-neutral-300, #cbd5e1);
+}
+
+.activePageBtn {
+  background-color: var(--color-primary, #2563eb) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-color: var(--color-primary, #2563eb) !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
 }
 
 .pageBtn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  background-color: var(--color-neutral-50, #f8fafc);
 }
