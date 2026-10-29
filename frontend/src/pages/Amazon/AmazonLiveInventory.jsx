@@ -17,7 +17,12 @@ import {
   FiUploadCloud,
   FiFileText,
   FiCheck,
-  FiFilter
+  FiFilter,
+  FiBookOpen,
+  FiChevronDown,
+  FiChevronUp,
+  FiInfo,
+  FiHelpCircle
 } from 'react-icons/fi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -35,6 +40,7 @@ const AmazonLiveInventory = () => {
   const [networkFilter, setNetworkFilter] = useState('ALL');
   const [stockFilter, setStockFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState('allocations');
+  const [showGuide, setShowGuide] = useState(false);
   const [backfillMode, setBackfillMode] = useState(false);
   const [reportDaysBack, setReportDaysBack] = useState(7);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -251,26 +257,29 @@ const AmazonLiveInventory = () => {
   const allocationColumns = [
     { 
       key: 'sku', 
-      label: 'SKU', 
+      label: 'Product SKU', 
       render: (val) => <span className={styles.skuCode}>{val}</span> 
     },
     { 
       key: 'network', 
-      label: 'Network', 
+      label: 'Shipping Route', 
       render: (val) => (
-        <span className={`${styles.badge} ${val === 'MFN' ? styles.badgeMfn : styles.badgeAfn}`}>
-          {val === 'MFN' ? 'MFN (Local WH)' : 'AFN (Amazon FC)'}
+        <span 
+          className={`${styles.badge} ${val === 'MFN' ? styles.badgeMfn : styles.badgeAfn}`}
+          title={val === 'MFN' ? 'Local Godown: Pack and dispatch from your own warehouse' : 'Amazon FBA: Stored in Amazon godowns and shipped by Amazon'}
+        >
+          {val === 'MFN' ? 'MFN (Local Godown)' : 'AFN (Amazon FBA)'}
         </span>
       )
     },
     { 
       key: 'allocated_qty', 
-      label: 'Total Allocated', 
+      label: 'Total Ordered', 
       render: (val) => <span style={{ fontWeight: 600, color: 'var(--color-neutral-800)' }}>{val}</span> 
     },
     { 
       key: 'reconciled_qty', 
-      label: 'Reconciled (Shipped)', 
+      label: 'Already Shipped', 
       render: (val) => (
         <span style={{ 
           color: val > 0 ? '#059669' : 'var(--color-neutral-400)', 
@@ -282,63 +291,72 @@ const AmazonLiveInventory = () => {
     },
     { 
       key: 'pending_qty', 
-      label: 'Soft Reserved (Active)', 
+      label: 'Pending To Pack (Reserved)', 
       render: (val) => <span className={styles.softReservedNumber}>{val}</span>
     },
     { 
       key: 'available_stock', 
-      label: 'Warehouse Stock', 
+      label: 'Godown Stock (Available)', 
       render: (val) => {
         const stock = typeof val === 'number' ? val : 0;
         if (stock < 0) {
           return (
-            <span style={{ 
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: '#fee2e2', 
-              color: '#b91c1c', 
-              fontWeight: 700, 
-              padding: '3px 8px', 
-              borderRadius: '6px',
-              fontSize: '0.82rem',
-              border: '1px solid #fca5a5'
-            }}>
-              🔴 {stock} (Deficit)
+            <span 
+              style={{ 
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#fee2e2', 
+                color: '#b91c1c', 
+                fontWeight: 700, 
+                padding: '3px 8px', 
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                border: '1px solid #fca5a5'
+              }}
+              title="Shortage! You sold more than you have in godown. Restock urgently!"
+            >
+              🔴 {stock} (Shortage / Deficit)
             </span>
           );
         }
         if (stock === 0) {
           return (
-            <span style={{ 
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: '#fef3c7', 
-              color: '#b45309', 
-              fontWeight: 600, 
-              padding: '3px 8px', 
-              borderRadius: '6px',
-              fontSize: '0.82rem',
-              border: '1px solid #fcd34d'
-            }}>
+            <span 
+              style={{ 
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#fef3c7', 
+                color: '#b45309', 
+                fontWeight: 600, 
+                padding: '3px 8px', 
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                border: '1px solid #fcd34d'
+              }}
+              title="Godown stock is 0! Customer ordered on Amazon, but shelf has 0 pieces in system. Restock needed."
+            >
               ⚠️ 0 (Out of Stock)
             </span>
           );
         }
         return (
-          <span style={{ 
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            backgroundColor: '#dcfce7', 
-            color: '#15803d', 
-            fontWeight: 600, 
-            padding: '3px 8px', 
-            borderRadius: '6px',
-            fontSize: '0.82rem',
-            border: '1px solid #bbf7d0'
-          }}>
+          <span 
+            style={{ 
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#dcfce7', 
+              color: '#15803d', 
+              fontWeight: 600, 
+              padding: '3px 8px', 
+              borderRadius: '6px',
+              fontSize: '0.82rem',
+              border: '1px solid #bbf7d0'
+            }}
+            title="Sufficient stock available in godown."
+          >
             🟢 {stock} In Stock
           </span>
         );
@@ -346,7 +364,7 @@ const AmazonLiveInventory = () => {
     },
     { 
       key: 'active_orders', 
-      label: 'Open Orders', 
+      label: 'Amazon Orders', 
       render: (val) => (
         <span style={{ color: 'var(--color-neutral-600)', fontSize: '0.85rem' }}>
           {val} {val === 1 ? 'order' : 'orders'}
@@ -502,7 +520,7 @@ const AmazonLiveInventory = () => {
     >
       <div className={styles.container}>
         <p className={styles.headerSubtitle}>
-          Real-time Selling Partner API (SP-API) order synchronization, two-phase soft inventory protection, and automated FC shipment deduction.
+          Real-time Amazon customer order sync, godown stock locking, and automated shipment deduction.
         </p>
 
         {/* 1. Telemetry & Metrics Cards */}
@@ -510,7 +528,7 @@ const AmazonLiveInventory = () => {
           {/* Metric 1: Sync Status */}
           <div className={styles.metricCard}>
             <div className={styles.metricHeader}>
-              <span className={styles.metricTitle}>SP-API Sync Status</span>
+              <span className={styles.metricTitle}>Amazon Sync Status</span>
               <div className={`
                 ${styles.iconCircle}
                 ${syncStatus?.status === 'SUCCESS' ? styles.iconCircleSuccess : ''}
@@ -537,14 +555,14 @@ const AmazonLiveInventory = () => {
             </div>
             <div className={styles.metricFooter}>
               <FiClock size={12} />
-              <span>Last run: {formatDateTime(syncStatus?.last_sync_end || syncStatus?.last_sync_start)}</span>
+              <span>Last sync: {formatDateTime(syncStatus?.last_sync_end || syncStatus?.last_sync_start)}</span>
             </div>
           </div>
 
           {/* Metric 2: Soft Reservations */}
           <div className={styles.metricCard}>
             <div className={styles.metricHeader}>
-              <span className={styles.metricTitle}>Active Soft Reservations</span>
+              <span className={styles.metricTitle}>Reserved Units (Pending Dispatch)</span>
               <div className={`${styles.iconCircle} ${styles.iconCirclePrimary}`}>
                 <FiShield />
               </div>
@@ -561,14 +579,14 @@ const AmazonLiveInventory = () => {
           {/* Metric 3: FC Warehouses */}
           <div className={styles.metricCard}>
             <div className={styles.metricHeader}>
-              <span className={styles.metricTitle}>Amazon Fulfillment Centers</span>
+              <span className={styles.metricTitle}>Amazon FBA Godowns</span>
               <div className={`${styles.iconCircle} ${styles.iconCircleNeutral}`}>
                 <FiTruck />
               </div>
             </div>
             <div className={styles.metricBody}>
               <span className={styles.metricNumber}>{fcSummaries.length}</span>
-              <span className={styles.metricUnit}>FC warehouses</span>
+              <span className={styles.metricUnit}>FBA godowns</span>
             </div>
             <div className={styles.metricFooter}>
               <span>BLR8, BOM7, MAA4, DEL4 & more</span>
@@ -578,7 +596,7 @@ const AmazonLiveInventory = () => {
           {/* Metric 4: Quarantined SKUs (DLQ) */}
           <div className={styles.metricCard}>
             <div className={styles.metricHeader}>
-              <span className={styles.metricTitle}>Quarantined SKUs (DLQ)</span>
+              <span className={styles.metricTitle}>Unknown / Unmapped SKUs</span>
               <div className={`
                 ${styles.iconCircle} 
                 ${(syncStatus?.dlq_count > 0 || dlqRecords.length > 0) ? styles.iconCircleWarning : styles.iconCircleSuccess}
@@ -591,29 +609,132 @@ const AmazonLiveInventory = () => {
               <span className={styles.metricUnit}>items</span>
             </div>
             <div className={styles.metricFooter}>
-              <span>{(syncStatus?.dlq_count > 0 || dlqRecords.length > 0) ? 'Requires SKU review' : 'Zero catalog mismatches'}</span>
+              <span>{(syncStatus?.dlq_count > 0 || dlqRecords.length > 0) ? 'Requires SKU mapping' : 'All SKUs recognized in catalog'}</span>
             </div>
           </div>
         </div>
 
-        {/* 2. Two-Phase Architecture Explanation Banner */}
+        {/* OPERATOR QUICK GUIDE BANNER (TOGGLEABLE) */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <button
+            type="button"
+            onClick={() => setShowGuide(!showGuide)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              border: '1px solid #3b82f6',
+              backgroundColor: showGuide ? '#2563eb' : '#eff6ff',
+              color: showGuide ? '#ffffff' : '#1d4ed8',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+            }}
+          >
+            <FiBookOpen size={18} />
+            <span>{showGuide ? 'Hide Operator Guide' : '📖 Operator Guide: How to Understand & Use This Page (Click to View)'}</span>
+            {showGuide ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
+          </button>
+
+          {showGuide && (
+            <div style={{ 
+              marginTop: '12px', 
+              padding: '1.5rem', 
+              backgroundColor: '#ffffff', 
+              border: '1px solid #bfdbfe', 
+              borderRadius: '10px', 
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+            }}>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#1e3a8a', fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FiHelpCircle color="#2563eb" /> Simple Guide for Warehouse & Billing Operators
+              </h3>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                
+                {/* Guide Box 1: Stock Status Colors */}
+                <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a', fontSize: '0.95rem' }}>
+                    1. What do the Colors in Godown Stock mean?
+                  </h4>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.875rem', color: '#334155', lineHeight: '1.6' }}>
+                    <li>
+                      <strong style={{ color: '#b91c1c' }}>🔴 Shortage / Deficit (e.g. -2, -3):</strong> Amazon sold more units than your physical godown had! You are in negative debt. <em>Action: Restock or transfer immediately.</em>
+                    </li>
+                    <li>
+                      <strong style={{ color: '#b45309' }}>⚠️ 0 (Out of Stock):</strong> A buyer placed an order on Amazon, but your system godown has <strong>0 pieces</strong>. <em>Action: Send stock from BKR or supplier so the parcel can be packed.</em>
+                    </li>
+                    <li>
+                      <strong style={{ color: '#15803d' }}>🟢 In Stock:</strong> Units are ready in your godown. Safe to fulfill!
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Guide Box 2: AFN vs MFN */}
+                <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a', fontSize: '0.95rem' }}>
+                    2. What is AFN vs MFN? (Who Ships It?)
+                  </h4>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.875rem', color: '#334155', lineHeight: '1.6' }}>
+                    <li>
+                      <strong style={{ color: '#d97706' }}>AFN (Amazon FBA):</strong> Stock is stored in Amazon's own godowns (BLR8, DEL4, BOM7). Amazon's staff packs and delivers it to the customer.
+                    </li>
+                    <li>
+                      <strong style={{ color: '#2563eb' }}>MFN (Local Godown / Merchant):</strong> Stock is stored in your own local warehouse. Your own dispatch team must pack and ship it.
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Guide Box 3: What do the numbers mean? */}
+                <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a', fontSize: '0.95rem' }}>
+                    3. What do the Table Columns mean?
+                  </h4>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.875rem', color: '#334155', lineHeight: '1.6' }}>
+                    <li><strong>Total Ordered:</strong> Total units purchased by Amazon customers.</li>
+                    <li><strong>Pending To Pack:</strong> Active orders waiting to be packed and dispatched. These units are locked so shop counters don't oversell them.</li>
+                    <li><strong>Already Shipped:</strong> Units dispatched and deducted from godown stock.</li>
+                  </ul>
+                </div>
+
+                {/* Guide Box 4: Operator Daily Routine */}
+                <div style={{ backgroundColor: '#eff6ff', padding: '1rem', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#1e40af', fontSize: '0.95rem' }}>
+                    4. Operator Daily 3-Step Routine
+                  </h4>
+                  <ol style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.875rem', color: '#1e3a8a', lineHeight: '1.6' }}>
+                    <li>Click <strong>"Sync Amazon Orders"</strong> at the top to download today's latest orders.</li>
+                    <li>Click the <strong>"⚠️ Sold But Out of Stock (40)"</strong> filter button to see all items that need urgent restocking.</li>
+                    <li>Go to <strong>Need Replenishment</strong>, select those urgent items, and click <strong>Approve</strong> — it will auto-generate the BKR bill and transfer stock to JSPL!</li>
+                  </ol>
+                </div>
+
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2. How Orders & Stock Protection Work */}
         <div className={styles.architectureCard}>
           <div className={styles.architectureIcon}>
             <FiShield />
           </div>
           <div className={styles.architectureContent}>
             <div className={styles.architectureTitle}>
-              <span>Two-Phase Inventory Protection Engine</span>
-              <span className={styles.stepPill}>Active Architecture</span>
+              <span>How Amazon Orders & Godown Stock Sync Together</span>
+              <span className={styles.stepPill}>Active Stock Protection</span>
             </div>
             <div className={styles.architectureSteps}>
               <div className={styles.stepBox}>
-                <strong>Phase 1: Real-time Soft Reservation (SP-API Orders)</strong>
-                Incoming Amazon orders immediately lock available stock so offline POS & B2B orders cannot oversell pending units.
+                <strong>Step 1: Orders Automatically Lock Stock (Soft Reservation)</strong>
+                When a customer orders on Amazon, the units are immediately locked in our system so your local showroom/counter doesn't accidentally sell them.
               </div>
               <div className={styles.stepBox}>
-                <strong>Phase 2: Exact FC Deduction (Shipment Reports)</strong>
-                Amazon shipment reports match the physical fulfillment center (<code>BLR8</code>, <code>BOM7</code>, etc.) and permanently deduct inventory from that specific FC warehouse ledger.
+                <strong>Step 2: Physical Stock Deduction (Shipment Deduction)</strong>
+                When Amazon or your dispatch team ships the parcel (e.g. from <code>BLR8</code>, <code>Chandigarh</code>), physical stock is permanently cut from that godown's ledger.
               </div>
             </div>
           </div>
@@ -627,7 +748,7 @@ const AmazonLiveInventory = () => {
               onClick={() => { setActiveTab('allocations'); setAllocationsPage(1); }}
             >
               <FiBox />
-              <span>Live Soft Allocations</span>
+              <span>Live Customer Orders</span>
               <span className={styles.tabCountPill}>{allocations.length}</span>
             </button>
 
@@ -636,7 +757,7 @@ const AmazonLiveInventory = () => {
               onClick={() => { setActiveTab('fc_reconciliation'); setFcPage(1); }}
             >
               <FiTruck />
-              <span>FC Inventory & Shipment Deduction</span>
+              <span>Amazon FBA Godowns Stock</span>
               <span className={styles.tabCountPill}>{fcSummaries.length}</span>
             </button>
 
@@ -645,7 +766,7 @@ const AmazonLiveInventory = () => {
               onClick={() => { setActiveTab('dlq'); setDlqPage(1); }}
             >
               <FiAlertTriangle />
-              <span>Quarantined Items (DLQ)</span>
+              <span>Unknown / Unmapped Items</span>
               <span className={styles.tabCountPill}>{dlqRecords.length}</span>
             </button>
           </div>
