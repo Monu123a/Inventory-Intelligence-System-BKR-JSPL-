@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNotificationStore } from '../../stores/notificationStore';
+import useCompanyStore from '../../stores/useCompanyStore';
 import styles from './JSPLReplenishmentView.module.css';
 import api from '../../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -8,10 +9,12 @@ import { ROUTES } from '../../constants/routes';
 const JSPLReplenishmentView = () => {
   const navigate = useNavigate();
   const addNotification = useNotificationStore(state => state.addNotification);
+  const { companyId } = useCompanyStore();
   const [recommendations, setRecommendations] = useState([]);
   const [activeTransfers, setActiveTransfers] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [warehouses, setWarehouses] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -20,22 +23,20 @@ const JSPLReplenishmentView = () => {
   const [confirmText, setConfirmText] = useState('');
   const isCrossCompanyEnabled = import.meta.env.VITE_CROSS_COMPANY_TRANSFERS === 'true';
 
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Fetch real recommendations data
+        // Fetch real recommendations data for current company
         const recRes = await api.get('/api/replenishment/recommendations');
-        setRecommendations(recRes.data);
+        setRecommendations(recRes.data || []);
 
-        
         const whRes = await api.get(`/api/warehouses/?all_companies=${isCrossCompanyEnabled}`);
         setWarehouses(whRes.data || []);
 
         // Fetch active transfers
         const transfersRes = await api.get('/api/transfers/?status=active');
-        setActiveTransfers(transfersRes.data);
+        setActiveTransfers(transfersRes.data || []);
       } catch (error) {
         addNotification({ type: 'error', title: 'Error', message: 'Failed to load replenishment data' });
       } finally {
@@ -43,7 +44,15 @@ const JSPLReplenishmentView = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [companyId]);
+
+  const filteredRecommendations = useMemo(() => {
+    if (!searchTerm.trim()) return recommendations;
+    const term = searchTerm.toLowerCase();
+    return recommendations.filter(
+      r => r.sku?.toLowerCase().includes(term) || r.product?.toLowerCase().includes(term)
+    );
+  }, [recommendations, searchTerm]);
 
   const handleSelect = (id) => {
     const newSelected = new Set(selectedItems);
@@ -187,6 +196,26 @@ const JSPLReplenishmentView = () => {
         </div>
       )}
 
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <input
+          type="text"
+          placeholder="Search by SKU or Product name..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{
+            padding: '0.6rem 1rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            minWidth: '280px',
+            backgroundColor: '#ffffff'
+          }}
+        />
+        <div style={{ fontSize: '0.875rem', color: '#4b5563', fontWeight: 500 }}>
+          Showing {filteredRecommendations.length} of {recommendations.length} items needing replenishment
+        </div>
+      </div>
+
       <div className={styles.card}>
         <table className={styles.table}>
           <thead>
@@ -195,8 +224,14 @@ const JSPLReplenishmentView = () => {
                 <input 
                   type="checkbox" 
                   className={styles.checkbox}
-                  checked={selectedItems.size === recommendations.length && recommendations.length > 0}
-                  onChange={handleSelectAll}
+                  checked={selectedItems.size === filteredRecommendations.length && filteredRecommendations.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedItems(new Set(filteredRecommendations.map(r => r.id)));
+                    } else {
+                      setSelectedItems(new Set());
+                    }
+                  }}
                 />
               </th>
               <th>SKU</th>
@@ -207,8 +242,8 @@ const JSPLReplenishmentView = () => {
             </tr>
           </thead>
           <tbody>
-            {recommendations.map(item => {
-              const activeTransfer = activeTransfers.find(t => t.items.some(i => i.sku === item.sku));
+            {filteredRecommendations.map(item => {
+              const activeTransfer = activeTransfers.find(t => t.items?.some(i => i.sku === item.sku));
               const isPending = !!activeTransfer;
               return (
               <tr key={item.id}>
@@ -221,22 +256,55 @@ const JSPLReplenishmentView = () => {
                     disabled={isPending}
                   />
                 </td>
-                <td>{item.sku}</td>
+                <td style={{ fontWeight: 600 }}>{item.sku}</td>
                 <td>{item.product}</td>
-                <td>{item.currentStock}</td>
-                <td>{item.requiredQty}</td>
+                <td>
+                  {item.currentStock < 0 ? (
+                    <span style={{ 
+                      color: '#b91c1c', 
+                      backgroundColor: '#fee2e2', 
+                      padding: '3px 8px', 
+                      borderRadius: '4px', 
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      {item.currentStock} (Deficit)
+                    </span>
+                  ) : item.currentStock === 0 ? (
+                    <span style={{ 
+                      color: '#b45309', 
+                      backgroundColor: '#fef3c7', 
+                      padding: '3px 8px', 
+                      borderRadius: '4px', 
+                      fontWeight: 600 
+                    }}>
+                      0 (Out of Stock)
+                    </span>
+                  ) : (
+                    <span style={{ color: '#047857', fontWeight: 600 }}>
+                      {item.currentStock} (Low Stock)
+                    </span>
+                  )}
+                </td>
+                <td style={{ fontWeight: 600, color: '#1d4ed8' }}>{item.requiredQty}</td>
                 <td>
                   {isPending ? (
                     <span className={styles.badge}>{activeTransfer.status}</span>
                   ) : (
-                    <span style={{ color: '#888' }}>-</span>
+                    <span style={{ color: '#9ca3af' }}>Ready</span>
                   )}
                 </td>
               </tr>
             )})}
-            {recommendations.length === 0 && (
+            {filteredRecommendations.length === 0 && (
               <tr>
-                <td colSpan="6" style={{textAlign: 'center'}}>No items need replenishment right now.</td>
+                <td colSpan="6" style={{textAlign: 'center', padding: '2rem', color: '#6b7280'}}>
+                  {recommendations.length === 0 
+                    ? 'No items currently need replenishment. All stocked items meet their levels.'
+                    : 'No matching replenishment items found for your search.'}
+                </td>
               </tr>
             )}
           </tbody>

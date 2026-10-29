@@ -42,13 +42,17 @@ def get_recommendations(
     state_hub_id: Optional[int] = None,
     warehouse_id: Optional[int] = None
 ):
-    
-    # Group inventory by product_id
     query = db.query(
-        Inventory.product_id,
-        func.sum(Inventory.available_qty).label("total_qty")
+        Product.id,
+        Product.sku,
+        Product.name,
+        Product.min_stock_level,
+        Product.reorder_level,
+        func.coalesce(func.sum(Inventory.available_qty), 0).label("total_qty")
+    ).join(
+        Inventory, (Product.id == Inventory.product_id) & (Inventory.company_id == Product.company_id)
     ).filter(
-        Inventory.company_id == company_id
+        Product.company_id == company_id
     )
 
     if warehouse_id:
@@ -56,33 +60,40 @@ def get_recommendations(
     elif state_hub_id:
         query = query.join(Warehouse, Inventory.warehouse_id == Warehouse.id).filter(Warehouse.hub_id == state_hub_id)
 
-    results = query.group_by(Inventory.product_id).all()
+    results = query.group_by(
+        Product.id,
+        Product.sku,
+        Product.name,
+        Product.min_stock_level,
+        Product.reorder_level
+    ).all()
 
     recommendations = []
-    for product_id, total_qty in results:
+    for prod_id, sku, name, min_stock_val, reorder_lvl, total_qty in results:
         total_qty = total_qty or 0
-        product = db.query(Product).filter(
-            Product.id == product_id,
-            Product.company_id == company_id
-        ).first()
-        if not product:
-            continue
+        min_stock = min_stock_val if (min_stock_val and min_stock_val > 0) else 0
+        reorder_level = reorder_lvl if (reorder_lvl and reorder_lvl > 0) else 0
         
-        # Use product-level thresholds, with sensible defaults
-        min_stock = product.min_stock_level if product.min_stock_level is not None else 10
-        
-        if min_stock <= 0:
-            continue
-            
-        reorder_level = product.reorder_level if product.reorder_level is not None else 50
-        
-        if total_qty < min_stock:
+        is_below_min = (min_stock > 0 and total_qty < min_stock)
+        is_out_of_stock = (total_qty <= 0)
+
+        if is_below_min or is_out_of_stock:
+            if reorder_level > 0:
+                required = max(reorder_level - total_qty, 1)
+            elif min_stock > 0:
+                required = max(min_stock - total_qty, 1)
+            else:
+                required = max(10 - total_qty, 10)
+
             recommendations.append({
-                "id": product.id,
-                "sku": product.sku,
-                "product": product.name,
-                "requiredQty": max(reorder_level - total_qty, 10),
+                "id": prod_id,
+                "sku": sku,
+                "product": name,
+                "requiredQty": required,
                 "currentStock": total_qty
             })
+
+    # Sort most urgent deficits and zero stock to the top
+    recommendations.sort(key=lambda x: (x["currentStock"], x["sku"]))
     return recommendations
 
