@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import os
@@ -294,6 +294,29 @@ def export_amazon_mtr_report(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to generate Amazon MTR report: {str(e)}")
+
+
+@router.post("/amazon-mtr/upload")
+async def upload_amazon_mtr_report(
+    file: UploadFile = File(...),
+    company_id: int = Depends(get_current_company_id),
+    manager_user = Depends(require_manager)
+):
+    """
+    Upload and ingest official Amazon Merchant Tax Report (MTR) Excel or CSV file.
+    Automatically deduplicates, matches FC warehouses, updates taxable outward supplies,
+    and synchronizes accounting records with 100% precision.
+    """
+    try:
+        from app.services.amazon_mtr_ingestion_service import ingest_amazon_mtr
+        contents = await file.read()
+        res = ingest_amazon_mtr(file_bytes=contents, target_company_id=company_id)
+        return {"data": res}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to ingest Amazon MTR file: {str(e)}")
+
 
 
 

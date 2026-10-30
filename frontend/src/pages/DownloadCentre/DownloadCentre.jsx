@@ -13,7 +13,7 @@ import { reportsService } from '../../services/reports';
 import api from '../../services/api';
 import { 
   FiRefreshCw, FiTrash2, FiEye, FiDownload, FiFileText, 
-  FiCheck, FiShoppingBag, FiTruck, FiRotateCcw, FiLayers
+  FiCheck, FiShoppingBag, FiTruck, FiRotateCcw, FiLayers, FiUpload
 } from 'react-icons/fi';
 import styles from './DownloadCentre.module.css';
 
@@ -180,6 +180,32 @@ const DownloadCentre = () => {
 
   // MTR Warehouse List
   const [mtrWarehouses, setMtrWarehouses] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+
+  const handleUploadMtr = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setUploadResult(null);
+    try {
+      const res = await reportsService.uploadAmazonMtrReport(file);
+      const data = res?.data || res;
+      setUploadResult(data);
+      // Reload warehouses and counts
+      reportsService.getAmazonMtrWarehouses().then(wRes => {
+        const list = wRes?.data || (Array.isArray(wRes) ? wRes : []);
+        setMtrWarehouses(list);
+      });
+      loadHistory();
+    } catch (err) {
+      console.error('Failed to upload Amazon MTR:', err);
+      alert('Failed to upload Amazon MTR: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     reportsService.getAmazonMtrWarehouses().then(res => {
@@ -439,9 +465,37 @@ const DownloadCentre = () => {
 
           {selectedCategory === 'amazon_mtr' && (
             <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Filter By Warehouse / Fulfillment Center (FC)
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Filter By Warehouse / Fulfillment Center (FC)
+                </div>
+                <div>
+                  <input
+                    type="file"
+                    id="mtr-upload-input"
+                    accept=".xlsx,.xls,.csv"
+                    style={{ display: 'none' }}
+                    onChange={handleUploadMtr}
+                  />
+                  <button
+                    type="button"
+                    className={styles.pillBtn}
+                    style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 500 }}
+                    disabled={isUploading}
+                    onClick={() => document.getElementById('mtr-upload-input')?.click()}
+                  >
+                    <FiUpload style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                    {isUploading ? 'Ingesting MTR Records...' : 'Upload Monthly Amazon MTR (.xlsx / .csv)'}
+                  </button>
+                </div>
               </div>
+
+              {uploadResult && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>
+                  <strong>MTR Sync Success:</strong> Processed {uploadResult.total_rows_parsed} rows ({uploadResult.shipments?.count} shipments, Net Rs. {Number(uploadResult.shipments?.net_amount || 0).toLocaleString('en-IN')}; {uploadResult.refunds?.count} refunds, Net Rs. {Number(uploadResult.refunds?.net_amount || 0).toLocaleString('en-IN')}).
+                </div>
+              )}
+
               <div className={styles.seriesPills}>
                 {mtrWarehouses.map((wh) => (
                   <button

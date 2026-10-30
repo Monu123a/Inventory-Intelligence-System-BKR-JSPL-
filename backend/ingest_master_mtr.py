@@ -14,7 +14,8 @@ DATABASE_URL = env_config.get("DATABASE_URL") or "postgresql://postgres:postgres
 
 DOWNLOADS_DIR = "/Users/harshahlawat/Downloads"
 OCT_IN_PATH = os.path.join(DOWNLOADS_DIR, "IN SERIES OCTOBER.xlsx")
-OCT_VSHB_PATH = os.path.join(DOWNLOADS_DIR, "Amazon_MTR_VSHB_xlsx.xlsx")
+OCT_456_PATH = os.path.join(DOWNLOADS_DIR, "456.xlsx")
+OCT_B2B_PATH = os.path.join(DOWNLOADS_DIR, "B2C & B2B JSPL OCTOBER.xlsx")
 MASTER_MTR_PATH = os.path.join(DOWNLOADS_DIR, "Halte Amz Master GST Records 23 - 26 -3.xlsx")
 
 FALLBACK_OCT_IN = "/Users/harshahlawat/.gemini/antigravity/brain/d247ab24-ed3f-44f6-936a-9d5c40d0c0be/.user_uploaded/media_1793273377560_a47053d3.xlsx"
@@ -89,11 +90,11 @@ def map_transaction_status(tx_type):
     if not tx_type:
         return "SHIPPED"
     t = str(tx_type).strip().lower()
-    if t in ("shipment", "freereplacement"):
+    if t == "shipment":
         return "SHIPPED"
     elif t in ("refund", "return"):
         return "RETURNED"
-    elif t in ("cancel", "cancelled"):
+    elif t in ("cancel", "cancelled", "freereplacement"):
         return "CANCELLED"
     return "SHIPPED"
 
@@ -164,15 +165,21 @@ def main():
     else:
         print(f"Warning: Master MTR file not found at {MASTER_MTR_PATH}")
 
-    # 2. October VSHB Series
-    if os.path.exists(OCT_VSHB_PATH):
-        print(f"Loading October VSHB Series: {OCT_VSHB_PATH}")
-        df_oct_vshb = pd.read_excel(OCT_VSHB_PATH)
-        dfs_to_process.append(("October VSHB Series", df_oct_vshb, 14, "VSHB"))
+    # 2. October B2C & B2B Master Report (All 15 FCs for October 2026)
+    if os.path.exists(OCT_B2B_PATH):
+        print(f"Loading October B2C & B2B Master Report: {OCT_B2B_PATH}")
+        df_oct_b2b = pd.read_excel(OCT_B2B_PATH)
+        dfs_to_process.append(("October B2C & B2B Master", df_oct_b2b, None, None))
     else:
-        print(f"Warning: October VSHB file not found at {OCT_VSHB_PATH}")
+        print(f"Warning: October B2C & B2B Master file not found at {OCT_B2B_PATH}")
 
-    # 3. October IN Series (Official company source of truth)
+    # 3. October VSHB Series (456.xlsx - 100% authoritative for VSHB)
+    if os.path.exists(OCT_456_PATH):
+        print(f"Loading October VSHB Series: {OCT_456_PATH}")
+        df_oct_456 = pd.read_excel(OCT_456_PATH)
+        dfs_to_process.append(("October VSHB Series (456.xlsx)", df_oct_456, 14, "VSHB"))
+
+    # 4. October IN Series (Official company source of truth)
     oct_in_file = OCT_IN_PATH if os.path.exists(OCT_IN_PATH) else FALLBACK_OCT_IN
     if os.path.exists(oct_in_file):
         print(f"Loading October IN Series: {oct_in_file}")
@@ -184,6 +191,7 @@ def main():
     # Collect and unify records across datasets
     # Authoritative later datasets overwrite earlier datasets for the same (order_id, line_item_id)
     unified_records = {}
+    ref_counts = {}
 
     for ds_name, df, forced_wh_id, default_series_prefix in dfs_to_process:
         print(f"\nProcessing {ds_name} with {len(df)} rows...")
@@ -199,15 +207,30 @@ def main():
             sku_upper = sku.upper()
             base_sku = sku_upper.split("-")[0]
 
-            line_item_id = clean_str(row.get("Shipment Item Id"))
-            if line_item_id and "." in line_item_id:
+            raw_line_id = clean_str(row.get("Shipment Item Id"))
+            if raw_line_id and "." in raw_line_id:
                 try:
-                    line_item_id = str(int(float(line_item_id)))
+                    raw_line_id = str(int(float(raw_line_id)))
                 except Exception:
                     pass
 
-            if not line_item_id:
-                line_item_id = f"MTR_{order_id}_{sku_upper}"
+            if not raw_line_id:
+                raw_line_id = f"MTR_{order_id}_{sku_upper}"
+
+            tx_type = clean_str(row.get("Transaction Type"))
+            status = map_transaction_status(tx_type)
+
+            # Differentiate line item IDs by transaction type to prevent collisions and overwrites
+            if tx_type == "Refund":
+                cnt = ref_counts.get((order_id, raw_line_id), 0) + 1
+                ref_counts[(order_id, raw_line_id)] = cnt
+                line_item_id = f"{raw_line_id}_REF_{cnt}" if cnt > 1 else f"{raw_line_id}_REF"
+            elif tx_type in ("Cancel", "Cancelled"):
+                line_item_id = f"{raw_line_id}_CANCEL"
+            elif tx_type == "FreeReplacement":
+                line_item_id = raw_line_id
+            else:
+                line_item_id = raw_line_id
 
             inv_num = clean_str(row.get("Invoice Number"))
             if inv_num and inv_num.isdigit() and default_series_prefix:
@@ -239,9 +262,6 @@ def main():
                             pass
                 except Exception:
                     pass
-
-            tx_type = clean_str(row.get("Transaction Type"))
-            status = map_transaction_status(tx_type)
 
             seller_gstin = clean_str(row.get("Seller Gstin")) or ""
             company_id = 2 if seller_gstin.startswith("04AEFPS") else 3
@@ -321,10 +341,11 @@ def main():
         matched_id = None
         if line_item_id in db_by_line_item_id:
             matched_id = db_by_line_item_id[line_item_id]
-        elif (order_id, sku_upper) in db_by_order_sku and db_by_order_sku[(order_id, sku_upper)] not in matched_db_ids:
-            matched_id = db_by_order_sku[(order_id, sku_upper)]
-        elif (order_id, base_sku) in db_by_order_base_sku and db_by_order_base_sku[(order_id, base_sku)] not in matched_db_ids:
-            matched_id = db_by_order_base_sku[(order_id, base_sku)]
+        elif item["status"] == "SHIPPED":
+            if (order_id, sku_upper) in db_by_order_sku and db_by_order_sku[(order_id, sku_upper)] not in matched_db_ids:
+                matched_id = db_by_order_sku[(order_id, sku_upper)]
+            elif (order_id, base_sku) in db_by_order_base_sku and db_by_order_base_sku[(order_id, base_sku)] not in matched_db_ids:
+                matched_id = db_by_order_base_sku[(order_id, base_sku)]
 
         if matched_id:
             matched_db_ids.add(matched_id)
@@ -379,7 +400,7 @@ def main():
     print(f"- Records to UPDATE in amazon_live_allocations: {len(to_update)}")
     print(f"- Records to INSERT into amazon_live_allocations: {len(to_insert)}")
 
-    # Handle cancelled orders for IN series
+    # Handle cancelled orders for IN and FC series
     # Orders in DB for warehouse 38 or IN- prefix with UNSHIPPED/PENDING status that were not matched in MTR
     cur.execute("""
         SELECT id, order_id, sku, invoice_number 
@@ -390,6 +411,18 @@ def main():
     unshipped_in = cur.fetchall()
     cancelled_ids = [r[0] for r in unshipped_in if r[0] not in matched_db_ids]
     print(f"- Identified {len(cancelled_ids)} unconfirmed/cancelled IN orders to mark as CANCELLED.")
+
+    # Identify stale records in DB with date in October 2026 that were not in the official October MTR
+    cur.execute("""
+        SELECT id FROM amazon_live_allocations
+        WHERE company_id = 3
+          AND status = 'SHIPPED'
+          AND COALESCE(shipment_date, invoice_date, order_date) >= '2026-10-01'
+          AND COALESCE(shipment_date, invoice_date, order_date) <= '2026-10-31 23:59:59'
+          AND NOT (id = ANY(%s));
+    """, (list(matched_db_ids),))
+    stale_oct_shipped = [r[0] for r in cur.fetchall()]
+    print(f"- Identified {len(stale_oct_shipped)} stale October shipments to reset/cancel.")
 
     if args.dry_run:
         print("\n[DRY RUN COMPLETED] No changes were written to the database.")
@@ -496,6 +529,16 @@ def main():
         """, (cancelled_ids,))
         conn.commit()
         print(f"Marked {len(cancelled_ids)} unconfirmed orders as CANCELLED.")
+
+    # Reset stale shipments
+    if stale_oct_shipped:
+        cur.execute("""
+            UPDATE amazon_live_allocations
+            SET status = 'CANCELLED', shipment_date = NULL, updated_at = NOW()
+            WHERE id = ANY(%s);
+        """, (stale_oct_shipped,))
+        conn.commit()
+        print(f"Reset and marked {len(stale_oct_shipped)} stale October records as CANCELLED.")
 
     print("\nSUCCESS: All Amazon MTR records ingested and synchronized!")
     cur.close()

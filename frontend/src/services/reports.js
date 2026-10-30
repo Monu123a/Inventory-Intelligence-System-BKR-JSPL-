@@ -106,5 +106,15 @@ export const reportsService = {
   getAmazonMtrWarehouses: async () => {
     const response = await api.get('/api/reports/amazon-mtr/warehouses');
     return normalizeResponse(response.data);
+  },
+  uploadAmazonMtrReport: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/api/reports/amazon-mtr/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return normalizeResponse(response.data);
   }
 };
