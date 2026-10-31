@@ -50,7 +50,7 @@ def get_live_inventory(company_id: int = Depends(get_current_company_id), db: Se
         AmazonLiveAllocation.amazon_network_at_allocation,
         stock_subquery.c.available_stock
     ).order_by(
-        stock_subquery.c.available_stock.asc()
+        AmazonLiveAllocation.sku.asc()
     ).all()
     
     result = []

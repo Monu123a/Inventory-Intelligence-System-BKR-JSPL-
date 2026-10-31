@@ -79,6 +79,9 @@ export const useInventory = ({ search = '', warehouseId = '', filterStatus = '',
       joined = joined.filter(item => item.status === filterStatus);
     }
 
+    // Sort by on-hand quantity descending so available stock is displayed prominently
+    joined.sort((a, b) => (b.current_qty || 0) - (a.current_qty || 0));
+
     // Pagination
     const startIndex = (page - 1) * limit;
     const paginated = joined.slice(startIndex, startIndex + limit);

@@ -67,7 +67,7 @@ def get_inventory(warehouse_id: Optional[int] = None, company_id: int = Depends(
             query = query.filter(Inventory.warehouse_id.in_([39, 2]))
         else:
             query = query.filter(Inventory.warehouse_id == warehouse_id)
-    return query.all()
+    return query.order_by(Inventory.current_qty.desc(), Inventory.id.asc()).all()
 
 class GlobalMovementResponse(MovementResponse):
     display_metadata: List[dict]
