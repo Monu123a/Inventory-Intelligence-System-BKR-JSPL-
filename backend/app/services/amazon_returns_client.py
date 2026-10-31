@@ -219,6 +219,43 @@ class SPAPIAmazonReturnsClient(AmazonReturnsClient):
             )
             mfn_reports = (mfn_rep_res.payload or {}).get("reports", [])
 
+            # Check if we should request a fresh MFN returns report
+            should_create_mfn = False
+            if not mfn_reports:
+                should_create_mfn = True
+            else:
+                newest_str = mfn_reports[0].get("createdTime")
+                if newest_str:
+                    try:
+                        from dateutil import parser as dt_parser
+                        newest_dt = dt_parser.isoparse(newest_str)
+                        if datetime.now(timezone.utc) - newest_dt > timedelta(hours=12):
+                            should_create_mfn = True
+                    except Exception:
+                        pass
+
+            if should_create_mfn:
+                try:
+                    logger.info("Requesting fresh MFN customer returns report from Amazon...")
+                    start_dt = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%dT00:00:00Z")
+                    cr = reports_api.create_report(
+                        reportType="GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE",
+                        dataStartTime=start_dt
+                    )
+                    new_rep_id = (cr.payload or {}).get("reportId")
+                    if new_rep_id:
+                        for _ in range(6):
+                            time.sleep(5)
+                            st = reports_api.get_report(new_rep_id)
+                            st_payload = st.payload or {}
+                            if st_payload.get("processingStatus") == "DONE":
+                                mfn_reports.insert(0, st_payload)
+                                break
+                            elif st_payload.get("processingStatus") in ["FATAL", "CANCELLED"]:
+                                break
+                except Exception as cr_err:
+                    logger.warning(f"Could not request on-demand MFN returns report: {cr_err}")
+
             for r in mfn_reports[:1]:
                 doc_id = r.get("reportDocumentId")
                 if not doc_id:

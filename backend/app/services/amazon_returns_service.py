@@ -111,5 +111,82 @@ class AmazonReturnsService:
 
         if failed_records:
             raise Exception(f"PartialBatchFailureException: {failed_records}")
+
+        # Also synchronize MFN and FC returns from amazon_live_allocations
+        try:
+            alloc_created, alloc_updated = AmazonReturnsService.sync_returns_from_allocations(db, company_id=company_id)
+            records_created += alloc_created
+            records_updated += alloc_updated
+        except Exception as alloc_err:
+            logger.error(f"Error syncing returns from allocations: {alloc_err}", exc_info=True)
             
         return records_created, records_updated
+
+    @staticmethod
+    def sync_returns_from_allocations(db: Session, company_id: int) -> Tuple[int, int]:
+        """
+        Synchronizes all return / refund records from amazon_live_allocations (both MFN and FC)
+        into amazon_returns table so warehouse staff can verify, inspect, and restock them.
+        """
+        from app.models.schema import AmazonLiveAllocation, AllocationStatus, AmazonNetworkType, Product
+        from sqlalchemy import or_
+
+        alloc_returns = (
+            db.query(AmazonLiveAllocation)
+            .filter(
+                AmazonLiveAllocation.company_id == company_id,
+                AmazonLiveAllocation.status == AllocationStatus.RETURNED
+            )
+            .all()
+        )
+
+        created = 0
+        updated = 0
+
+        for a in alloc_returns:
+            is_mfn = (
+                a.amazon_network_at_allocation == AmazonNetworkType.MFN or
+                a.warehouse_id == 38 or
+                (a.invoice_number and a.invoice_number.upper().startswith("IN-"))
+            )
+            channel = "MFN" if is_mfn else "AFN"
+            ret_id = f"{channel}-{a.invoice_number or a.order_id}"
+            item_id = a.amazon_line_item_id or f"{a.order_id}-{a.sku}"
+
+            existing = db.query(AmazonReturn).filter(
+                AmazonReturn.company_id == company_id,
+                AmazonReturn.amazon_return_id == ret_id,
+                AmazonReturn.order_item_id == item_id
+            ).first()
+
+            prod = db.query(Product).filter(
+                Product.sku == a.sku,
+                Product.company_id == company_id
+            ).first()
+
+            if existing:
+                pass
+            else:
+                new_ret = AmazonReturn(
+                    company_id=company_id,
+                    amazon_return_id=ret_id,
+                    amazon_order_id=a.order_id,
+                    order_item_id=item_id,
+                    sku=a.sku,
+                    asin=None,
+                    product_name=prod.name if prod else a.sku,
+                    quantity=abs(a.allocated_qty or 1),
+                    return_reason=f"{channel} Customer Return ({a.invoice_number or 'Standard'})",
+                    return_status="Received",
+                    inspection_status=None,
+                    requested_at=a.order_date or a.shipment_date,
+                    received_at=a.shipment_date or a.order_date,
+                    last_synced_at=datetime.utcnow()
+                )
+                db.add(new_ret)
+                created += 1
+
+        if created > 0:
+            db.commit()
+
+        return created, updated

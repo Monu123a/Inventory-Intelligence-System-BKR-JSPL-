@@ -415,6 +415,41 @@ def ingest_amazon_mtr(
     total_refund_tax = sum(v["tax_amt"] or 0.0 for v in refund_items)
     total_refund_net = sum(v["net_amt"] or 0.0 for v in refund_items)
 
+    # Sync refund items into amazon_returns table
+    if refund_items:
+        ret_insert_query = """
+            INSERT INTO amazon_returns (
+                company_id, amazon_return_id, amazon_order_id, order_item_id,
+                sku, asin, product_name, quantity, return_reason,
+                return_status, requested_at, received_at, last_synced_at,
+                created_at, updated_at
+            ) VALUES %s
+            ON CONFLICT (company_id, amazon_return_id, order_item_id)
+            DO NOTHING;
+        """
+        ret_payload = [
+            (
+                r["company_id"],
+                f"{'MFN' if (r['amazon_network'] == 'MFN' or r['warehouse_id'] == 38 or (r['inv_num'] and r['inv_num'].startswith('IN-'))) else 'AFN'}-{r['inv_num'] or r['order_id']}",
+                r["order_id"],
+                r["line_item_id"],
+                r["sku_upper"],
+                None,
+                r["sku_upper"],
+                abs(r["qty"] or 1),
+                f"{'MFN' if (r['amazon_network'] == 'MFN' or r['warehouse_id'] == 38 or (r['inv_num'] and r['inv_num'].startswith('IN-'))) else 'AFN'} Customer Return ({r['inv_num'] or 'Standard'})",
+                "Received",
+                r["order_date"] or r["ship_date"],
+                r["ship_date"] or r["order_date"],
+                pd.Timestamp.now().to_pydatetime(),
+                pd.Timestamp.now().to_pydatetime(),
+                pd.Timestamp.now().to_pydatetime()
+            )
+            for r in refund_items
+        ]
+        execute_values(cur, ret_insert_query, ret_payload, page_size=1000)
+        conn.commit()
+
     cur.close()
     conn.close()
 
